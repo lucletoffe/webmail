@@ -529,7 +529,8 @@ export function CalendarManagementSettings() {
               )}
             >
               {isOrderable && (
-                <GripVertical className="w-4 h-4 -me-1.5 text-muted-foreground/60 cursor-grab flex-shrink-0" aria-hidden="true" />
+                // No HTML drag and drop on touch screens: the arrows do it there.
+                <GripVertical className="w-4 h-4 -me-1.5 text-muted-foreground/60 cursor-grab flex-shrink-0 pointer-coarse:hidden" aria-hidden="true" />
               )}
               {/* Color swatch - clickable to change color */}
               <div className="relative">
