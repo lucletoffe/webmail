@@ -1302,10 +1302,6 @@ export const useCalendarStore = create<CalendarStore>()(
           // failure stay, the rest are undone.
           set({ error: 'Failed to reorder calendars', calendars: withSortOrders(saved) });
           throw error;
-        } finally {
-          for (const calendarId of saved.keys()) {
-            void calendarHooks.onCalendarChange.emit({ calendarId, change: 'updated' });
-          }
         }
       },
 

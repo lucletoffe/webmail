@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useCalendarStore } from '@/stores/calendar-store';
 import { CALENDAR_KIND_COMPONENTS, CalendarKindPicker, type CalendarKind } from '@/components/calendar/calendar-kind-picker';
-import type { CalendarComponentType } from '@/lib/jmap/types';
+import type { Calendar, CalendarComponentType } from '@/lib/jmap/types';
 import { useAuthStore } from '@/stores/auth-store';
 import { getActiveAccountSlotHeaders } from '@/lib/auth/active-account-slot';
 import { toast } from '@/stores/toast-store';
