@@ -3215,6 +3215,8 @@
       "new_event_in_calendar": "Нова подія в цьому календарі",
       "move_up": "Перемістити вгору",
       "move_down": "Перемістити вниз",
+      "shared_with": "Доступ надано: {names}",
+      "shared_with_count": "{count, plural, one {Доступ надано # особі} few {Доступ надано # особам} many {Доступ надано # особам} other {Доступ надано # особи}}",
       "kind": "Вміст",
       "kind_events": "Події",
       "kind_tasks": "Завдання",
