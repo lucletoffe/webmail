@@ -4,12 +4,12 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useCalendarStore } from '@/stores/calendar-store';
 import { CALENDAR_KIND_COMPONENTS, CalendarKindPicker, type CalendarKind } from '@/components/calendar/calendar-kind-picker';
-import type { CalendarComponentType } from '@/lib/jmap/types';
+import type { Calendar, CalendarComponentType } from '@/lib/jmap/types';
 import { useAuthStore } from '@/stores/auth-store';
 import { getActiveAccountSlotHeaders } from '@/lib/auth/active-account-slot';
 import { toast } from '@/stores/toast-store';
 import { SettingsSection } from './settings-section';
-import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Copy, Link, Upload, Globe, RefreshCw, Eraser, Users } from '@/components/icons';
+import { Plus, Pencil, Trash2, Calendar as CalendarIcon, Copy, Link, Upload, Globe, RefreshCw, Eraser, Users, ArrowUp, ArrowDown, GripVertical } from '@/components/icons';
 import { ShareCollectionDialog } from './share-collection-dialog';
 import type { CalendarRights } from '@/lib/jmap/types';
 import { cn, formatDateTime, redactUrlCredentials } from '@/lib/utils';
@@ -17,9 +17,12 @@ import { ICalImportModal } from '@/components/calendar/ical-import-modal';
 import { ICalSubscriptionModal } from '@/components/calendar/ical-subscription-modal';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useManagedAccountStore } from '@/stores/managed-account-store';
+import { useAccountStore } from '@/stores/account-store';
 import { apiFetch } from '@/lib/browser-navigation';
 import { CALENDAR_COLORS, sharedCalendarColorKey } from '@/lib/shared-calendar-colors';
 import { IS_LITE } from '@/lib/lite';
+import { calendarAccountKey, moveCalendar } from '@/lib/calendar-sort';
+import { shareRecipientNames, useShareRecipientLabels } from '@/hooks/use-share-recipient-labels';
 
 function CalendarColorPicker({
   value,
@@ -154,7 +157,7 @@ export function CalendarManagementSettings() {
   const t = useTranslations('calendar.management');
   const { client, serverUrl, username } = useAuthStore();
   const managedAccountId = useManagedAccountStore((s) => s.managedAccountId);
-  const { calendars, updateCalendar, shareCalendar, createCalendar, removeCalendar, clearCalendarEvents, fetchCalendars, icalSubscriptions: allSubs, removeICalSubscription, refreshICalSubscription, isSubscriptionCalendar } = useCalendarStore();
+  const { calendars, updateCalendar, reorderCalendars, shareCalendar, createCalendar, removeCalendar, clearCalendarEvents, fetchCalendars, icalSubscriptions: allSubs, removeICalSubscription, refreshICalSubscription, isSubscriptionCalendar } = useCalendarStore();
   // Subscriptions are persisted globally but scoped per JMAP account via
   // accountId. Legacy entries with no accountId show in the active account.
   const currentAccountId = client?.getAccountId();
@@ -184,6 +187,23 @@ export function CalendarManagementSettings() {
   const sharedCalendarColors = useSettingsStore((s) => s.sharedCalendarColors);
   const setSharedCalendarColor = useSettingsStore((s) => s.setSharedCalendarColor);
   const colorPickerRef = useRef<HTMLDivElement>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const listedCalendars = calendars
+    .filter(cal => !isSubscriptionCalendar(cal.id))
+    .filter(cal => !managedAccountId || cal.accountId === managedAccountId);
+  // Only the user's own calendars are offered for reordering; a shared
+  // calendar's order is left to its owner.
+  const orderableCalendars = listedCalendars.filter(cal => !cal.isShared);
+
+  // Principal ids belong to one server: only calendars of the account
+  // `client` talks to get their recipients named.
+  const activeLocalAccountId = useAccountStore((s) => s.activeAccountId);
+  const resolvesShares = (cal: Calendar) => !cal.localAccountId || cal.localAccountId === activeLocalAccountId;
+  const shareLabels = useShareRecipientLabels(
+    client,
+    orderableCalendars.some(cal => Object.keys(cal.shareWith ?? {}).length > 0 && resolvesShares(cal)),
+  );
 
   // Load calendars if not yet loaded
   useEffect(() => {
@@ -349,6 +369,19 @@ export function CalendarManagementSettings() {
     setColorPickerId(null);
   };
 
+  // Move a calendar next to `targetId` (before it when moving up, after it
+  // when moving down) and store the new order as sortOrder.
+  const handleMove = async (calendarId: string, targetId: string | undefined) => {
+    if (!client || !targetId) return;
+    const orderedIds = moveCalendar(calendars, calendarId, targetId);
+    if (!orderedIds) return;
+    try {
+      await reorderCalendars(client, orderedIds);
+    } catch {
+      toast.error(t('error_update'));
+    }
+  };
+
   const handleDelete = async (calendarId: string) => {
     if (!client) return;
     setIsLoading(true);
@@ -406,11 +439,14 @@ export function CalendarManagementSettings() {
   return (
     <SettingsSection title={t('title')} description={t('description')}>
       <div className="space-y-2">
-        {calendars
-          .filter(cal => !isSubscriptionCalendar(cal.id))
-          .filter(cal => !managedAccountId || cal.accountId === managedAccountId)
-          .map((cal) => {
+        {listedCalendars.map((cal) => {
           const color = (cal.isShared && sharedCalendarColors[sharedCalendarColorKey(cal)]) || cal.color || '#3b82f6';
+          // Up and down step over the neighbours of the same account.
+          const siblings = cal.isShared ? [] : orderableCalendars.filter(c => calendarAccountKey(c) === calendarAccountKey(cal));
+          const orderIndex = siblings.indexOf(cal);
+          const isOrderable = siblings.length > 1;
+          const previousId = siblings[orderIndex - 1]?.id;
+          const nextId = siblings[orderIndex + 1]?.id;
 
           if (editingId === cal.id) {
             return (
@@ -475,8 +511,27 @@ export function CalendarManagementSettings() {
           return (
             <div
               key={cal.id}
-              className="flex items-center gap-3 py-2.5 px-3 rounded-md border border-border bg-background group"
+              data-testid="calendar-settings-item"
+              data-calendar-name={cal.name}
+              draggable={isOrderable}
+              onDragStart={isOrderable ? (e) => {
+                setDraggingId(cal.id);
+                // Firefox starts no drag without data.
+                e.dataTransfer.setData('text/plain', cal.id);
+                e.dataTransfer.effectAllowed = 'move';
+              } : undefined}
+              onDragOver={isOrderable && draggingId ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } : undefined}
+              onDrop={isOrderable && draggingId ? (e) => { e.preventDefault(); void handleMove(draggingId, cal.id); setDraggingId(null); } : undefined}
+              onDragEnd={() => setDraggingId(null)}
+              className={cn(
+                "flex items-center gap-3 py-2.5 px-3 rounded-md border border-border bg-background group",
+                draggingId === cal.id && "opacity-50",
+              )}
             >
+              {isOrderable && (
+                // No HTML drag and drop on touch screens: the arrows do it there.
+                <GripVertical className="w-4 h-4 -me-1.5 text-muted-foreground/60 cursor-grab flex-shrink-0 pointer-coarse:hidden" aria-hidden="true" />
+              )}
               {/* Color swatch - clickable to change color */}
               <div className="relative">
                 <button
@@ -540,16 +595,48 @@ export function CalendarManagementSettings() {
               {(() => {
                 const shareCount = Object.keys(cal.shareWith || {}).length;
                 if (shareCount === 0 || cal.isShared) return null;
+                const names = resolvesShares(cal) ? shareRecipientNames(cal.shareWith, shareLabels) : null;
+                const label = names
+                  ? t('shared_with', { names: names.join(', ') })
+                  : t('shared_with_count', { count: shareCount });
                 return (
                   <span
                     className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full"
-                    title={t('share')}
+                    title={label}
+                    data-testid="calendar-shared-indicator"
                   >
-                    <Users className="w-3 h-3" />
-                    {shareCount}
+                    <Users className="w-3 h-3" aria-hidden="true" />
+                    <span aria-hidden="true">{shareCount}</span>
+                    <span className="sr-only">{label}</span>
                   </span>
                 );
               })()}
+
+              {/* Shown for touch too: there is no hover, and no HTML drag and drop. */}
+              {isOrderable && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => handleMove(cal.id, previousId)}
+                    disabled={!previousId}
+                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    title={t('move_up')}
+                    aria-label={t('move_up')}
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMove(cal.id, nextId)}
+                    disabled={!nextId}
+                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    title={t('move_down')}
+                    aria-label={t('move_down')}
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
