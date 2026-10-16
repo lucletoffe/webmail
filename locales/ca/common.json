@@ -2967,6 +2967,7 @@
       "declined": "Rebutjat",
       "tentative": "Provisional",
       "needs_action": "Cal resposta",
+      "pending_badge": "Awaiting reply",
       "remove": "Elimina",
       "edit": "Edita",
       "email_placeholder": "Afegiu una adreça electrònica o cerqueu contactes",

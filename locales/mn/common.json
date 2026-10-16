@@ -2967,6 +2967,7 @@
       "declined": "Татгалзсан",
       "tentative": "Урьдчилсан",
       "needs_action": "Арга хэмжээ авах шаардлагатай",
+      "pending_badge": "Awaiting reply",
       "remove": "Устгах",
       "edit": "Засварлах",
       "email_placeholder": "Имэйл хаяг нэмэх эсвэл харилцагч хайх",

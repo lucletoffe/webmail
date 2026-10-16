@@ -2967,6 +2967,7 @@
       "declined": "Odmietnuté",
       "tentative": "Nezáväzne",
       "needs_action": "Vyžaduje akciu",
+      "pending_badge": "Awaiting reply",
       "remove": "Odstrániť",
       "edit": "Upraviť",
       "email_placeholder": "Pridajte e-mailovú adresu alebo vyhľadajte kontakty",

@@ -2967,6 +2967,7 @@
       "declined": "已拒绝",
       "tentative": "暂定",
       "needs_action": "待处理",
+      "pending_badge": "Awaiting reply",
       "remove": "移除",
       "edit": "编辑",
       "email_placeholder": "添加邮箱地址或搜索联系人",

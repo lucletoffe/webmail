@@ -2967,6 +2967,7 @@
       "declined": "Afslået",
       "tentative": "Foreløbig",
       "needs_action": "Kræver handling",
+      "pending_badge": "Awaiting reply",
       "remove": "Fjern",
       "edit": "Redigér",
       "email_placeholder": "Tilføj e-mailadresse eller søg efter kontakter",

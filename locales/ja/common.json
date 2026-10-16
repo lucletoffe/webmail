@@ -2967,6 +2967,7 @@
       "declined": "辞退",
       "tentative": "仮承諾",
       "needs_action": "未回答",
+      "pending_badge": "Awaiting reply",
       "remove": "削除",
       "edit": "編集",
       "email_placeholder": "メールアドレスを追加または連絡先を検索",

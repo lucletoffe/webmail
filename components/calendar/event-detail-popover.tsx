@@ -19,6 +19,7 @@ import {
   getUserParticipantId,
   getUserStatus,
   getParticipantList,
+  isPendingForUser,
 } from "@/lib/calendar-participants";
 import { canUserRsvp, getEventEditability, type EditabilityContext } from "@/lib/calendar-editability";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
@@ -218,6 +219,14 @@ export function EventDetailPopover({
 
   const userCurrentStatus = useMemo(
     () => getUserStatus(event, currentUserEmails),
+    [event, currentUserEmails]
+  );
+
+  // Mirror of the hatched block in the calendar views: the detail popover
+  // calls out "awaiting your reply" above the RSVP buttons so the user sees
+  // what the stripes already told them (ordre Luc 16/10/2026, LPBvKUOr §3).
+  const isPending = useMemo(
+    () => isPendingForUser(event, currentUserEmails),
     [event, currentUserEmails]
   );
 
@@ -587,6 +596,16 @@ export function EventDetailPopover({
       {/* RSVP Bar (for attendees) */}
       {canRsvp && onRsvp && userParticipantId && (
         <div className="px-4 py-3 border-t border-border">
+          {isPending && (
+            <p className="text-xs font-medium text-warning mb-2 flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className="inline-block w-3 h-3 rounded-xs border border-warning"
+                style={{ backgroundImage: `repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 3px)` }}
+              />
+              {t("participants.pending_badge")}
+            </p>
+          )}
           <p className="text-xs font-medium text-muted-foreground mb-2">
             {t("participants.rsvp_label")}
           </p>
