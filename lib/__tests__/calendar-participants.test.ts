@@ -6,6 +6,7 @@ import {
   getUserParticipantId,
   getUserStatus,
   isDeclinedByUser,
+  isPendingForUser,
   getParticipantList,
   getStatusCounts,
   getParticipantCount,
@@ -305,6 +306,126 @@ describe('isDeclinedByUser', () => {
     expect(isDeclinedByUser(makeEvent({ dave: declinedAttendee }), [])).toBe(false);
     expect(isDeclinedByUser(makeEvent({ dave: declinedAttendee }), undefined)).toBe(false);
     expect(isDeclinedByUser(makeEvent(null), ['dave@example.com'])).toBe(false);
+  });
+});
+
+describe('isPendingForUser', () => {
+  // Received invitations auto-added by the server (Stalwart `autoAddInvitations`)
+  // carry PARTSTAT=NEEDS-ACTION for the attendee until they reply — the visual
+  // this predicate drives is what reminds them to decide.
+  const myNeedsAction: Partial<CalendarParticipant> = {
+    '@type': 'Participant',
+    calendarAddress: 'mailto:me@example.com',
+    participationStatus: 'needs-action',
+  };
+  const myTentative: Partial<CalendarParticipant> = {
+    '@type': 'Participant',
+    calendarAddress: 'mailto:me@example.com',
+    participationStatus: 'tentative',
+  };
+  const myAccepted: Partial<CalendarParticipant> = {
+    '@type': 'Participant',
+    calendarAddress: 'mailto:me@example.com',
+    participationStatus: 'accepted',
+  };
+  const myDeclined: Partial<CalendarParticipant> = {
+    '@type': 'Participant',
+    calendarAddress: 'mailto:me@example.com',
+    participationStatus: 'declined',
+  };
+
+  it('is true for the user own needs-action participation', () => {
+    const event = makeEvent({ org: orgParticipant, me: myNeedsAction });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(true);
+  });
+
+  it('is true for the user own tentative participation', () => {
+    const event = makeEvent({ org: orgParticipant, me: myTentative });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(true);
+  });
+
+  it('is false once the user has accepted or declined', () => {
+    expect(isPendingForUser(makeEvent({ org: orgParticipant, me: myAccepted }), ['me@example.com'])).toBe(false);
+    expect(isPendingForUser(makeEvent({ org: orgParticipant, me: myDeclined }), ['me@example.com'])).toBe(false);
+  });
+
+  it('is true when the event status is tentative, even if the user has no participant entry', () => {
+    // Proposed meeting the organizer has not confirmed yet (RFC 5545
+    // STATUS:TENTATIVE) — the slot must not look like a firm booking.
+    const event = makeEvent({ org: orgParticipant }, { status: 'tentative' });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(true);
+  });
+
+  it('is false for the organizer on their own event, even if the server echoes NEEDS-ACTION', () => {
+    // Stalwart rebuilds the ORGANIZER as a participant with no roles and no
+    // reply — treating that as pending would mark every event the user runs.
+    const event = makeEvent(
+      { org: { ...orgParticipant, participationStatus: 'needs-action' } },
+      { organizerCalendarAddress: 'mailto:me@example.com' }
+    );
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(false);
+  });
+
+  it('is false when the event is cancelled, no matter what the user replied', () => {
+    const event = makeEvent({ me: myNeedsAction }, { status: 'cancelled' });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(false);
+  });
+
+  it('is false when the user has no email identity to match', () => {
+    const event = makeEvent({ me: myNeedsAction });
+    expect(isPendingForUser(event, [])).toBe(false);
+    expect(isPendingForUser(event, undefined)).toBe(false);
+  });
+
+  it('matches the configurable alias list (identity + fallback)', () => {
+    // Luc has copies of calendars where he figures under other addresses
+    // (perso-hey, perso-ggl); the caller passes every known alias.
+    const event = makeEvent({
+      me: { '@type': 'Participant', calendarAddress: 'mailto:luc@hey.com', participationStatus: 'needs-action' },
+    });
+    expect(isPendingForUser(event, ['luc@undust.co', 'luc@hey.com'])).toBe(true);
+    expect(isPendingForUser(event, ['luc@undust.co'])).toBe(false);
+  });
+
+  it('matches an alias calendarAddress case-insensitively (e.g. luc.letoffe@methode-ec2r.com)', () => {
+    // Mesure JMAP 16/10/2026 : « Luc et Jean » (08/09) a Luc sous
+    // mailto:luc.letoffe@methode-ec2r.com (calendarAddress), pas luc@undust.co.
+    // La comparaison doit tomber dessus même avec une casse mélangée.
+    const event = makeEvent({
+      me: {
+        '@type': 'Participant',
+        calendarAddress: 'mailto:Luc.Letoffe@Methode-EC2R.com',
+        participationStatus: 'needs-action',
+        expectReply: true,
+      },
+    });
+    expect(
+      isPendingForUser(event, ['luc@undust.co', 'luc.letoffe@methode-ec2r.com'])
+    ).toBe(true);
+  });
+
+  it('also matches an alias via sendTo.imip', () => {
+    const event = makeEvent({
+      me: {
+        '@type': 'Participant',
+        sendTo: { imip: 'mailto:Luc@Hey.com' },
+        participationStatus: 'tentative',
+      },
+    });
+    expect(isPendingForUser(event, ['luc@hey.com'])).toBe(true);
+  });
+
+  it('hatches a plug event with no participants but STATUS:TENTATIVE', () => {
+    // Rattrapage des invitations perdues (spam / autre adresse) : une sonde
+    // crée un bouchon sans ORGANIZER/ATTENDEE (pour ne déclencher aucun iTIP)
+    // avec status:tentative — à hachurer quand même pour forcer la décision.
+    const event = makeEvent(null, { status: 'tentative' });
+    expect(isPendingForUser(event, ['luc@undust.co'])).toBe(true);
+  });
+
+  it('ignores someone else awaiting their reply', () => {
+    const event = makeEvent({ org: orgParticipant, bob: attendeeParticipant, me: myAccepted });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(false);
   });
 });
 

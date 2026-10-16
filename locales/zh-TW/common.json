@@ -2967,6 +2967,7 @@
       "declined": "已拒絕",
       "tentative": "暫定",
       "needs_action": "待處理",
+      "pending_badge": "Awaiting reply",
       "remove": "移除",
       "edit": "編輯",
       "email_placeholder": "新增電子郵件地址或搜尋聯絡人",

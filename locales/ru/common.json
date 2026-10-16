@@ -2967,6 +2967,7 @@
       "declined": "Отклонено",
       "tentative": "Предварительно",
       "needs_action": "Требует ответа",
+      "pending_badge": "Awaiting reply",
       "remove": "Удалить",
       "edit": "Редактировать",
       "email_placeholder": "Добавьте адрес или найдите контакт",

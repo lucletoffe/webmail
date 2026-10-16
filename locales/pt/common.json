@@ -2967,6 +2967,7 @@
       "declined": "Recusado",
       "tentative": "Provisório",
       "needs_action": "Aguardando resposta",
+      "pending_badge": "Awaiting reply",
       "remove": "Remover",
       "edit": "Editar",
       "email_placeholder": "Adicionar endereço de e-mail ou pesquisar contatos",

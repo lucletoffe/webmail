@@ -2967,6 +2967,7 @@
       "declined": "Refusé",
       "tentative": "Provisoire",
       "needs_action": "En attente de réponse",
+      "pending_badge": "À accepter",
       "remove": "Retirer",
       "edit": "Modifier",
       "email_placeholder": "Ajouter une adresse e-mail ou chercher des contacts",

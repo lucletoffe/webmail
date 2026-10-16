@@ -41,18 +41,43 @@ describe('EventCard', () => {
     expect(screen.getByText('Standup a')).toHaveClass('line-through');
   });
 
-  it('leaves accepted and unanswered occurrences alone', () => {
+  it('leaves accepted occurrences alone', () => {
     render(
-      <>
-        <EventCard event={makeOccurrence('a', 'accepted')} variant="block" currentUserEmails={me} />
-        <EventCard event={makeOccurrence('b', 'needs-action')} variant="block" currentUserEmails={me} />
-      </>
+      <EventCard event={makeOccurrence('a', 'accepted')} variant="block" currentUserEmails={me} />
     );
-    for (const card of screen.getAllByRole('button')) {
-      expect(card.style.boxShadow).not.toContain('inset');
-      expect(card.getAttribute('aria-label')).not.toMatch(/declined/);
-    }
+    const card = screen.getByRole('button');
+    expect(card.style.boxShadow).not.toContain('inset');
+    expect(card.style.backgroundImage).toBe('');
+    expect(card.getAttribute('aria-label')).not.toMatch(/declined/);
+    expect(card.getAttribute('aria-label')).not.toMatch(/pending_badge/);
     expect(screen.getByText('Standup a')).not.toHaveClass('line-through');
+  });
+
+  it.each(['chip', 'span', 'block'] as const)('hatches a needs-action invitation (%s)', (variant) => {
+    // Pending RSVP = diagonal stripes in the calendar colour + an inset border
+    // to keep the slot readable, plus an "awaiting reply" cue in the aria-label
+    // so the user is forced to decide (ordre Luc 16/10/2026, LPBvKUOr §3).
+    render(<EventCard event={makeOccurrence('a', 'needs-action')} variant={variant} currentUserEmails={me} />);
+    const card = screen.getByRole('button');
+    expect(card.style.backgroundImage).toMatch(/repeating-linear-gradient/);
+    expect(card.style.boxShadow).toContain('inset 0 0 0 1px');
+    expect(card.getAttribute('aria-label')).toMatch(/, participants\.pending_badge$/);
+    expect(card.getAttribute('title')).toBe('participants.pending_badge');
+    // The slot still reads at its real time, not struck through.
+    expect(screen.getByText('Standup a')).not.toHaveClass('line-through');
+  });
+
+  it('hatches a tentative RSVP from the user', () => {
+    render(<EventCard event={makeOccurrence('a', 'tentative')} variant="block" currentUserEmails={me} />);
+    const card = screen.getByRole('button');
+    expect(card.style.backgroundImage).toMatch(/repeating-linear-gradient/);
+    expect(card.getAttribute('aria-label')).toMatch(/pending_badge/);
+  });
+
+  it('hatches an event the organizer has only proposed (STATUS:TENTATIVE)', () => {
+    const event = { ...makeOccurrence('a', 'accepted'), status: 'tentative' } as CalendarEvent;
+    render(<EventCard event={event} variant="block" currentUserEmails={me} />);
+    expect(screen.getByRole('button').style.backgroundImage).toMatch(/repeating-linear-gradient/);
   });
 
   it('only looks at the user\'s own participant entry', () => {

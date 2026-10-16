@@ -2967,6 +2967,7 @@
       "declined": "Avslått",
       "tentative": "Kanskje",
       "needs_action": "Har ikke svart",
+      "pending_badge": "Awaiting reply",
       "remove": "Fjern",
       "edit": "Rediger",
       "email_placeholder": "Legg til e-postadresse eller søk etter kontakter",

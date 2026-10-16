@@ -2967,6 +2967,7 @@
       "declined": "거절함",
       "tentative": "미정",
       "needs_action": "응답 필요",
+      "pending_badge": "Awaiting reply",
       "remove": "삭제",
       "edit": "편집",
       "email_placeholder": "이메일을 추가하거나 연락처를 검색하세요",

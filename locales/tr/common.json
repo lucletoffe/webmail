@@ -2967,6 +2967,7 @@
       "declined": "Reddedildi",
       "tentative": "Geçici",
       "needs_action": "İşlem gerekiyor",
+      "pending_badge": "Awaiting reply",
       "remove": "Kaldır",
       "edit": "Düzenle",
       "email_placeholder": "E-posta adresi ekleyin veya kişileri arayın",

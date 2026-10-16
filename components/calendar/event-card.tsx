@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { CalendarEvent, Calendar } from "@/lib/jmap/types";
 import { format } from "date-fns";
 import { Users } from "@/components/icons";
-import { getParticipantCount, isDeclinedByUser } from "@/lib/calendar-participants";
+import { getParticipantCount, isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import { getEventEndDate, getEventStartDate } from "@/lib/calendar-utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import { readableTextOn } from "@/lib/color-transform";
@@ -47,19 +47,38 @@ function getEventColor(event: CalendarEvent, calendar?: Calendar): string {
 
 // Events are solid blocks of their calendar colour; declined and cancelled
 // ones drop the fill and keep a 1px border in it (repos/branding/APP.md).
-// Everything is drawn with box-shadow, so the selection ring joins the list
-// here and the browser's focus outline stays free.
+// Pending RSVPs — the user has not yet accepted or declined — paint diagonal
+// stripes in the calendar colour over the event's own fill, so the slot
+// still reads as "that time" without looking like a firm commitment: it
+// forces an answer before the slot counts as taken (ordre Luc 16/10/2026,
+// decision LPBvKUOr §3). Everything is drawn with box-shadow, so the
+// selection ring joins the list here and the browser's focus outline stays
+// free.
+//
+// The stripe is drawn with `backgroundImage` on top of the usual
+// `backgroundColor`: the colour of the calendar still wins the reading, the
+// gradient only breaks it up. 6px / 10px bands at 45° stay crisp at any zoom
+// and read in both light and dark themes — the stripe is translucent black
+// on light fills and translucent white on dark fills (chosen from the
+// readable text colour, which already knows which is which).
 function eventFillStyle(
   color: string,
-  { inactive, separated, selected }: { inactive: boolean; separated?: boolean; selected?: boolean },
+  { inactive, pending, separated, selected }: { inactive: boolean; pending?: boolean; separated?: boolean; selected?: boolean },
 ): CSSProperties {
   const shadows: string[] = [];
   if (selected) shadows.push("0 0 0 2px var(--color-primary)");
   else if (separated) shadows.push("0 0 0 1px var(--color-background)");
   if (inactive) shadows.push(`inset 0 0 0 1px ${color}`);
+  // Pending wins over the plain fill but loses to inactive (a declined or
+  // cancelled event still reads as a hollow outline, not a hatched block).
+  if (!inactive && pending) shadows.push(`inset 0 0 0 1px ${color}`);
   const fill: CSSProperties = inactive
     ? { backgroundColor: "var(--color-background)", color: `color-mix(in srgb, ${color} 55%, var(--color-foreground))` }
     : { backgroundColor: color, color: readableTextOn(color) };
+  if (!inactive && pending) {
+    const stripe = fill.color === "rgb(255, 255, 255)" ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
+    fill.backgroundImage = `repeating-linear-gradient(45deg, ${stripe} 0 2px, transparent 2px 10px)`;
+  }
   return shadows.length > 0 ? { ...fill, boxShadow: shadows.join(", ") } : fill;
 }
 
@@ -112,10 +131,22 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
   // iTIP CANCEL marks the attendee's copy with status "cancelled" instead of
   // deleting it (#572), and a declined invitation stays on the calendar too
   // (#1110) - render both struck through and dimmed.
+  //
+  // A pending RSVP — the user has been invited and has not yet replied, or
+  // the organizer has only proposed the meeting (STATUS:TENTATIVE) — is
+  // hatched with diagonal stripes (ordre Luc 16/10/2026, LPBvKUOr §3): the
+  // slot shows at its real time without reading as a firm booking.
   const isCancelled = event.status === "cancelled";
   const isDeclined = !isCancelled && isDeclinedByUser(event, currentUserEmails);
+  const isPending = !isCancelled && !isDeclined && isPendingForUser(event, currentUserEmails);
   const isInactive = isCancelled || isDeclined;
-  const statusLabel = isCancelled ? t("detail.cancelled") : isDeclined ? t("participants.declined") : null;
+  const statusLabel = isCancelled
+    ? t("detail.cancelled")
+    : isDeclined
+      ? t("participants.declined")
+      : isPending
+        ? t("participants.pending_badge")
+        : null;
   const ariaLabel = `${event.title || t("events.no_title")}, ${timeString}${calendarName ? `, ${calendarName}` : ""}${statusLabel ? `, ${statusLabel}` : ""}`;
 
   const handleDragStart = useCallback((e: DragEvent) => {
@@ -165,7 +196,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
           isBeingDragged && "opacity-50",
           className
         )}
-        style={{ ...eventFillStyle(color, { inactive: isInactive, selected: isSelected }), ...style }}
+        title={isPending ? t("participants.pending_badge") : undefined}
+        style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, selected: isSelected }), ...style }}
       >
         <span className={cn("truncate", isInactive && "line-through")}>{event.title || t("events.no_title")}</span>
       </button>
@@ -189,7 +221,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
           isBeingDragged && "opacity-50",
           className
         )}
-        style={{ ...eventFillStyle(color, { inactive: isInactive, selected: isSelected }), ...style }}
+        title={isPending ? t("participants.pending_badge") : undefined}
+        style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, selected: isSelected }), ...style }}
       >
         <div className="flex items-center gap-1 min-w-0">
           {showTimeInMonthView && !event.showWithoutTime && (
@@ -216,7 +249,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
         isBeingDragged && "opacity-50",
         className
       )}
-      style={{ ...eventFillStyle(color, { inactive: isInactive, separated: true, selected: isSelected }), ...style }}
+      title={isPending ? t("participants.pending_badge") : undefined}
+      style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, separated: true, selected: isSelected }), ...style }}
     >
       <div className={cn("font-medium truncate", isInactive && "line-through")}>{event.title || t("events.no_title")}</div>
       {/* Shorter blocks have no room for a second line at the 60px hour. */}

@@ -8,7 +8,7 @@ import { EventCard } from "./event-card";
 import { CalendarTaskChip } from "./task-chip";
 import { buildWeekSegments, getEventDayBounds, getPrimaryCalendarId } from "@/lib/calendar-utils";
 import { groupTasksByDueDay } from "@/lib/calendar-tasks";
-import { isDeclinedByUser } from "@/lib/calendar-participants";
+import { isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import type { CalendarEvent, Calendar, CalendarTask } from "@/lib/jmap/types";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCalendarStore } from "@/stores/calendar-store";
@@ -351,11 +351,17 @@ export function CalendarMonthView({
                         const cal = calId ? calendarMap.get(calId) : undefined;
                         const evColor = ev.color || cal?.color || "#3b82f6";
                         const inactive = ev.status === "cancelled" || isDeclinedByUser(ev, currentUserEmails);
+                        // A pending RSVP on the mobile 3-dot cell reads as a
+                        // hollow ring in the calendar colour: it occupies the
+                        // slot without claiming it has been accepted. Same
+                        // ring as a task, filled is reserved for firm events
+                        // (ordre Luc 16/10/2026, LPBvKUOr §3).
+                        const pending = !inactive && isPendingForUser(ev, currentUserEmails);
                         return (
                           <span
                             key={ev.id}
-                            className={cn("w-1.5 h-1.5 rounded-full", inactive && "opacity-40")}
-                            style={{ backgroundColor: evColor }}
+                            className={cn("w-1.5 h-1.5 rounded-full", inactive && "opacity-40", pending && "border bg-transparent")}
+                            style={pending ? { borderColor: evColor } : { backgroundColor: evColor }}
                           />
                         );
                       })}

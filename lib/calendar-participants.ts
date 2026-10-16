@@ -132,6 +132,26 @@ export function isDeclinedByUser(event: CalendarEvent, userEmails: string[] | un
   return getUserStatus(event, userEmails) === 'declined';
 }
 
+/**
+ * True when this event is proposed to the user and still awaiting their reply.
+ * The point of the visual it drives (hatched block, "awaiting reply" badge)
+ * is to force the user to accept or decline before the slot counts as taken.
+ *
+ * Returns true for the user's own `needs-action` or `tentative` participation,
+ * and for an event-level `status: 'tentative'` (proposed meeting the organizer
+ * has not confirmed yet, RFC 5545 §3.8.1.11). Returns false for an organizer
+ * on their own event (nothing to RSVP to) and for a declined/accepted/cancelled
+ * event. Empty `userEmails` returns false — pending needs a "me" to apply to.
+ */
+export function isPendingForUser(event: CalendarEvent, userEmails: string[] | undefined): boolean {
+  if (!userEmails || userEmails.length === 0) return false;
+  if (event.status === 'cancelled') return false;
+  if (isOrganizer(event, userEmails)) return false;
+  if (event.status === 'tentative') return true;
+  const status = getUserStatus(event, userEmails);
+  return status === 'needs-action' || status === 'tentative';
+}
+
 /** When the same address appears in two participant entries, a real RSVP on
  *  either one beats a missing/"needs-action" one — the duplicate is always the
  *  entry that never replied (the needs-action side). Between two real replies

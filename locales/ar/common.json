@@ -2967,6 +2967,7 @@
       "declined": "مرفوض",
       "tentative": "مبدئي",
       "needs_action": "بحاجة إلى رد",
+      "pending_badge": "Awaiting reply",
       "remove": "إزالة",
       "edit": "تعديل",
       "email_placeholder": "أضف عنوان بريد إلكتروني أو ابحث في جهات الاتصال",

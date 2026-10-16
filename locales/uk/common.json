@@ -2967,6 +2967,7 @@
       "declined": "Відхилено",
       "tentative": "Орієнтовний",
       "needs_action": "Потребує дії",
+      "pending_badge": "Awaiting reply",
       "remove": "видалити",
       "edit": "Редагувати",
       "email_placeholder": "Додайте електронну адресу або знайдіть контакти",

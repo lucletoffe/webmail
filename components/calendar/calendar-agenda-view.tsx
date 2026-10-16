@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { getEventColor } from "./event-card";
 import { getEventDayBounds, getEventEndDate, getEventStartDate, getPrimaryCalendarId } from "@/lib/calendar-utils";
 import { displayNow, isDisplayToday } from "@/lib/timezone";
-import { getParticipantCount, isDeclinedByUser } from "@/lib/calendar-participants";
+import { getParticipantCount, isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import { useScrollWindow } from "@/hooks/use-scroll-window";
 import type { ScrollWindowViewProps } from "@/lib/calendar-scroll-window";
 import type { CalendarEvent, Calendar } from "@/lib/jmap/types";
@@ -213,6 +213,13 @@ export function CalendarAgendaView({
               // instead of deleting it (#572); a declined invitation stays
               // listed too (#1110).
               const isInactive = ev.status === "cancelled" || isDeclinedByUser(ev, currentUserEmails);
+              // A pending RSVP paints the row with a diagonal hatch in the
+              // calendar colour: lists keep the same visual language as
+              // month/week/day cards (ordre Luc 16/10/2026, LPBvKUOr §3).
+              const isPending = !isInactive && isPendingForUser(ev, currentUserEmails);
+              const pendingRowStyle = isPending
+                ? { backgroundImage: `repeating-linear-gradient(45deg, ${color}22 0 2px, transparent 2px 10px)` }
+                : undefined;
               const locationName = ev.locations
                 ? Object.values(ev.locations)[0]?.name
                 : null;
@@ -225,7 +232,9 @@ export function CalendarAgendaView({
                   onMouseLeave={() => onHoverLeave?.()}
                   onContextMenu={onContextMenuEvent ? (e) => onContextMenuEvent(e, ev) : undefined}
                   className="w-full flex items-start px-4 hover:bg-muted/50 transition-colors text-start"
-                  style={{ gap: 'var(--density-item-gap)', paddingBlock: 'var(--density-item-py)' }}
+                  style={{ gap: 'var(--density-item-gap)', paddingBlock: 'var(--density-item-py)', ...pendingRowStyle }}
+                  title={isPending ? t("participants.pending_badge") : undefined}
+                  aria-label={isPending ? `${ev.title || t("events.no_title")}, ${t("participants.pending_badge")}` : undefined}
                 >
                   <div className="flex flex-col items-center pt-0.5 min-w-[60px]">
                     {ev.showWithoutTime ? (
@@ -252,6 +261,16 @@ export function CalendarAgendaView({
                     <div className={cn("text-sm font-medium truncate", isInactive && "line-through text-muted-foreground")}>
                       {ev.title || t("events.no_title")}
                     </div>
+                    {isPending && (
+                      <div className="mt-0.5">
+                        <span
+                          className="inline-block text-[10px] uppercase tracking-wide rounded-sm px-1.5 py-0.5 border"
+                          style={{ color, borderColor: color }}
+                        >
+                          {t("participants.pending_badge")}
+                        </span>
+                      </div>
+                    )}
                     {locationName && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                         <MapPin className="w-3 h-3 flex-shrink-0" />
