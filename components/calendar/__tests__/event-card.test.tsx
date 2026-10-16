@@ -80,6 +80,40 @@ describe('EventCard', () => {
     expect(screen.getByRole('button').style.backgroundImage).toMatch(/repeating-linear-gradient/);
   });
 
+  // Stripe tone must come from the fill's luminance, not from an rgb-literal
+  // compare: readableTextOn returns the hex '#ffffff' / '#111827', never a
+  // 'rgb(255,255,255)' string, so a literal compare always fell to dark-on-dark
+  // and the hatch disappeared on dark calendar colours (fred review 17ajQpph B1).
+  it('paints the hatch white on a dark calendar colour', () => {
+    const darkCalendar = { id: 'cal-1', name: 'Night', color: '#0b1a3a' } as unknown as Calendar;
+    render(
+      <EventCard
+        event={makeOccurrence('a', 'needs-action')}
+        calendar={darkCalendar}
+        variant="block"
+        currentUserEmails={me}
+      />
+    );
+    const bg = screen.getByRole('button').style.backgroundImage;
+    expect(bg).toMatch(/rgba\(255,\s*255,\s*255/);
+    expect(bg).not.toMatch(/rgba\(0,\s*0,\s*0/);
+  });
+
+  it('paints the hatch black on a light calendar colour', () => {
+    const lightCalendar = { id: 'cal-1', name: 'Day', color: '#fde68a' } as unknown as Calendar;
+    render(
+      <EventCard
+        event={makeOccurrence('a', 'needs-action')}
+        calendar={lightCalendar}
+        variant="block"
+        currentUserEmails={me}
+      />
+    );
+    const bg = screen.getByRole('button').style.backgroundImage;
+    expect(bg).toMatch(/rgba\(0,\s*0,\s*0/);
+    expect(bg).not.toMatch(/rgba\(255,\s*255,\s*255/);
+  });
+
   it('only looks at the user\'s own participant entry', () => {
     const event = makeOccurrence('a', 'accepted');
     event.participants!.org.participationStatus = 'declined';

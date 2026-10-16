@@ -132,6 +132,21 @@ export function isDarkColor(colorString: string): boolean {
   return luminance < 0.5;
 }
 
+/**
+ * Build a `rgba(...)` string from any colour shape `parseColor` can read —
+ * `#rgb`, `#rrggbb`, `rgb()`, `rgba()`, `hsl()`, named CSS colours — and
+ * clamp the alpha to [0, 1]. Returns the fallback (default: transparent) when
+ * the input is unreadable, so a composed CSS value (gradient stop, overlay)
+ * never collapses to an invalid string when a Calendar JMAP server emits a
+ * colour we did not anticipate (fred review 17ajQpph N2).
+ */
+export function withAlpha(colorString: string, alpha: number, fallback = 'rgba(0, 0, 0, 0)'): string {
+  const rgb = parseColor(colorString);
+  if (!rgb) return fallback;
+  const clamped = Math.max(0, Math.min(1, alpha));
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamped})`;
+}
+
 export function transformColorForDarkMode(colorString: string): string {
   const rgb = parseColor(colorString);
   if (!rgb) return colorString;

@@ -139,15 +139,28 @@ export function isDeclinedByUser(event: CalendarEvent, userEmails: string[] | un
  *
  * Returns true for the user's own `needs-action` or `tentative` participation,
  * and for an event-level `status: 'tentative'` (proposed meeting the organizer
- * has not confirmed yet, RFC 5545 §3.8.1.11). Returns false for an organizer
- * on their own event (nothing to RSVP to) and for a declined/accepted/cancelled
- * event. Empty `userEmails` returns false — pending needs a "me" to apply to.
+ * has not confirmed yet, RFC 5545 §3.8.1.11) in two cases: the plug has no
+ * participants at all (recovery sweep for an invitation lost to spam), or
+ * the user does figure in the participant list — a third party's "tentative"
+ * event on a shared calendar the user is NOT invited to is NOT pending for
+ * them (fred review 17ajQpph N1 — the user has nothing to RSVP there,
+ * so no "awaiting reply" affordance applies).
+ *
+ * Returns false for an organizer on their own event (nothing to RSVP to) and
+ * for a declined/accepted/cancelled event. Empty `userEmails` returns false —
+ * pending needs a "me" to apply to.
  */
 export function isPendingForUser(event: CalendarEvent, userEmails: string[] | undefined): boolean {
   if (!userEmails || userEmails.length === 0) return false;
   if (event.status === 'cancelled') return false;
   if (isOrganizer(event, userEmails)) return false;
-  if (event.status === 'tentative') return true;
+  if (event.status === 'tentative') {
+    // Plug (no participants) or user is on the invite list → pending.
+    // Otherwise the event belongs to someone else on a shared calendar.
+    if (!event.participants || Object.keys(event.participants).length === 0) return true;
+    if (getUserParticipantId(event, userEmails) !== null) return true;
+    return false;
+  }
   const status = getUserStatus(event, userEmails);
   return status === 'needs-action' || status === 'tentative';
 }

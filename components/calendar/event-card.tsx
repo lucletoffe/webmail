@@ -9,7 +9,7 @@ import { Users } from "@/components/icons";
 import { getParticipantCount, isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import { getEventEndDate, getEventStartDate } from "@/lib/calendar-utils";
 import { useSettingsStore } from "@/stores/settings-store";
-import { readableTextOn } from "@/lib/color-transform";
+import { isDarkColor, readableTextOn } from "@/lib/color-transform";
 
 interface EventCardProps {
   event: CalendarEvent;
@@ -57,10 +57,10 @@ function getEventColor(event: CalendarEvent, calendar?: Calendar): string {
 //
 // The stripe is drawn with `backgroundImage` on top of the usual
 // `backgroundColor`: the colour of the calendar still wins the reading, the
-// gradient only breaks it up. 6px / 10px bands at 45° stay crisp at any zoom
-// and read in both light and dark themes — the stripe is translucent black
-// on light fills and translucent white on dark fills (chosen from the
-// readable text colour, which already knows which is which).
+// gradient only breaks it up. 2px / 10px bands at 45° stay crisp at any zoom
+// and the stripe tone is picked from the fill's own luminance — translucent
+// white on a dark calendar colour, translucent black on a light one — so
+// the hatch stays readable in both light and dark themes.
 function eventFillStyle(
   color: string,
   { inactive, pending, separated, selected }: { inactive: boolean; pending?: boolean; separated?: boolean; selected?: boolean },
@@ -76,7 +76,12 @@ function eventFillStyle(
     ? { backgroundColor: "var(--color-background)", color: `color-mix(in srgb, ${color} 55%, var(--color-foreground))` }
     : { backgroundColor: color, color: readableTextOn(color) };
   if (!inactive && pending) {
-    const stripe = fill.color === "rgb(255, 255, 255)" ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
+    // Luminance-based pick: lifts the hatch off dark fills (bluenavy, deep
+    // violet, "identity black" on the sombre palette) where a dark-on-dark
+    // stripe disappears — the previous rgb-literal compare always fell to
+    // dark-on-dark because readableTextOn returns '#ffffff' / '#111827', not
+    // 'rgb(255,255,255)' (fred review 17ajQpph B1).
+    const stripe = isDarkColor(color) ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
     fill.backgroundImage = `repeating-linear-gradient(45deg, ${stripe} 0 2px, transparent 2px 10px)`;
   }
   return shadows.length > 0 ? { ...fill, boxShadow: shadows.join(", ") } : fill;

@@ -349,10 +349,27 @@ describe('isPendingForUser', () => {
     expect(isPendingForUser(makeEvent({ org: orgParticipant, me: myDeclined }), ['me@example.com'])).toBe(false);
   });
 
-  it('is true when the event status is tentative, even if the user has no participant entry', () => {
-    // Proposed meeting the organizer has not confirmed yet (RFC 5545
-    // STATUS:TENTATIVE) — the slot must not look like a firm booking.
-    const event = makeEvent({ org: orgParticipant }, { status: 'tentative' });
+  it('is true when the event status is tentative on a plug with no participants', () => {
+    // Rattrapage: an invitation lost to spam gets replayed as a plug event
+    // with STATUS:TENTATIVE and no ORGANIZER/ATTENDEE (so no iTIP fires).
+    // Pending must apply so the slot forces the user to decide.
+    const event = makeEvent(null, { status: 'tentative' });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(true);
+  });
+
+  it('is false for a third-party STATUS:TENTATIVE event the user is NOT invited to', () => {
+    // On a shared calendar, a colleague's "tentative" event must not be
+    // hatched: the user has nothing to RSVP to, so no "awaiting reply"
+    // affordance applies (fred review 17ajQpph N1).
+    const event = makeEvent({ org: orgParticipant, bob: attendeeParticipant }, { status: 'tentative' });
+    expect(isPendingForUser(event, ['me@example.com'])).toBe(false);
+  });
+
+  it('is true for a STATUS:TENTATIVE event when the user IS on the invite list', () => {
+    const event = makeEvent(
+      { org: orgParticipant, me: { ...attendeeParticipant, calendarAddress: 'mailto:me@example.com', email: 'me@example.com' } },
+      { status: 'tentative' }
+    );
     expect(isPendingForUser(event, ['me@example.com'])).toBe(true);
   });
 
@@ -413,14 +430,6 @@ describe('isPendingForUser', () => {
       },
     });
     expect(isPendingForUser(event, ['luc@hey.com'])).toBe(true);
-  });
-
-  it('hatches a plug event with no participants but STATUS:TENTATIVE', () => {
-    // Rattrapage des invitations perdues (spam / autre adresse) : une sonde
-    // crée un bouchon sans ORGANIZER/ATTENDEE (pour ne déclencher aucun iTIP)
-    // avec status:tentative — à hachurer quand même pour forcer la décision.
-    const event = makeEvent(null, { status: 'tentative' });
-    expect(isPendingForUser(event, ['luc@undust.co'])).toBe(true);
   });
 
   it('ignores someone else awaiting their reply', () => {
