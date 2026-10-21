@@ -1256,6 +1256,17 @@
         "invitation_parsing_desc": "Detect calendar invitations in email attachments and show calendar actions"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Keyboard shortcuts",
+      "description": "Give the mail actions your own keys, such as Ctrl + E to archive. A key you choose replaces the built-in one.",
+      "change": "Change",
+      "reset": "Reset",
+      "reset_all": "Reset all shortcuts",
+      "recording": "Press the new key… (Esc to cancel)",
+      "invalid": "{key} can't be used: the app or the browser keeps it.",
+      "taken": "{key} is already used by “{action}”.",
+      "fixed_keys": "Moving through the list (j, k, arrows, Enter, Esc, g sequences), x, ? and Ctrl/⌘ + A keep their keys."
+    },
     "language_region": {
       "title": "Language, Region & Time",
       "description": "Language, date format, time format, and other regional preferences",

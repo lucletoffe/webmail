@@ -1256,6 +1256,17 @@
         "invitation_parsing_desc": "Registrér kalenderinvitationer i e-mail-vedhæftninger og vis kalenderhandlinger"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Tastaturgenveje",
+      "description": "Giv mailhandlingerne dine egne taster, f.eks. Ctrl + E for at arkivere. Den tast, du vælger, erstatter standardtasten.",
+      "change": "Skift",
+      "reset": "Nulstil",
+      "reset_all": "Nulstil alle genveje",
+      "recording": "Tryk på den nye tast… (Esc for at annullere)",
+      "invalid": "{key} kan ikke bruges: appen eller browseren bruger den.",
+      "taken": "{key} bruges allerede af “{action}”.",
+      "fixed_keys": "Taster til at bevæge sig i listen (j, k, pile, Enter, Esc, g-sekvenser), x, ? og Ctrl/⌘ + A beholder deres taster."
+    },
     "language_region": {
       "title": "Sprog, region & tid",
       "description": "Sprog, datoformat, tidsformat og andre regionale indstillinger",

@@ -1256,6 +1256,17 @@
         "invitation_parsing_desc": "Detecta les invitacions de calendari als fitxers adjunts del correu i mostra les accions del calendari"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Dreceres de teclat",
+      "description": "Assigna les teves pròpies tecles a les accions del correu, com ara Ctrl + E per arxivar. La tecla que triïs substitueix la predeterminada.",
+      "change": "Canvia",
+      "reset": "Restableix",
+      "reset_all": "Restableix totes les dreceres",
+      "recording": "Prem la tecla nova… (Esc per cancel·lar)",
+      "invalid": "No es pot fer servir {key}: l'aplicació o el navegador la reserven.",
+      "taken": "{key} ja s'utilitza per a «{action}».",
+      "fixed_keys": "Les tecles per moure't per la llista (j, k, fletxes, Retorn, Esc, seqüències g), x, ? i Ctrl/⌘ + A no canvien."
+    },
     "language_region": {
       "title": "Idioma, regió i hora",
       "description": "Idioma, format de data, format d'hora i altres preferències regionals",

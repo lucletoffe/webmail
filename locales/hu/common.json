@@ -1256,6 +1256,17 @@
         "invitation_parsing_desc": "Naptármeghívók észlelése az e-mail csatolmányokban és naptár műveletek megjelenítése"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Billentyűparancsok",
+      "description": "Adjon saját billentyűket a levelezési műveletekhez, például Ctrl + E az archiváláshoz. A választott billentyű felváltja az alapértelmezettet.",
+      "change": "Módosítás",
+      "reset": "Visszaállítás",
+      "reset_all": "Minden billentyűparancs visszaállítása",
+      "recording": "Nyomja meg az új billentyűt… (Esc a megszakításhoz)",
+      "invalid": "A(z) {key} nem használható: az alkalmazás vagy a böngésző foglalja.",
+      "taken": "A(z) {key} már a(z) „{action}” művelethez tartozik.",
+      "fixed_keys": "A listában mozgás billentyűi (j, k, nyilak, Enter, Esc, g-sorozatok), az x, a ? és a Ctrl/⌘ + A nem változnak."
+    },
     "language_region": {
       "title": "Nyelv, régió és idő",
       "description": "Nyelv, dátumformátum, időformátum és egyéb regionális beállítások",

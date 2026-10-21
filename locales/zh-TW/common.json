@@ -1256,6 +1256,17 @@
         "invitation_parsing_desc": "偵測郵件附件中的行事曆邀請，並顯示行事曆動作"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "鍵盤快速鍵",
+      "description": "為郵件操作設定你自己的按鍵，例如以 Ctrl + E 封存。你選擇的按鍵會取代預設按鍵。",
+      "change": "變更",
+      "reset": "還原",
+      "reset_all": "還原所有快速鍵",
+      "recording": "請按下新的按鍵…（按 Esc 取消）",
+      "invalid": "無法使用 {key}：應用程式或瀏覽器已占用此按鍵。",
+      "taken": "{key} 已被「{action}」使用。",
+      "fixed_keys": "在清單中移動的按鍵（j、k、方向鍵、Enter、Esc、g 序列）、x、? 和 Ctrl/⌘ + A 保持不變。"
+    },
     "language_region": {
       "title": "語言、地區與時間",
       "description": "語言、日期格式、時間格式以及其他區域設定",

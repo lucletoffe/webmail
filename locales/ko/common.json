@@ -1253,6 +1253,17 @@
         "confirm_revoke_message_this": "이 기기는 즉시 백그라운드 알림 수신을 멈추게 됩니다."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "키보드 단축키",
+      "description": "메일 작업에 원하는 키를 지정하세요. 예: Ctrl + E로 보관. 선택한 키가 기본 키를 대신합니다.",
+      "change": "변경",
+      "reset": "초기화",
+      "reset_all": "모든 단축키 초기화",
+      "recording": "새 키를 누르세요… (Esc로 취소)",
+      "invalid": "{key}은(는) 사용할 수 없습니다: 앱이나 브라우저가 사용하는 키입니다.",
+      "taken": "{key}은(는) 이미 '{action}'에 사용 중입니다.",
+      "fixed_keys": "목록 이동 키(j, k, 화살표, Enter, Esc, g 시퀀스), x, ?, Ctrl/⌘ + A는 바뀌지 않습니다."
+    },
     "language_region": {
       "title": "언어, 지역 및 시간",
       "description": "언어, 날짜 형식, 시간 형식 및 기타 지역 환경설정",

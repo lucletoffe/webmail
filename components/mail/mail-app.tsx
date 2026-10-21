@@ -888,11 +888,13 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
   }), [activeEmails, selectedEmail, client, selectedMailbox, isMobile, isTablet, selectedEmailIds, mailboxes, isScheduledView]);
 
   // Initialize keyboard shortcuts
+  const shortcutBindings = useSettingsStore((s) => s.shortcutBindings);
   useKeyboardShortcuts({
     enabled: isAuthenticated && !showComposer,
     emails: activeEmails,
     selectedEmailId: selectedEmail?.id,
     selectionCount: selectedEmailIds.size,
+    customBindings: shortcutBindings,
     handlers: keyboardHandlers,
   });
 

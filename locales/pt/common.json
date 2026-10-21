@@ -1253,6 +1253,17 @@
         "confirm_revoke_message_this": "Este dispositivo deixará de receber notificações em segundo plano imediatamente."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Atalhos de teclado",
+      "description": "Atribua as suas próprias teclas às ações de e-mail, como Ctrl + E para arquivar. A tecla escolhida substitui a predefinida.",
+      "change": "Alterar",
+      "reset": "Repor",
+      "reset_all": "Repor todos os atalhos",
+      "recording": "Prima a nova tecla… (Esc para cancelar)",
+      "invalid": "Não é possível usar {key}: a aplicação ou o navegador reserva-a.",
+      "taken": "{key} já é usada por «{action}».",
+      "fixed_keys": "As teclas para percorrer a lista (j, k, setas, Enter, Esc, sequências g), x, ? e Ctrl/⌘ + A mantêm-se."
+    },
     "language_region": {
       "title": "Idioma, Região e Hora",
       "description": "Idioma, formato de data, formato de hora e outras preferências regionais",
