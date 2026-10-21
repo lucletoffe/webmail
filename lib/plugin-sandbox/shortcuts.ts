@@ -63,6 +63,19 @@ function eventMatches(ev: KeyboardEvent, combo: NormalisedCombo): boolean {
   return ev.key.toLowerCase() === combo.key;
 }
 
+/**
+ * The label of the plugin shortcut a key event runs, or null. Read by the
+ * app's custom keys (lib/shortcut-bindings.ts), which leave a plugin's key
+ * to the plugin.
+ */
+export function pluginShortcutLabel(ev: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>): string | null {
+  for (const binding of bindings.values()) {
+    const combo = normaliseCombo(binding.keys);
+    if (combo && eventMatches(ev as KeyboardEvent, combo)) return binding.label;
+  }
+  return null;
+}
+
 function onKeyDown(ev: KeyboardEvent): void {
   if (isEditableEventTarget(ev)) return;
   if (bindings.size === 0) return;

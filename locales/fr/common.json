@@ -1253,6 +1253,17 @@
         "confirm_revoke_message_this": "Cet appareil cessera immédiatement de recevoir les notifications en arrière-plan."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Raccourcis clavier",
+      "description": "Donnez vos propres touches aux actions sur les messages, par exemple Ctrl + E pour archiver. La touche choisie remplace celle d'origine.",
+      "change": "Modifier",
+      "reset": "Rétablir",
+      "reset_all": "Rétablir tous les raccourcis",
+      "recording": "Appuyez sur la nouvelle touche… (Échap pour annuler)",
+      "invalid": "{key} n'est pas utilisable : l'application ou le navigateur s'en sert.",
+      "taken": "{key} est déjà utilisé par « {action} ».",
+      "fixed_keys": "Les touches de déplacement dans la liste (j, k, flèches, Entrée, Échap, séquences g), x, ? et Ctrl/⌘ + A ne changent pas."
+    },
     "language_region": {
       "title": "Langue, région et heure",
       "description": "Langue, format de date, format d'heure et autres préférences régionales",

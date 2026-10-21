@@ -69,6 +69,7 @@ import { PluginsSettings } from '@/components/settings/plugins-settings';
 import { PluginIframeSlot } from '@/components/plugins/plugin-iframe-slot';
 import { offersForSlot as pluginOffersForSlot, subscribe as pluginRegistrySubscribe, get as getActivePlugin } from '@/lib/plugin-sandbox/registry';
 import { ProtocolHandlerSettings } from '@/components/settings/protocol-handler-settings';
+import { KeyboardShortcutSettings } from '@/components/settings/keyboard-shortcut-settings';
 import { appPath, buildSettingsPath, parseSettingsPath } from '@/lib/deep-links';
 import { consumePendingDeepLink, subscribePendingDeepLink } from '@/lib/deep-link-handoff';
 import { useDeepLinkUrl } from '@/hooks/use-deep-link-url';
@@ -673,7 +674,12 @@ export function SettingsApp({ linkSegments: routeSegments }: SettingsAppProps = 
       {effectiveActiveTab === 'language' && <LanguageSettings />}
       {effectiveActiveTab === 'notifications' && <NotificationSettings />}
       {effectiveActiveTab === 'appearance' && <AppearanceSettings />}
-      {effectiveActiveTab === 'layout' && <LayoutSettings />}
+      {effectiveActiveTab === 'layout' && (
+        <div className="space-y-8">
+          <LayoutSettings />
+          <KeyboardShortcutSettings />
+        </div>
+      )}
       {effectiveActiveTab === 'reading' && <ReadingSettings />}
       {effectiveActiveTab === 'composing' && <ComposingSettings />}
       {effectiveActiveTab === 'downloads' && <DownloadsSettings />}

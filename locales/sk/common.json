@@ -1256,6 +1256,17 @@
         "confirm_revoke_message_this": "Toto zariadenie okamžite prestane prijímať oznámenia na pozadí."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Klávesové skratky",
+      "description": "Priraďte akciám s poštou vlastné klávesy, napríklad Ctrl + E na archiváciu. Zvolený kláves nahradí predvolený.",
+      "change": "Zmeniť",
+      "reset": "Obnoviť",
+      "reset_all": "Obnoviť všetky skratky",
+      "recording": "Stlačte nový kláves… (Esc na zrušenie)",
+      "invalid": "{key} nemožno použiť: vyhradzuje si ho aplikácia alebo prehliadač.",
+      "taken": "{key} už používa akcia „{action}“.",
+      "fixed_keys": "Klávesy na pohyb v zozname (j, k, šípky, Enter, Esc, sekvencie g), x, ? a Ctrl/⌘ + A sa nemenia."
+    },
     "language_region": {
       "title": "Jazyk, región a čas",
       "description": "Jazyk, formát dátumu, formát času a ďalšie regionálne predvoľby",

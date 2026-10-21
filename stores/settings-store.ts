@@ -11,6 +11,7 @@ import {
   DEFAULT_SUB_ADDRESS_DELIMITER,
   isValidSubAddressDelimiter,
 } from '@/lib/sub-addressing';
+import { sanitizeShortcutBindings, type ShortcutBindings } from '@/lib/shortcut-bindings';
 
 // Use console directly to avoid circular dependency with lib/debug.ts
 // (debug.ts imports useSettingsStore for debugMode check)
@@ -463,6 +464,9 @@ interface SettingsState {
   // Folders
   folderIcons: Record<string, string>; // mailboxId -> icon name
 
+  // Custom keys for the mail actions; each replaces the action's built-in keys
+  shortcutBindings: ShortcutBindings;
+
   // Keywords (labels/tags)
   emailKeywords: KeywordDefinition[];
   nestedTags: boolean; // Treat "/" in a tag id as a parent/child separator
@@ -680,6 +684,9 @@ const DEFAULT_SETTINGS = {
   // Folders
   folderIcons: {} as Record<string, string>,
 
+  // Keyboard shortcuts
+  shortcutBindings: {} as ShortcutBindings,
+
   // Keywords
   emailKeywords: USING_MOCK_SERVER ? DEV_KEYWORDS : DEFAULT_KEYWORDS,
   nestedTags: USING_MOCK_SERVER,
@@ -875,6 +882,7 @@ export const useSettingsStore = create<SettingsState>()(
           tintListRowsByAccount: state.tintListRowsByAccount,
           showFolderTotalCount: state.showFolderTotalCount,
           folderIcons: state.folderIcons,
+          shortcutBindings: state.shortcutBindings,
           emailKeywords: state.emailKeywords,
           nestedTags: state.nestedTags,
           attachmentReminderEnabled: state.attachmentReminderEnabled,
@@ -942,6 +950,12 @@ export const useSettingsStore = create<SettingsState>()(
               // Per-account map (accountId -> identityId); ignore any legacy
               // global/non-record value rather than corrupting the map.
               if (key === 'preferredIdentityIds' && !isPlainRecord(settings[key])) {
+                return;
+              }
+              // A key from a newer/older client, or one that now collides,
+              // must not reach the listener.
+              if (key === 'shortcutBindings') {
+                set({ shortcutBindings: sanitizeShortcutBindings(settings[key]) });
                 return;
               }
               // The list order is sent to the server as a sort array, so an
@@ -1206,6 +1220,7 @@ export const useSettingsStore = create<SettingsState>()(
             if (!isPlainRecord(state.preferredIdentityIds)) {
               state.preferredIdentityIds = {};
             }
+            state.shortcutBindings = sanitizeShortcutBindings(state.shortcutBindings);
             state.messageListOrder = sanitizeSortLevels(state.messageListOrder);
             if (state.messageListOrderScope !== 'inbox' && state.messageListOrderScope !== 'all') {
               state.messageListOrderScope = 'inbox';

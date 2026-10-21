@@ -1253,6 +1253,17 @@
         "confirm_revoke_message_this": "Questo dispositivo smetterà subito di ricevere le notifiche in background."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Scorciatoie da tastiera",
+      "description": "Assegna tasti personalizzati alle azioni sulla posta, ad esempio Ctrl + E per archiviare. Il tasto scelto sostituisce quello predefinito.",
+      "change": "Modifica",
+      "reset": "Ripristina",
+      "reset_all": "Ripristina tutte le scorciatoie",
+      "recording": "Premi il nuovo tasto… (Esc per annullare)",
+      "invalid": "Impossibile usare {key}: è riservato all'app o al browser.",
+      "taken": "{key} è già usato da «{action}».",
+      "fixed_keys": "I tasti per muoversi nell'elenco (j, k, frecce, Invio, Esc, sequenze g), x, ? e Ctrl/⌘ + A non cambiano."
+    },
     "language_region": {
       "title": "Lingua, regione e ora",
       "description": "Lingua, formato data, formato ora e altre preferenze regionali",

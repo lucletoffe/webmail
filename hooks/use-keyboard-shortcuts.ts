@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { Email } from "@/lib/jmap/types";
 import { isEditableEventTarget } from "@/lib/keyboard";
+import {
+  comboFromEvent,
+  customComboMap,
+  type CustomizableShortcutAction,
+  type ShortcutBindings,
+} from "@/lib/shortcut-bindings";
 
 export interface KeyboardShortcutHandlers {
   // Navigation
@@ -36,11 +42,36 @@ export interface KeyboardShortcutHandlers {
   onToggleThreadExpansion?: () => void;
 }
 
+/**
+ * The handler behind each action that can take a custom key, and what it
+ * needs, as in the built-in switch below: the message on screen, or that
+ * message or a selection.
+ */
+const CUSTOM_KEY_TARGETS: Record<
+  CustomizableShortcutAction,
+  { handler: keyof KeyboardShortcutHandlers; needs?: "email" | "target" }
+> = {
+  "reply": { handler: "onReply", needs: "email" },
+  "reply-all": { handler: "onReplyAll", needs: "email" },
+  "forward": { handler: "onForward", needs: "email" },
+  "toggle-star": { handler: "onToggleStar", needs: "email" },
+  "archive": { handler: "onArchive", needs: "target" },
+  "delete": { handler: "onDelete", needs: "target" },
+  "mark-as-unread": { handler: "onMarkAsUnread", needs: "target" },
+  "mark-as-read": { handler: "onMarkAsRead", needs: "target" },
+  "toggle-spam": { handler: "onToggleSpam", needs: "target" },
+  "compose": { handler: "onCompose" },
+  "focus-search": { handler: "onFocusSearch" },
+  "refresh": { handler: "onRefresh" },
+};
+
 export interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
   emails: Email[];
   selectedEmailId?: string;
   selectionCount?: number;
+  /** The user's own keys (settings `shortcutBindings`); each replaces the action's built-in keys. */
+  customBindings?: ShortcutBindings;
   handlers: KeyboardShortcutHandlers;
 }
 
@@ -72,9 +103,11 @@ export function useKeyboardShortcuts({
   emails,
   selectedEmailId,
   selectionCount = 0,
+  customBindings,
   handlers,
 }: UseKeyboardShortcutsOptions) {
   const handlersRef = useRef(handlers);
+  const customCombos = useMemo(() => customComboMap(customBindings ?? {}), [customBindings]);
 
   // Keep handlers ref updated
   useEffect(() => {
@@ -91,6 +124,26 @@ export function useKeyboardShortcuts({
       const h = handlersRef.current;
       const key = physicalShortcutKey(event);
       const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+      const hasBatchTarget = !!selectedEmailId || selectionCount > 0;
+
+      // The user's own keys come first. A custom key is always the app's, so
+      // the browser never sees it, even when the action has nothing to act on.
+      // (A plugin's key never gets here: its capture listener stops it.)
+      const combo = customCombos.size > 0 ? comboFromEvent(event) : null;
+      const customAction = combo ? customCombos.get(combo) : undefined;
+      if (customAction) {
+        event.preventDefault();
+        const target = CUSTOM_KEY_TARGETS[customAction];
+        const ready = target.needs === "email" ? !!selectedEmailId
+          : target.needs === "target" ? hasBatchTarget
+          : true;
+        if (ready) (h[target.handler] as (() => void) | undefined)?.();
+        return;
+      }
+      // An action that has a custom key no longer answers to its built-in ones.
+      const builtIn = (action: CustomizableShortcutAction, fn: (() => void) | undefined) => {
+        if (!customBindings?.[action]) fn?.();
+      };
 
       // Shortcuts that work with modifiers
       if (event.ctrlKey || event.metaKey) {
@@ -105,8 +158,6 @@ export function useKeyboardShortcuts({
 
       // Shortcuts that should NOT work with modifiers
       if (hasModifier) return;
-
-      const hasBatchTarget = !!selectedEmailId || selectionCount > 0;
 
       switch (key) {
         // Navigation
@@ -141,9 +192,9 @@ export function useKeyboardShortcuts({
           if (selectedEmailId) {
             event.preventDefault();
             if (event.shiftKey) {
-              h.onReplyAll?.();
+              builtIn("reply-all", h.onReplyAll);
             } else {
-              h.onReply?.();
+              builtIn("reply", h.onReply);
             }
           }
           break;
@@ -151,28 +202,28 @@ export function useKeyboardShortcuts({
         case "a":
           if (selectedEmailId) {
             event.preventDefault();
-            h.onReplyAll?.();
+            builtIn("reply-all", h.onReplyAll);
           }
           break;
 
         case "f":
           if (selectedEmailId) {
             event.preventDefault();
-            h.onForward?.();
+            builtIn("forward", h.onForward);
           }
           break;
 
         case "s":
           if (selectedEmailId) {
             event.preventDefault();
-            h.onToggleStar?.();
+            builtIn("toggle-star", h.onToggleStar);
           }
           break;
 
         case "e":
           if (hasBatchTarget) {
             event.preventDefault();
-            h.onArchive?.();
+            builtIn("archive", h.onArchive);
           }
           break;
 
@@ -181,40 +232,40 @@ export function useKeyboardShortcuts({
         case "backspace":
           if (hasBatchTarget) {
             event.preventDefault();
-            h.onDelete?.();
+            builtIn("delete", h.onDelete);
           }
           break;
 
         case "u":
           if (hasBatchTarget) {
             event.preventDefault();
-            h.onMarkAsUnread?.();
+            builtIn("mark-as-unread", h.onMarkAsUnread);
           }
           break;
 
         case "i":
           if (hasBatchTarget && event.shiftKey) {
             event.preventDefault();
-            h.onMarkAsRead?.();
+            builtIn("mark-as-read", h.onMarkAsRead);
           }
           break;
 
         case "!":
           if (hasBatchTarget) {
             event.preventDefault();
-            h.onToggleSpam?.();
+            builtIn("toggle-spam", h.onToggleSpam);
           }
           break;
 
         // Global actions
         case "c":
           event.preventDefault();
-          h.onCompose?.();
+          builtIn("compose", h.onCompose);
           break;
 
         case "/":
           event.preventDefault();
-          h.onFocusSearch?.();
+          builtIn("focus-search", h.onFocusSearch);
           break;
 
         case "?":
@@ -225,7 +276,7 @@ export function useKeyboardShortcuts({
         case "g":
           if (event.shiftKey) {
             event.preventDefault();
-            h.onRefresh?.();
+            builtIn("refresh", h.onRefresh);
           }
           break;
 
@@ -238,7 +289,7 @@ export function useKeyboardShortcuts({
           break;
       }
     },
-    [selectedEmailId, selectionCount]
+    [selectedEmailId, selectionCount, customCombos, customBindings]
   );
 
   useEffect(() => {
@@ -273,6 +324,14 @@ export function useKeyboardShortcuts({
   return { getAdjacentEmailIndex };
 }
 
+/** One row of the help modal. */
+export interface ShortcutEntry {
+  readonly key: string;
+  readonly description: string;
+  /** The action behind the row when its key can be changed in the settings. */
+  readonly action?: CustomizableShortcutAction;
+}
+
 // Shortcut definitions for the help modal
 export const KEYBOARD_SHORTCUTS = {
   navigation: [
@@ -282,22 +341,22 @@ export const KEYBOARD_SHORTCUTS = {
     { key: "Esc", description: "shortcuts.navigation.close_email" },
   ],
   actions: [
-    { key: "r", description: "shortcuts.actions.reply" },
-    { key: "R / a", description: "shortcuts.actions.reply_all" },
-    { key: "f", description: "shortcuts.actions.forward" },
-    { key: "s", description: "shortcuts.actions.star" },
-    { key: "e", description: "shortcuts.actions.archive" },
-    { key: "# / Del", description: "shortcuts.actions.delete" },
-    { key: "u", description: "shortcuts.actions.mark_unread" },
-    { key: "Shift + I", description: "shortcuts.actions.mark_read" },
-    { key: "!", description: "shortcuts.actions.toggle_spam" },
+    { key: "r", description: "shortcuts.actions.reply", action: "reply" },
+    { key: "R / a", description: "shortcuts.actions.reply_all", action: "reply-all" },
+    { key: "f", description: "shortcuts.actions.forward", action: "forward" },
+    { key: "s", description: "shortcuts.actions.star", action: "toggle-star" },
+    { key: "e", description: "shortcuts.actions.archive", action: "archive" },
+    { key: "# / Del", description: "shortcuts.actions.delete", action: "delete" },
+    { key: "u", description: "shortcuts.actions.mark_unread", action: "mark-as-unread" },
+    { key: "Shift + I", description: "shortcuts.actions.mark_read", action: "mark-as-read" },
+    { key: "!", description: "shortcuts.actions.toggle_spam", action: "toggle-spam" },
   ],
   global: [
-    { key: "c", description: "shortcuts.global.compose" },
-    { key: "/", description: "shortcuts.global.search" },
+    { key: "c", description: "shortcuts.global.compose", action: "compose" },
+    { key: "/", description: "shortcuts.global.search", action: "focus-search" },
     { key: "Ctrl/⌘ + K", description: "shortcuts.global.global_search" },
     { key: "?", description: "shortcuts.global.help" },
-    { key: "Shift + G", description: "shortcuts.global.refresh" },
+    { key: "Shift + G", description: "shortcuts.global.refresh", action: "refresh" },
     { key: "Ctrl + A", description: "shortcuts.global.select_all" },
   ],
   threads: [

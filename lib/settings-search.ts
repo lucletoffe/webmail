@@ -58,6 +58,7 @@ export const tabSearchPaths: Record<Tab, string[]> = {
     'settings.advanced.show_avatars_in_junk',
   ],
   layout: [
+    'settings.keyboard_shortcuts',
     'settings.appearance.toolbar_position',
     'settings.appearance.toolbar_labels',
     'settings.appearance.hide_account_switcher',

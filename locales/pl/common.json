@@ -1253,6 +1253,17 @@
         "confirm_revoke_message_this": "To urządzenie natychmiast przestanie odbierać powiadomienia w tle."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Skróty klawiszowe",
+      "description": "Przypisz własne klawisze do działań na poczcie, np. Ctrl + E do archiwizowania. Wybrany klawisz zastępuje domyślny.",
+      "change": "Zmień",
+      "reset": "Przywróć",
+      "reset_all": "Przywróć wszystkie skróty",
+      "recording": "Naciśnij nowy klawisz… (Esc, aby anulować)",
+      "invalid": "Nie można użyć {key}: zastrzega go aplikacja lub przeglądarka.",
+      "taken": "{key} jest już używany przez „{action}”.",
+      "fixed_keys": "Klawisze poruszania się po liście (j, k, strzałki, Enter, Esc, sekwencje g), x, ? i Ctrl/⌘ + A pozostają bez zmian."
+    },
     "language_region": {
       "title": "Język, region i czas",
       "description": "Język, format daty, format godziny i inne preferencje regionalne",
