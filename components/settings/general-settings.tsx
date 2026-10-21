@@ -5,6 +5,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { SettingsSection, SettingItem, ToggleSwitch } from './settings-section';
 import { LanguageSettings } from './language-settings';
 import { ProtocolHandlerSettings } from './protocol-handler-settings';
+import { KeyboardShortcutSettings } from './keyboard-shortcut-settings';
 import { useTour } from '@/components/tour/tour-provider';
 import { Button } from '@/components/ui/button';
 import { PlayCircle } from '@/components/icons';
@@ -13,7 +14,8 @@ import { IS_LITE } from '@/lib/lite';
 /**
  * The General page: language and time, which links the browser hands to
  * Bulwark (the former Default apps tab; its handler routes do not exist in
- * the static Lite build), and the getting-started tour.
+ * the static Lite build), the keys of the mail actions, and the
+ * getting-started tour.
  */
 export function GeneralSettings({ supportsCalendar }: { supportsCalendar: boolean }) {
   const tTour = useTranslations('tour');
@@ -25,6 +27,8 @@ export function GeneralSettings({ supportsCalendar }: { supportsCalendar: boolea
       <LanguageSettings />
 
       {!IS_LITE && <ProtocolHandlerSettings supportsCalendar={supportsCalendar} />}
+
+      <KeyboardShortcutSettings />
 
       <SettingsSection id="tour" title={tTour('settings_section')}>
         <SettingItem label={tTour('restart_title')} description={tTour('restart_desc')}>

@@ -1101,12 +1101,14 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
   // shortcuts then act on the message on screen, as its toolbar does, and
   // reach the selection again back in the list.
   const shortcutsTargetSelection = selectedEmailKeys.size > 0 && !(mvShell && !cursorOnly && selectedEmail);
+  const shortcutBindings = useSettingsStore((s) => s.shortcutBindings);
   useKeyboardShortcuts({
     enabled: isAuthenticated && !showComposer,
     emails: activeEmails,
     selectedEmailId: selectedEmail?.id,
     selectionCount: selectedEmailKeys.size,
     mountainViewKeys: mvShell,
+    customBindings: shortcutBindings,
     handlers: keyboardHandlers,
   });
 

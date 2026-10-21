@@ -18,6 +18,7 @@ import {
   DEFAULT_SUB_ADDRESS_DELIMITER,
   isValidSubAddressDelimiter,
 } from '@/lib/sub-addressing';
+import { sanitizeShortcutBindings, type ShortcutBindings } from '@/lib/shortcut-bindings';
 
 // Use console directly to avoid circular dependency with lib/debug.ts
 // (debug.ts imports useSettingsStore for debugMode check)
@@ -663,6 +664,9 @@ interface SettingsState {
   folderIcons: Record<string, string>; // mailboxId -> icon name
   folderCountModes: Record<string, FolderCountMode>; // mailboxId -> counter override (#982)
 
+  // Custom keys for the mail actions; each replaces the action's built-in keys
+  shortcutBindings: ShortcutBindings;
+
   // Keywords (labels/tags)
   emailKeywords: KeywordDefinition[];
   nestedTags: boolean; // Treat "/" in a tag id as a parent/child separator
@@ -926,6 +930,9 @@ const DEFAULT_SETTINGS = {
   // Folders
   folderIcons: {} as Record<string, string>,
   folderCountModes: {} as Record<string, FolderCountMode>,
+
+  // Keyboard shortcuts
+  shortcutBindings: {} as ShortcutBindings,
 
   // Keywords
   emailKeywords: USING_MOCK_SERVER ? DEV_KEYWORDS : DEFAULT_KEYWORDS,
@@ -1256,6 +1263,7 @@ export const useSettingsStore = create<SettingsState>()(
           hiddenSharedMailAccounts: state.hiddenSharedMailAccounts,
           folderIcons: state.folderIcons,
           folderCountModes: state.folderCountModes,
+          shortcutBindings: state.shortcutBindings,
           emailKeywords: state.emailKeywords,
           nestedTags: state.nestedTags,
           attachmentReminderEnabled: state.attachmentReminderEnabled,
@@ -1393,6 +1401,12 @@ export const useSettingsStore = create<SettingsState>()(
                 return;
               }
               if (key === 'hiddenSharedMailAccounts' && !isPlainRecord(settings[key])) {
+                return;
+              }
+              // A key from a newer/older client, or one that now collides,
+              // must not reach the listener.
+              if (key === 'shortcutBindings') {
+                put(key, { shortcutBindings: sanitizeShortcutBindings(settings[key]) });
                 return;
               }
               if (key === 'notificationMutes') {

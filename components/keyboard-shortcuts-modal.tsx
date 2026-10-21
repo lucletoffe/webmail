@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { X, Keyboard } from "@/components/icons";
 import { KEYBOARD_SHORTCUTS, type ShortcutEntry } from "@/hooks/use-keyboard-shortcuts";
+import { formatCombo } from "@/lib/shortcut-bindings";
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
@@ -20,6 +21,7 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
   const t = useTranslations();
   const { startTour } = useTour();
   const interfaceLayout = useSettingsStore((state) => state.interfaceLayout);
+  const shortcutBindings = useSettingsStore((state) => state.shortcutBindings);
   const shell = useProInterfaceActive() ? "pro" : "standard";
   const features = usePolicyStore((s) => s.policy.features);
   // Plugin buttons in the composer that have a shortcut (composer-toolbar-actions).
@@ -30,6 +32,11 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
     entries.filter((entry) => (!entry.layout || entry.layout === interfaceLayout)
       && (!entry.shell || entry.shell === shell)
       && (!entry.feature || (features[entry.feature] ?? true)));
+  // A key the user chose in the settings replaces the built-in ones.
+  const keyOf = (entry: ShortcutEntry) => {
+    const custom = entry.action ? shortcutBindings?.[entry.action] : undefined;
+    return custom ? formatCombo(custom) : entry.key;
+  };
 
   const modalRef = useFocusTrap({
     isActive: isOpen,
@@ -83,8 +90,8 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
               <div className="space-y-2">
                 {shown(KEYBOARD_SHORTCUTS.navigation).map((shortcut) => (
                   <ShortcutRow
-                    key={shortcut.key}
-                    shortcutKey={shortcut.key}
+                    key={shortcut.description}
+                    shortcutKey={keyOf(shortcut)}
                     description={t(shortcut.description)}
                   />
                 ))}
@@ -99,8 +106,8 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
               <div className="space-y-2">
                 {shown(KEYBOARD_SHORTCUTS.actions).map((shortcut) => (
                   <ShortcutRow
-                    key={shortcut.key}
-                    shortcutKey={shortcut.key}
+                    key={shortcut.description}
+                    shortcutKey={keyOf(shortcut)}
                     description={t(shortcut.description)}
                   />
                 ))}
@@ -115,8 +122,8 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {shown(KEYBOARD_SHORTCUTS.global).map((shortcut) => (
                   <ShortcutRow
-                    key={shortcut.key}
-                    shortcutKey={shortcut.key}
+                    key={shortcut.description}
+                    shortcutKey={keyOf(shortcut)}
                     description={t(shortcut.description)}
                   />
                 ))}
@@ -131,8 +138,8 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {shown(KEYBOARD_SHORTCUTS.threads).map((shortcut) => (
                   <ShortcutRow
-                    key={shortcut.key}
-                    shortcutKey={shortcut.key}
+                    key={shortcut.description}
+                    shortcutKey={keyOf(shortcut)}
                     description={t(shortcut.description)}
                   />
                 ))}
@@ -147,8 +154,8 @@ export function KeyboardShortcutsModal({ isOpen, onClose }: KeyboardShortcutsMod
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {shown(KEYBOARD_SHORTCUTS.composer).map((shortcut) => (
                   <ShortcutRow
-                    key={shortcut.key}
-                    shortcutKey={shortcut.key}
+                    key={shortcut.description}
+                    shortcutKey={keyOf(shortcut)}
                     description={t(shortcut.description)}
                   />
                 ))}

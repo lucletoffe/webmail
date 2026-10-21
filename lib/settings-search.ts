@@ -49,7 +49,7 @@ export const tabSearchPaths: Record<Tab, string[]> = {
     'settings.appearance.show_shared_mail_accounts',
     'settings.account.shared_accounts',
   ],
-  general: ['settings.language_region', 'protocol_handlers', 'tour.restart_title', 'tour.show_on_new_devices_title'],
+  general: ['settings.language_region', 'protocol_handlers', 'settings.keyboard_shortcuts', 'tour.restart_title', 'tour.show_on_new_devices_title'],
   notifications: ['settings.notifications', 'settings.appearance.favicon_unread_badge'],
   appearance: [
     'settings.appearance.theme',
