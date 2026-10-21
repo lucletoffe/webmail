@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "此设备将立即停止接收后台通知。"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "键盘快捷键",
+      "description": "为邮件操作设置你自己的按键，例如用 Ctrl + E 归档。你选择的按键会替换默认按键。",
+      "change": "更改",
+      "reset": "恢复",
+      "reset_all": "恢复所有快捷键",
+      "recording": "请按下新的按键…（按 Esc 取消）",
+      "invalid": "无法使用 {key}：应用或浏览器已占用该按键。",
+      "taken": "{key} 已被“{action}”使用。",
+      "fixed_keys": "在列表中移动的按键（j、k、方向键、Enter、Esc、g 序列）、x、? 和 Ctrl/⌘ + A 保持不变。"
+    },
     "language_region": {
       "title": "语言、地区与时间",
       "description": "语言、日期格式、时间格式以及其他区域设置",

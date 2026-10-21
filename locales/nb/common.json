@@ -1368,6 +1368,17 @@
         "sound_desc": "Spill av et lydvarsel for kalenderpåminnelser"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Hurtigtaster",
+      "description": "Gi e-posthandlingene dine egne taster, for eksempel Ctrl + E for å arkivere. Tasten du velger, erstatter standardtasten.",
+      "change": "Endre",
+      "reset": "Tilbakestill",
+      "reset_all": "Tilbakestill alle hurtigtaster",
+      "recording": "Trykk på den nye tasten… (Esc for å avbryte)",
+      "invalid": "{key} kan ikke brukes: appen eller nettleseren bruker den.",
+      "taken": "{key} brukes allerede av «{action}».",
+      "fixed_keys": "Tastene for å bevege seg i listen (j, k, piler, Enter, Esc, g-sekvenser), x, ? og Ctrl/⌘ + A beholder tastene sine."
+    },
     "language_region": {
       "title": "Språk, region og tid",
       "description": "Språk, datoformat, tidsformat og andre regionale preferanser",

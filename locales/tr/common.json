@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "Bu cihaz arka plan bildirimlerini almayı hemen bırakacak."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Klavye kısayolları",
+      "description": "Posta işlemlerine kendi tuşlarınızı atayın, örneğin arşivlemek için Ctrl + E. Seçtiğiniz tuş varsayılan tuşun yerini alır.",
+      "change": "Değiştir",
+      "reset": "Sıfırla",
+      "reset_all": "Tüm kısayolları sıfırla",
+      "recording": "Yeni tuşa basın… (iptal için Esc)",
+      "invalid": "{key} kullanılamaz: uygulama veya tarayıcı bu tuşu kullanıyor.",
+      "taken": "{key} zaten “{action}” için kullanılıyor.",
+      "fixed_keys": "Listede gezinme tuşları (j, k, oklar, Enter, Esc, g dizileri), x, ? ve Ctrl/⌘ + A değişmez."
+    },
     "language_region": {
       "title": "Dil, Bölge ve Saat",
       "description": "Dil, tarih biçimi, saat biçimi ve diğer bölgesel tercihler",

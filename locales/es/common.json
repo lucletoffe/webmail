@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "Este dispositivo dejará de recibir notificaciones en segundo plano de inmediato."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Atajos de teclado",
+      "description": "Asigna tus propias teclas a las acciones del correo, por ejemplo Ctrl + E para archivar. La tecla que elijas sustituye a la predeterminada.",
+      "change": "Cambiar",
+      "reset": "Restablecer",
+      "reset_all": "Restablecer todos los atajos",
+      "recording": "Pulsa la nueva tecla… (Esc para cancelar)",
+      "invalid": "No se puede usar {key}: la aplicación o el navegador la reservan.",
+      "taken": "{key} ya se usa para «{action}».",
+      "fixed_keys": "Las teclas para moverse por la lista (j, k, flechas, Intro, Esc, secuencias g), x, ? y Ctrl/⌘ + A no cambian."
+    },
     "language_region": {
       "title": "Idioma, Región y Hora",
       "description": "Idioma, formato de fecha, formato de hora y otras preferencias regionales",

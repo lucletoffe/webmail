@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "Dit apparaat ontvangt meteen geen achtergrondmeldingen meer."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Sneltoetsen",
+      "description": "Geef de e-mailacties je eigen toetsen, zoals Ctrl + E om te archiveren. De gekozen toets vervangt de standaardtoets.",
+      "change": "Wijzigen",
+      "reset": "Herstellen",
+      "reset_all": "Alle sneltoetsen herstellen",
+      "recording": "Druk op de nieuwe toets… (Esc om te annuleren)",
+      "invalid": "{key} kan niet worden gebruikt: de app of de browser gebruikt deze toets.",
+      "taken": "{key} wordt al gebruikt door ‘{action}’.",
+      "fixed_keys": "De toetsen om door de lijst te bewegen (j, k, pijlen, Enter, Esc, g-reeksen), x, ? en Ctrl/⌘ + A blijven ongewijzigd."
+    },
     "language_region": {
       "title": "Taal, Regio & Tijd",
       "description": "Taal, datumnotatie, tijdnotatie en andere regionale voorkeuren",

@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "Dieses Gerät empfängt sofort keine Hintergrundbenachrichtigungen mehr."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Tastenkürzel",
+      "description": "Legen Sie eigene Tasten für die Mail-Aktionen fest, etwa Strg + E zum Archivieren. Die gewählte Taste ersetzt die vorgegebene.",
+      "change": "Ändern",
+      "reset": "Zurücksetzen",
+      "reset_all": "Alle Tastenkürzel zurücksetzen",
+      "recording": "Drücken Sie die neue Taste… (Esc zum Abbrechen)",
+      "invalid": "{key} ist nicht verfügbar: Die App oder der Browser verwendet diese Taste.",
+      "taken": "{key} wird bereits für „{action}“ verwendet.",
+      "fixed_keys": "Die Tasten zum Bewegen in der Liste (j, k, Pfeile, Enter, Esc, g-Folgen), x, ? und Strg/⌘ + A bleiben unverändert."
+    },
     "language_region": {
       "title": "Sprache, Region & Zeit",
       "description": "Sprache, Datums- und Zeitformat sowie weitere regionale Einstellungen",

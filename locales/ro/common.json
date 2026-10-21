@@ -1368,6 +1368,17 @@
         "sound_desc": "Redă o alertă audio pentru mementourile din calendar"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Comenzi rapide de la tastatură",
+      "description": "Alocă propriile taste acțiunilor pentru e-mail, de exemplu Ctrl + E pentru arhivare. Tasta aleasă o înlocuiește pe cea implicită.",
+      "change": "Schimbă",
+      "reset": "Resetează",
+      "reset_all": "Resetează toate comenzile rapide",
+      "recording": "Apasă tasta nouă… (Esc pentru anulare)",
+      "invalid": "{key} nu poate fi folosită: aplicația sau browserul o rezervă.",
+      "taken": "{key} este deja folosită de „{action}”.",
+      "fixed_keys": "Tastele de deplasare în listă (j, k, săgeți, Enter, Esc, secvențe g), x, ? și Ctrl/⌘ + A rămân neschimbate."
+    },
     "language_region": {
       "title": "Limba, regiunea și ora",
       "description": "Limba, formatul datei, formatul orei și alte preferințe regionale",

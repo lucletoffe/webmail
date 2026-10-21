@@ -1368,6 +1368,17 @@
         "sound_desc": "Mängi helimärguanne kalendri meeldetuletuste puhul"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Kiirklahvid",
+      "description": "Määra kirjatoimingutele oma klahvid, näiteks Ctrl + E arhiveerimiseks. Valitud klahv asendab vaikimisi klahvi.",
+      "change": "Muuda",
+      "reset": "Taasta",
+      "reset_all": "Taasta kõik kiirklahvid",
+      "recording": "Vajuta uut klahvi… (Esc tühistamiseks)",
+      "invalid": "{key} ei saa kasutada: rakendus või brauser kasutab seda.",
+      "taken": "{key} on juba kasutusel toimingu „{action}“ jaoks.",
+      "fixed_keys": "Loendis liikumise klahvid (j, k, nooled, Enter, Esc, g-järjestused), x, ? ja Ctrl/⌘ + A jäävad samaks."
+    },
     "language_region": {
       "title": "Keel, piirkond ja kellaaeg",
       "description": "Keel, kuupäevavorming, kellaajavorming ja muud piirkondlikud eelistused",

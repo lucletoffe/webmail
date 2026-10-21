@@ -1365,6 +1365,17 @@
         "confirm_revoke_message_this": "このデバイスはすぐにバックグラウンド通知の受信を停止します。"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "キーボードショートカット",
+      "description": "メール操作に独自のキーを割り当てます（例: Ctrl + E でアーカイブ）。選んだキーは既定のキーに置き換わります。",
+      "change": "変更",
+      "reset": "元に戻す",
+      "reset_all": "すべてのショートカットを元に戻す",
+      "recording": "新しいキーを押してください…（Esc でキャンセル）",
+      "invalid": "{key} は使用できません: アプリまたはブラウザーが使用しています。",
+      "taken": "{key} は「{action}」で既に使われています。",
+      "fixed_keys": "一覧の移動キー（j、k、矢印、Enter、Esc、g シーケンス）、x、?、Ctrl/⌘ + A は変更できません。"
+    },
     "language_region": {
       "title": "言語、地域、時刻",
       "description": "言語、日付形式、時刻形式、その他の地域設定",
