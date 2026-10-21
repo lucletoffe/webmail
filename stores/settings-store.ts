@@ -1771,6 +1771,7 @@ export const useSettingsStore = create<SettingsState>()(
             if (!isPlainRecord(state.hiddenSharedMailAccounts)) {
               state.hiddenSharedMailAccounts = {};
             }
+            state.shortcutBindings = sanitizeShortcutBindings(state.shortcutBindings);
             if (!Array.isArray(state.explicitSettings)) {
               state.explicitSettings = [];
             }

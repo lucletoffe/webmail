@@ -26,6 +26,16 @@ describe('settings-store shortcutBindings', () => {
     expect(useSettingsStore.getState().shortcutBindings).toEqual({ reply: 'mod+e', delete: 'r' });
   });
 
+  it('cleans a stored value on rehydrate', async () => {
+    localStorage.setItem('settings-storage', JSON.stringify({
+      state: { shortcutBindings: { archive: 'mod+c', compose: 'y' } },
+      version: 8,
+    }));
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().shortcutBindings).toEqual({ compose: 'y' });
+    localStorage.removeItem('settings-storage');
+  });
+
   it('turns a value that is not a record into no custom keys', () => {
     useSettingsStore.getState().importSettings(JSON.stringify({ shortcutBindings: 'mod+e' }));
     expect(useSettingsStore.getState().shortcutBindings).toEqual({});

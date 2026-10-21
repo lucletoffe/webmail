@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSettingsStore } from '@/stores/settings-store';
 import { usePolicyStore } from '@/stores/policy-store';
 import { Button } from '@/components/ui/button';
 import { KEYBOARD_SHORTCUTS, type ShortcutEntry } from '@/hooks/use-keyboard-shortcuts';
+import { pluginShortcutLabel } from '@/lib/plugin-sandbox/shortcuts';
 import {
   comboFromEvent,
   formatCombo,
@@ -30,6 +31,9 @@ const MODIFIER_KEYS = new Set(['Control', 'Meta', 'Alt', 'Shift', 'AltGraph', 'C
  * Settings > General > Keyboard shortcuts: one row per mail action, its key
  * (built-in or the user's own), and a recorder that takes the next key press.
  * A custom key replaces the built-in ones; see lib/shortcut-bindings.ts.
+ *
+ * The recorder is a focused input: the mail and plugin shortcut listeners
+ * skip key presses typed into a field, so recording a key never runs one.
  */
 export function KeyboardShortcutSettings() {
   const t = useTranslations();
@@ -44,39 +48,37 @@ export function KeyboardShortcutSettings() {
     const entry = ROWS.find((row) => row.action === action);
     return entry ? t(entry.description) : action;
   };
+  const stopRecording = () => {
+    setRecording(null);
+    setError(null);
+  };
 
-  useEffect(() => {
-    if (!recording) return;
-    // Capture phase, and stopped there, so the mail shortcuts never see the
-    // keys being recorded.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (MODIFIER_KEYS.has(event.key)) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (event.key === 'Escape') {
-        setRecording(null);
-        setError(null);
-        return;
-      }
-      const combo = comboFromEvent(event);
-      const conflict = combo ? shortcutConflict(combo, recording, bindings) : 'invalid';
-      if (conflict === 'invalid' || !combo) {
-        setError(t('settings.keyboard_shortcuts.invalid', { key: combo ? formatCombo(combo) : event.key }));
-        return;
-      }
-      if (conflict) {
-        setError(t('settings.keyboard_shortcuts.taken', { key: formatCombo(combo), action: labelOf(conflict) }));
-        return;
-      }
-      updateSetting('shortcutBindings', { ...bindings, [recording]: combo });
-      setRecording(null);
-      setError(null);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  // labelOf and t only read translations; the listener is rebuilt per recording.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recording, bindings, updateSetting]);
+  const record = (action: CustomizableShortcutAction, event: ReactKeyboardEvent<HTMLInputElement>) => {
+    // Tab still moves focus; a lone modifier waits for the key it goes with.
+    if (event.key === 'Tab' || MODIFIER_KEYS.has(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      stopRecording();
+      return;
+    }
+    const combo = comboFromEvent(event.nativeEvent);
+    const plugin = pluginShortcutLabel(event.nativeEvent);
+    const conflict = combo ? shortcutConflict(combo, action, bindings) : 'invalid';
+    if (!combo || conflict === 'invalid') {
+      setError(t('settings.keyboard_shortcuts.invalid', { key: combo ? formatCombo(combo) : event.key }));
+      return;
+    }
+    if (conflict || plugin) {
+      setError(t('settings.keyboard_shortcuts.taken', {
+        key: formatCombo(combo),
+        action: conflict ? labelOf(conflict) : plugin ?? '',
+      }));
+      return;
+    }
+    updateSetting('shortcutBindings', { ...bindings, [action]: combo });
+    stopRecording();
+  };
 
   const reset = (action: CustomizableShortcutAction) => {
     const { [action]: _, ...rest } = bindings;
@@ -98,17 +100,22 @@ export function KeyboardShortcutSettings() {
           <SettingItem key={entry.action} label={t(entry.description)}>
             <div className="flex flex-wrap items-center gap-1.5" data-testid={`shortcut-row-${entry.action}`}>
               {isRecording ? (
-                <span className="text-xs text-primary" role="status">
-                  {t('settings.keyboard_shortcuts.recording')}
-                </span>
+                <input
+                  autoFocus
+                  readOnly
+                  aria-label={t('settings.keyboard_shortcuts.recording')}
+                  placeholder={t('settings.keyboard_shortcuts.recording')}
+                  onKeyDown={(event) => record(entry.action, event)}
+                  className="h-7 w-64 max-w-full rounded border border-primary bg-background px-2 text-xs text-foreground placeholder:text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
               ) : (
                 keys.map((key) => (
                   <kbd
                     key={key}
                     className={cn(
                       'inline-flex items-center justify-center px-2 py-0.5 min-w-[24px]',
-                      'text-xs font-mono font-medium rounded border shadow-sm',
-                      custom ? 'bg-primary/10 border-primary/40 text-foreground' : 'bg-muted border-border text-foreground',
+                      'text-xs font-mono font-medium rounded border shadow-sm text-foreground',
+                      custom ? 'bg-primary/10 border-primary/40' : 'bg-muted border-border',
                     )}
                   >
                     {key}
@@ -146,7 +153,7 @@ export function KeyboardShortcutSettings() {
             size="sm"
             className="text-xs h-7 self-start"
             onClick={() => {
-              setRecording(null);
+              stopRecording();
               updateSetting('shortcutBindings', {});
             }}
           >

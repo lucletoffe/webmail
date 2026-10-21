@@ -38,6 +38,7 @@ describe('comboFromEvent', () => {
     ['an arrow', keydown('ArrowDown', 'ArrowDown')],
     ['F5', keydown('F5', 'F5')],
     ['a lone modifier', keydown('Control', 'ControlLeft', { ctrlKey: true })],
+    ['AltGr + E (€), which Windows reports as Ctrl + Alt', keydown('€', 'KeyE', { ctrlKey: true, altKey: true, modifierAltGraph: true })],
   ])('cannot bind %s', (_name, event) => {
     expect(comboFromEvent(event)).toBeNull();
   });
@@ -87,6 +88,11 @@ describe('shortcutConflict', () => {
     expect(shortcutConflict('e', 'archive', {})).toBeNull();
   });
 
+  it('sees Shift + 1 and Shift + 3 as the built-in ! and #', () => {
+    expect(shortcutConflict('shift+1', 'compose', {})).toBe('toggle-spam');
+    expect(shortcutConflict('shift+3', 'compose', {})).toBe('delete');
+  });
+
   it('reports a key the app keeps', () => {
     expect(shortcutConflict('j', 'archive', {})).toBe('invalid');
   });
@@ -103,6 +109,7 @@ describe('sanitizeShortcutBindings', () => {
 
   it('drops a key that would mean two things', () => {
     expect(sanitizeShortcutBindings({ archive: 'r' })).toEqual({});
+    expect(sanitizeShortcutBindings({ compose: 'shift+1' })).toEqual({});
     const both = sanitizeShortcutBindings({ archive: 'mod+e', delete: 'mod+e' });
     expect(Object.values(both)).toEqual(['mod+e']);
   });

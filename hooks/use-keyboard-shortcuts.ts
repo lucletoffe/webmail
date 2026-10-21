@@ -10,6 +10,7 @@ import {
   type ShortcutBindings,
 } from "@/lib/shortcut-bindings";
 import { keyboardHooks } from "@/lib/plugin-hooks";
+import { pluginShortcutLabel } from "@/lib/plugin-sandbox/shortcuts";
 import type { InterfaceLayout } from "@/stores/settings-store";
 import type { FeatureGates } from "@/lib/admin/types";
 
@@ -180,12 +181,18 @@ export function useKeyboardShortcuts({
       const hasBatchTarget = !!selectedEmailId || selectionCount > 0;
 
       // The user's own keys come first, except the letter that completes a
-      // pending `g` sequence. A custom key is always the app's, so the browser
-      // never sees it, even when the action has nothing to act on.
+      // pending `g` sequence and a key a plugin installed later has taken.
+      // A custom key is always the app's, so the browser never sees it, even
+      // when the action has nothing to act on.
       const combo = customCombos.size > 0 ? comboFromEvent(event) : null;
       const customAction = combo ? customCombos.get(combo) : undefined;
       const completesGoTo = mountainViewKeys && pendingGoTo.current !== null && !hasModifier && !!GO_TO_KEYS[key];
-      if (combo && customAction && !completesGoTo) {
+      if (combo && customAction && !completesGoTo && !pluginShortcutLabel(event)) {
+        // Any key but the second half ends a pending `g` sequence.
+        if (pendingGoTo.current !== null) {
+          clearTimeout(pendingGoTo.current);
+          pendingGoTo.current = null;
+        }
         event.preventDefault();
         const target = CUSTOM_KEY_TARGETS[customAction];
         const ready = target.needs === "email" ? !!selectedEmailId

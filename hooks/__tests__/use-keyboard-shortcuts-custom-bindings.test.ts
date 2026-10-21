@@ -1,6 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { clearAllHooks, keyboardHooks } from '@/lib/plugin-hooks';
+import { registerShortcuts } from '@/lib/plugin-sandbox/shortcuts';
+import type { SandboxInstance } from '@/lib/plugin-sandbox/host-bridge';
 import { useKeyboardShortcuts } from '../use-keyboard-shortcuts';
 
 // Settings > General > Keyboard shortcuts: a custom key replaces the action's
@@ -121,5 +123,38 @@ describe('useKeyboardShortcuts: custom keys', () => {
 
     press('i', 'KeyI');
     expect(onArchive).toHaveBeenCalledTimes(1);
+  });
+
+  it('ends a pending Mountain View g when a custom key runs', () => {
+    const onCompose = vi.fn();
+    const onGoToMailbox = vi.fn();
+    renderHook(() => useKeyboardShortcuts({
+      emails: [], mountainViewKeys: true, customBindings: { compose: 'y' }, handlers: { onCompose, onGoToMailbox },
+    }));
+
+    press('g', 'KeyG');
+    press('y', 'KeyY');
+    press('i', 'KeyI');
+
+    expect(onCompose).toHaveBeenCalledTimes(1);
+    expect(onGoToMailbox).not.toHaveBeenCalled();
+  });
+
+  it('leaves a key a plugin has taken to the plugin', () => {
+    const onArchive = vi.fn();
+    const invokeHook = vi.fn().mockResolvedValue(undefined);
+    const unregister = registerShortcuts(
+      { pluginId: 'p', invokeHook } as unknown as SandboxInstance,
+      [{ id: 'go', keys: 'Ctrl+Alt+E', label: 'Plugin go' }],
+    );
+    renderHook(() => useKeyboardShortcuts({
+      emails: [], selectedEmailId: 'e1', customBindings: { archive: 'mod+alt+e' }, handlers: { onArchive },
+    }));
+
+    press('e', 'KeyE', { ctrlKey: true, altKey: true });
+    unregister();
+
+    expect(invokeHook).toHaveBeenCalledWith('shortcut:go', []);
+    expect(onArchive).not.toHaveBeenCalled();
   });
 });

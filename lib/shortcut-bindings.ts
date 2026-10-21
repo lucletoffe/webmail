@@ -29,17 +29,22 @@ export type CustomizableShortcutAction = typeof CUSTOMIZABLE_SHORTCUT_ACTIONS[nu
 
 export type ShortcutBindings = Partial<Record<CustomizableShortcutAction, string>>;
 
-/** The built-in keys of each customizable action, in combo form. */
+/**
+ * The built-in keys of each customizable action, spelled as comboFromEvent
+ * spells the same key press: the built-in `!` and `#` are Shift + 1 and
+ * Shift + 3 (the hook reads them by physical key), so a custom Shift + 1 is
+ * caught as toggle-spam's key.
+ */
 export const DEFAULT_SHORTCUT_COMBOS: Record<CustomizableShortcutAction, readonly string[]> = {
   'reply': ['r'],
   'reply-all': ['shift+r', 'a'],
   'forward': ['f'],
   'toggle-star': ['s'],
   'archive': ['e'],
-  'delete': ['#', 'delete', 'backspace'],
+  'delete': ['shift+3', 'delete', 'backspace'],
   'mark-as-unread': ['u'],
   'mark-as-read': ['shift+i'],
-  'toggle-spam': ['!'],
+  'toggle-spam': ['shift+1'],
   'compose': ['c'],
   'focus-search': ['/'],
   'refresh': ['shift+g'],
@@ -67,8 +72,11 @@ const NAMED_KEYS = new Set([
  * Letters follow the layout when it is Latin (AZERTY's A records as `a`) and
  * the physical key otherwise, so a Cyrillic layout still records `e`. Digits
  * follow the physical key, symbols the character typed (Shift is part of it).
+ * AltGr, which Windows reports as Ctrl + Alt, types characters (€, @, [...])
+ * and never makes a combo.
  */
 export function comboFromEvent(event: KeyboardEvent): string | null {
+  if (event.getModifierState?.('AltGraph')) return null;
   const code = event.code ?? '';
   const typed = (event.key ?? '').toLowerCase();
   let key: string;
