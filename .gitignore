@@ -51,3 +51,4 @@ next-env.d.ts
 
 # Sibling repos
 /repos/
+bun.lock
