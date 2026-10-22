@@ -95,6 +95,17 @@ describe("undust-meet", () => {
       });
     });
 
+    it("remonte UndustMeetError.status=401 quand la session Ops est expirée", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(new Response("", { status: 401 }))
+      );
+
+      const err = await reserveUndustMeetRoom().catch((e) => e);
+      expect(err).toBeInstanceOf(UndustMeetError);
+      expect((err as UndustMeetError).status).toBe(401);
+    });
+
     it("remonte UndustMeetError status=0 sur erreur réseau (CORS, offline)", async () => {
       vi.stubGlobal(
         "fetch",

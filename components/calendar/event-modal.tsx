@@ -493,6 +493,12 @@ export function EventModal({
   const [showUndustMeetPrompt, setShowUndustMeetPrompt] = useState(false);
   const [dismissedUndustMeetPrompt, setDismissedUndustMeetPrompt] = useState(false);
   const [generatingUndustMeet, setGeneratingUndustMeet] = useState(false);
+  // Anti double-clic : un useRef échappe à la capture du state par le
+  // callback de rendu. Si l'utilisateur clique deux fois rapidement avant
+  // que le setState `generatingUndustMeet(true)` ne se propage, le state
+  // encore à `false` autoriserait un second fetch — le ref est mis à jour
+  // SYNCHRONE et le barre immédiatement.
+  const undustMeetInFlight = useRef(false);
 
   const handleAddAttendee = useCallback((p: { name: string; email: string }) => {
     setAttendees(prev => {
@@ -518,19 +524,37 @@ export function EventModal({
   // par le PREMIER iMIP envoyé par Stalwart. Pas de second mail « mise à
   // jour » (c'est l'inquiétude de fond, cf. mandat 2026-10-22).
   const handleGenerateUndustMeet = useCallback(async () => {
-    if (generatingUndustMeet) return;
+    // Garde SYNCHRONE : le state React n'est propagé qu'au prochain rendu,
+    // deux clics successifs lanceraient deux fetch.
+    if (undustMeetInFlight.current) return;
+    undustMeetInFlight.current = true;
     setGeneratingUndustMeet(true);
     setShowUndustMeetPrompt(false);
     try {
       const room = await reserveUndustMeetRoom(title.trim());
       setVirtualLocation(room.url);
     } catch (e) {
-      const code = e instanceof UndustMeetError ? e.status : 0;
-      toast.error(t("form.undust_meet_error", { code: String(code) }));
+      if (e instanceof UndustMeetError && e.status === 401) {
+        // Session Ops expirée → l'utilisateur doit se reconnecter sur
+        // ops.undust.co ET revenir recliquer. Toast avec action cliquable
+        // qui ouvre ops.undust.co dans un nouvel onglet (le composant
+        // Toast ne prend qu'une `string` comme title ; l'URL vit dans un
+        // bouton d'action que l'utilisateur peut cliquer).
+        toast.error(t("form.undust_meet_error_401"), {
+          action: {
+            label: "ops.undust.co",
+            onClick: () => window.open("https://ops.undust.co", "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        const code = e instanceof UndustMeetError ? e.status : 0;
+        toast.error(t("form.undust_meet_error", { code: String(code) }));
+      }
     } finally {
+      undustMeetInFlight.current = false;
       setGeneratingUndustMeet(false);
     }
-  }, [generatingUndustMeet, title, t]);
+  }, [title, t]);
 
   const handleDismissUndustMeetPrompt = useCallback(() => {
     setShowUndustMeetPrompt(false);
