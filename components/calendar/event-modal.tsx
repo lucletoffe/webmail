@@ -28,6 +28,7 @@ import { canUserRsvp, getEventEditability, canCreateEventsIn } from "@/lib/calen
 import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { useSettingsStore } from "@/stores/settings-store";
 import { generateUUID } from "@/lib/utils";
+import { isUndustMeetEnabled, reserveUndustMeetRoom, UndustMeetError } from "@/lib/undust-meet";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
 import { useIsPaneScoped } from "@/hooks/use-pane-context";
 import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
@@ -483,12 +484,81 @@ export function EventModal({
     return getStatusCounts(event);
   }, [event]);
 
+  // Mandat Luc 2026-10-22 : « dès le moment où il y a un invité, forcément
+  // lui attribuer une session Meet », mais sans surprise — propose, décision
+  // à l'utilisateur. L'inline prompt s'affiche quand on passe de 0 à 1
+  // participant ET que la case « lien de réunion » est vide. Si Luc dit non,
+  // on retient (dismissedUndustMeetPrompt) : pas de harcèlement en boucle.
+  const undustMeetEnabled = isUndustMeetEnabled();
+  const [showUndustMeetPrompt, setShowUndustMeetPrompt] = useState(false);
+  const [dismissedUndustMeetPrompt, setDismissedUndustMeetPrompt] = useState(false);
+  const [generatingUndustMeet, setGeneratingUndustMeet] = useState(false);
+  // Anti double-clic : un useRef échappe à la capture du state par le
+  // callback de rendu. Si l'utilisateur clique deux fois rapidement avant
+  // que le setState `generatingUndustMeet(true)` ne se propage, le state
+  // encore à `false` autoriserait un second fetch — le ref est mis à jour
+  // SYNCHRONE et le barre immédiatement.
+  const undustMeetInFlight = useRef(false);
+
   const handleAddAttendee = useCallback((p: { name: string; email: string }) => {
-    setAttendees(prev => [...prev, p]);
-  }, []);
+    setAttendees(prev => {
+      const next = [...prev, p];
+      if (
+        undustMeetEnabled &&
+        !virtualLocation.trim() &&
+        !dismissedUndustMeetPrompt &&
+        prev.length === 0
+      ) {
+        setShowUndustMeetPrompt(true);
+      }
+      return next;
+    });
+  }, [undustMeetEnabled, virtualLocation, dismissedUndustMeetPrompt]);
 
   const handleRemoveAttendee = useCallback((email: string) => {
     setAttendees(prev => prev.filter(a => a.email.toLowerCase() !== email.toLowerCase()));
+  }, []);
+
+  // Appelle le serveur ops qui réserve une salle Jitsi avant que l'invitation
+  // ne parte — l'URL retournée est écrite dans virtualLocation, donc portée
+  // par le PREMIER iMIP envoyé par Stalwart. Pas de second mail « mise à
+  // jour » (c'est l'inquiétude de fond, cf. mandat 2026-10-22).
+  const handleGenerateUndustMeet = useCallback(async () => {
+    // Garde SYNCHRONE : le state React n'est propagé qu'au prochain rendu,
+    // deux clics successifs lanceraient deux fetch.
+    if (undustMeetInFlight.current) return;
+    undustMeetInFlight.current = true;
+    setGeneratingUndustMeet(true);
+    setShowUndustMeetPrompt(false);
+    try {
+      const room = await reserveUndustMeetRoom(title.trim());
+      setVirtualLocation(room.url);
+    } catch (e) {
+      if (e instanceof UndustMeetError && e.status === 401) {
+        // Session Ops expirée → l'utilisateur doit se reconnecter sur
+        // ops.undust.co ET revenir recliquer. Toast avec action cliquable
+        // qui ouvre ops.undust.co dans un nouvel onglet (le composant
+        // Toast ne prend qu'une `string` comme title ; l'URL vit dans un
+        // bouton d'action que l'utilisateur peut cliquer).
+        toast.error(t("form.undust_meet_error_401"), {
+          action: {
+            label: "ops.undust.co",
+            onClick: () => window.open("https://ops.undust.co", "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        const code = e instanceof UndustMeetError ? e.status : 0;
+        toast.error(t("form.undust_meet_error", { code: String(code) }));
+      }
+    } finally {
+      undustMeetInFlight.current = false;
+      setGeneratingUndustMeet(false);
+    }
+  }, [title, t]);
+
+  const handleDismissUndustMeetPrompt = useCallback(() => {
+    setShowUndustMeetPrompt(false);
+    setDismissedUndustMeetPrompt(true);
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -1113,6 +1183,22 @@ export function EventModal({
               placeholder="https://meet.example.com/..."
               maxLength={2000}
             />
+            {undustMeetEnabled && !virtualLocation.trim() && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={handleGenerateUndustMeet}
+                disabled={generatingUndustMeet}
+                data-testid="undust-meet-generate"
+              >
+                <Video className="w-4 h-4 mr-1.5" />
+                {generatingUndustMeet
+                  ? t("form.undust_meet_generating")
+                  : t("form.undust_meet_generate")}
+              </Button>
+            )}
             <PluginSlot
               name="calendar-event-actions"
               className="mt-2 flex flex-wrap gap-2"
@@ -1145,6 +1231,38 @@ export function EventModal({
               onAdd={handleAddAttendee}
               onRemove={handleRemoveAttendee}
             />
+            {showUndustMeetPrompt && (
+              <div
+                className="mt-2 flex items-center justify-between gap-2 rounded border border-input bg-muted/40 px-3 py-2 text-sm"
+                data-testid="undust-meet-prompt"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Video className="w-4 h-4" />
+                  {t("form.undust_meet_prompt")}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={handleGenerateUndustMeet}
+                    disabled={generatingUndustMeet}
+                    data-testid="undust-meet-prompt-yes"
+                  >
+                    {t("form.undust_meet_prompt_yes")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDismissUndustMeetPrompt}
+                    data-testid="undust-meet-prompt-no"
+                  >
+                    {t("form.undust_meet_prompt_no")}
+                  </Button>
+                </span>
+              </div>
+            )}
             <ParticipantAvailability
               attendees={attendees}
               start={availabilityWindow.start}
