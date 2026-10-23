@@ -783,8 +783,9 @@ export function escapeHtml(str: string): string {
  * Render a plain-text email body as HTML, HTML-escaping all content and
  * linkifying http(s) URLs. URLs terminate at whitespace or any character that
  * would break an attribute (`"`, `'`, `<`, `>`), so attribute-escaping is
- * enforced even if escaping has bugs. `hrefFor` may send a link somewhere
- * else than the URL it shows; its result is escaped the same way.
+ * enforced even if escaping has bugs. `hrefFor` may send a link to another
+ * http(s) URL than the one it shows (escaped the same way); any other result
+ * is ignored, so the output still links nothing but http(s).
  */
 export function plainTextToSafeHtml(
   text: string,
@@ -799,7 +800,8 @@ export function plainTextToSafeHtml(
   while ((match = urlRegex.exec(text)) !== null) {
     result += escapeHtml(text.slice(lastIndex, match.index));
     const url = escapeHtml(match[0]);
-    const href = hrefFor ? escapeHtml(hrefFor(match[0])) : url;
+    const target = hrefFor?.(match[0]);
+    const href = target && /^https?:\/\//i.test(target) ? escapeHtml(target) : url;
     result += `<a href="${href}" target="_blank" rel="noopener noreferrer"${classAttr}>${url}</a>`;
     lastIndex = match.index + match[0].length;
   }

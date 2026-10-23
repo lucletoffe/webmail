@@ -757,6 +757,14 @@ describe('email-sanitization', () => {
       expect(link?.getAttribute('href')).toBe(href);
     });
 
+    it.each(['javascript:alert(1)', 'mailto:x@example.com', '', '/relative'])(
+      'keeps the URL as href when hrefFor returns a non-http(s) %j',
+      (target) => {
+        const result = plainTextToSafeHtml('https://x.com/r', '', () => target);
+        expect(result).toContain('<a href="https://x.com/r"');
+      },
+    );
+
     it('does not linkify non-http schemes', () => {
       const result = plainTextToSafeHtml('try javascript:alert(1) or file:///etc/passwd');
       expect(result).not.toContain('<a ');
