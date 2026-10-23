@@ -9,13 +9,22 @@
 //   - Serveur vérifie `Origin: https://webmail.undust.co` ET
 //     `current_user_email == Meeting.calendar_organizer`. Un utilisateur non
 //     organizer reçoit 403 ; un autre site reçoit 403 au preflight.
-//   - Réponse 201 : { room_name, organizer_email, url }. `url` est le lien à
-//     écrire dans l'événement d'agenda — c'est le hop ops qui route Luc
-//     authentifié en modo et un invité anonyme en guest sur le MÊME chemin.
+//   - Réponse 201 (contrat v2, décision PG GNgpgt03) :
+//     { room_name, organizer_email, url, host_url? }. `url` est le lien
+//     INVITÉ `https://meet.undust.co/<salle>`, celui qu'on écrit dans
+//     l'événement et que reçoit tout invité. `host_url` n'est pas lu : le
+//     lien organisateur se dérive de la salle (`hostJoinUrl`), y compris
+//     pour les événements créés ailleurs (Ops) ou avant le contrat v2.
+//
+// Rejoindre en organisateur : `https://ops.undust.co/meet/<salle>?host=1`
+// fait entrer l'organisateur authentifié en modérateur (login Pocket ID sinon).
 //
 // Un fetch échoue silencieusement si la session Pocket ID est expirée ou si
 // l'utilisateur n'est pas l'organizer : l'UI remonte une erreur utilisateur,
 // pas de retry automatique (une boucle sur 403 est inutile).
+
+import { isOrganizer } from "@/lib/calendar-participants";
+import type { CalendarEvent } from "@/lib/jmap/types";
 
 const DEFAULT_URL = "https://ops.undust.co/api/calendar/meetings/reserve";
 
@@ -36,6 +45,57 @@ const UNDUST_HOSTS = new Set([
 export function isUndustMeetEnabled(): boolean {
   if (typeof window === "undefined") return false;
   return UNDUST_HOSTS.has(window.location.hostname);
+}
+
+const GUEST_HOST = "meet.undust.co";
+const ROOM_PATH = /^\/([a-z0-9][a-z0-9-]{0,63})\/?$/;
+const OPS_MEET_URL = "https://ops.undust.co/meet/";
+
+// Salle d'un lien invité `https://meet.undust.co/<salle>` (slash final
+// toléré). Toute autre forme — requête (anciens liens `?jwt=`), fragment,
+// sous-chemin, http — n'est pas un lien de salle : il s'ouvre tel quel.
+function guestRoomOf(uri: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(uri.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.host !== GUEST_HOST) return null;
+  if (url.username || url.password || url.search || url.hash) return null;
+  return ROOM_PATH.exec(url.pathname)?.[1] ?? null;
+}
+
+/**
+ * Lien organisateur d'une salle undust : `https://ops.undust.co/meet/<salle>?host=1`
+ * quand `uri` est le lien invité d'une salle ET que l'utilisateur organise
+ * l'événement (participant `roles.owner` ou adresse organisateur parmi
+ * `userEmails`, sans casse ; un événement sans participants est le sien).
+ * Null sinon : le lien s'ouvre tel quel. Ops reste juge du rôle modérateur.
+ */
+export function hostJoinUrl(
+  uri: string,
+  event: CalendarEvent,
+  userEmails: string[]
+): string | null {
+  const room = guestRoomOf(uri);
+  if (!room) return null;
+  const hasParticipants = Object.keys(event.participants ?? {}).length > 0;
+  if (hasParticipants && !isOrganizer(event, userEmails)) return null;
+  return `${OPS_MEET_URL}${room}?host=1`;
+}
+
+/**
+ * Ce qu'ouvre l'action « Rejoindre » d'un lien de réunion : le lien
+ * organisateur (`hostJoinUrl`) sur l'instance undust, sinon le lien
+ * lui-même. Le texte affiché reste le lien invité.
+ */
+export function meetingJoinHref(
+  uri: string,
+  event: CalendarEvent,
+  userEmails: string[]
+): string {
+  return (isUndustMeetEnabled() && hostJoinUrl(uri, event, userEmails)) || uri;
 }
 
 export interface ReservedMeetRoom {

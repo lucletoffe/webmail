@@ -20,6 +20,13 @@ describe('LinkifiedText', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
   });
 
+  it('opens a URL where hrefFor says, still showing the URL', () => {
+    render(<LinkifiedText text="Lien visio : https://meet.example/r" hrefFor={(url) => `${url}?host=1`} />);
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', 'https://meet.example/r?host=1');
+    expect(link).toHaveTextContent('https://meet.example/r');
+  });
+
   it('stops the URL at the closing angle bracket of an <https://...> form', () => {
     render(<LinkifiedText text="Need help? <https://aka.example/JoinMeeting?omkt=fr-FR> | System" />);
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://aka.example/JoinMeeting?omkt=fr-FR');

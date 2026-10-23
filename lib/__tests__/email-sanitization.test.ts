@@ -743,6 +743,28 @@ describe('email-sanitization', () => {
       expect(result).toContain('class="text-primary hover:underline"');
     });
 
+    it('points a link at hrefFor while showing the URL', () => {
+      const result = plainTextToSafeHtml('join https://meet.example/r now', '', (url) => `${url}?host=1`);
+      expect(result).toContain('<a href="https://meet.example/r?host=1"');
+      expect(result).toContain('>https://meet.example/r</a>');
+    });
+
+    it('escapes what hrefFor returns', () => {
+      const href = 'https://x.com/"onmouseover="alert(1)';
+      const result = plainTextToSafeHtml('https://x.com', '', () => href);
+      const link = new DOMParser().parseFromString(result, 'text/html').querySelector('a');
+      expect(link?.getAttributeNames()).toEqual(['href', 'target', 'rel']);
+      expect(link?.getAttribute('href')).toBe(href);
+    });
+
+    it.each(['javascript:alert(1)', 'javascript:alert(1)//https://x.com', 'mailto:x@example.com', '', '/relative'])(
+      'keeps the URL as href when hrefFor returns a non-http(s) %j',
+      (target) => {
+        const result = plainTextToSafeHtml('https://x.com/r', '', () => target);
+        expect(result).toContain('<a href="https://x.com/r"');
+      },
+    );
+
     it('does not linkify non-http schemes', () => {
       const result = plainTextToSafeHtml('try javascript:alert(1) or file:///etc/passwd');
       expect(result).not.toContain('<a ');
