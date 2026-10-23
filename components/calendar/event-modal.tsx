@@ -28,7 +28,7 @@ import { canUserRsvp, getEventEditability, canCreateEventsIn } from "@/lib/calen
 import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { useSettingsStore } from "@/stores/settings-store";
 import { generateUUID } from "@/lib/utils";
-import { isUndustMeetEnabled, reserveUndustMeetRoom, UndustMeetError } from "@/lib/undust-meet";
+import { isUndustMeetEnabled, meetingJoinHref, reserveUndustMeetRoom, UndustMeetError } from "@/lib/undust-meet";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
 import { useIsPaneScoped } from "@/hooks/use-pane-context";
 import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
@@ -1002,7 +1002,7 @@ export function EventModal({
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                 {/^https?:\/\//i.test(locationName) ? (
-                  <a href={locationName} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline truncate" title={locationName}>
+                  <a href={meetingJoinHref(locationName, event, currentUserEmails)} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline truncate" title={locationName}>
                     {(() => { try { return new URL(locationName).hostname; } catch { return locationName; } })()}
                   </a>
                 ) : (
@@ -1015,7 +1015,7 @@ export function EventModal({
             {virtualLoc && (
               <div className="flex items-start gap-2.5">
                 <Video className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <a href={virtualLoc} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline truncate" title={virtualLoc}>
+                <a href={meetingJoinHref(virtualLoc, event, currentUserEmails)} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline truncate" title={virtualLoc}>
                   {(() => { try { return new URL(virtualLoc).hostname; } catch { return virtualLoc; } })()}
                 </a>
               </div>

@@ -25,6 +25,7 @@ import { canUserRsvp, getEventEditability, type EditabilityContext } from "@/lib
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
 import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
 import { findMeetingLink, locationAction, mapsUrl, primaryLocationName } from "@/lib/event-links";
+import { meetingJoinHref } from "@/lib/undust-meet";
 
 interface EventDetailPopoverProps {
   event: CalendarEvent;
@@ -159,12 +160,16 @@ export function EventDetailPopover({
   const virtualLocation = meeting?.uri ?? null;
 
   // A URL opens as a link, a location that only names the service joins the
-  // meeting, a postal address opens in the maps.
+  // meeting, a postal address opens in the maps. Joining an undust room opens
+  // its organizer link for the organizer (meetingJoinHref); the link shown
+  // stays the one the guests received.
   const locationHref = useMemo(() => {
     if (!locationName) return null;
     const action = locationAction(locationName, meeting);
-    return action.kind === "url" ? action.uri : mapsUrl(action.query);
-  }, [locationName, meeting]);
+    return action.kind === "url"
+      ? meetingJoinHref(action.uri, event, currentUserEmails)
+      : mapsUrl(action.query);
+  }, [locationName, meeting, event, currentUserEmails]);
   const [locationCopied, setLocationCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -467,7 +472,7 @@ export function EventDetailPopover({
           <div className="flex items-start gap-2.5">
             <Video className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <a
-              href={virtualLocation}
+              href={meetingJoinHref(virtualLocation, event, currentUserEmails)}
               target="_blank"
               rel="noreferrer"
               className="text-sm text-primary hover:underline truncate"
