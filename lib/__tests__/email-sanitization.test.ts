@@ -743,6 +743,20 @@ describe('email-sanitization', () => {
       expect(result).toContain('class="text-primary hover:underline"');
     });
 
+    it('points a link at hrefFor while showing the URL', () => {
+      const result = plainTextToSafeHtml('join https://meet.example/r now', '', (url) => `${url}?host=1`);
+      expect(result).toContain('<a href="https://meet.example/r?host=1"');
+      expect(result).toContain('>https://meet.example/r</a>');
+    });
+
+    it('escapes what hrefFor returns', () => {
+      const href = 'https://x.com/"onmouseover="alert(1)';
+      const result = plainTextToSafeHtml('https://x.com', '', () => href);
+      const link = new DOMParser().parseFromString(result, 'text/html').querySelector('a');
+      expect(link?.getAttributeNames()).toEqual(['href', 'target', 'rel']);
+      expect(link?.getAttribute('href')).toBe(href);
+    });
+
     it('does not linkify non-http schemes', () => {
       const result = plainTextToSafeHtml('try javascript:alert(1) or file:///etc/passwd');
       expect(result).not.toContain('<a ');

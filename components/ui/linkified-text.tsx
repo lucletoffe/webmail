@@ -7,6 +7,8 @@ interface LinkifiedTextProps {
   /** Plain text, as stored on the object (no markup is interpreted). */
   text: string;
   className?: string;
+  /** Where a URL of the text opens, when not the URL itself; the text shown never changes. */
+  hrefFor?: (url: string) => string;
 }
 
 /**
@@ -23,10 +25,10 @@ interface LinkifiedTextProps {
  * defense in depth - unlike message bodies this renders into the main
  * document, not the sandboxed iframe.
  */
-export function LinkifiedText({ text, className }: LinkifiedTextProps) {
+export function LinkifiedText({ text, className, hrefFor }: LinkifiedTextProps) {
   const html = useMemo(
-    () => sanitizePlainTextRenderedHtml(plainTextToSafeHtml(text, "text-primary hover:underline")),
-    [text],
+    () => sanitizePlainTextRenderedHtml(plainTextToSafeHtml(text, "text-primary hover:underline", hrefFor)),
+    [text, hrefFor],
   );
 
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;

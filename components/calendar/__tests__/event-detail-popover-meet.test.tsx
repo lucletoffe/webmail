@@ -1,15 +1,17 @@
 import { render, screen, cleanup } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { EventDetailPopover } from '../event-detail-popover';
+import { isUndustMeetEnabled } from '@/lib/undust-meet';
 import type { CalendarEvent } from '@/lib/jmap/types';
 
 // The organizer of an undust room joins it through Ops as moderator
-// (decision GNgpgt03): the popover link opens the organizer URL while the
-// text keeps showing the guest link. jsdom runs on localhost, which the
-// undust guard accepts.
+// (decision GNgpgt03): every popover link to the room opens the organizer
+// URL while the text keeps showing the guest link.
 
 const GUEST_LINK = 'https://meet.undust.co/m-ee59ee19aad5be55';
 const HOST_LINK = 'https://ops.undust.co/meet/m-ee59ee19aad5be55?host=1';
+// What Ops writes in the events it creates (JMAP luc@, 23/10).
+const OPS_DESCRIPTION = `Lien visio : ${GUEST_LINK}\nQuand : lundi 23 novembre 2026, 15h00 – 15h45 (heure de Paris)`;
 
 const luc = { roles: { owner: true }, email: 'luc@undust.co', calendarAddress: 'mailto:luc@undust.co' };
 const client = { email: 'pb@b-technologie.fr', calendarAddress: 'mailto:pb@b-technologie.fr' };
@@ -30,6 +32,11 @@ function makeEvent(overrides: Record<string, unknown>): CalendarEvent {
   } as unknown as CalendarEvent;
 }
 
+const opsEvent = makeEvent({
+  locations: { loc1: { '@type': 'Location', name: GUEST_LINK } },
+  description: OPS_DESCRIPTION,
+});
+
 function renderPopover(event: CalendarEvent, currentUserEmails = ['luc@undust.co']) {
   return render(
     <EventDetailPopover
@@ -46,16 +53,29 @@ function renderPopover(event: CalendarEvent, currentUserEmails = ['luc@undust.co
 }
 
 describe('EventDetailPopover undust meeting link', () => {
+  beforeAll(() => {
+    // jsdom runs on localhost, which the undust guard accepts like
+    // webmail.undust.co; without it every case below would test nothing.
+    expect(isUndustMeetEnabled()).toBe(true);
+  });
+
   afterEach(() => {
     cleanup();
   });
 
   it('opens the organizer link from a location created by Ops', () => {
-    renderPopover(makeEvent({ locations: { loc1: { '@type': 'Location', name: GUEST_LINK } } }));
+    renderPopover(opsEvent);
 
     const link = screen.getByTitle(GUEST_LINK);
     expect(link.getAttribute('href')).toBe(HOST_LINK);
     expect(link.textContent).toBe('meet.undust.co');
+  });
+
+  it('opens the organizer link from the description written by Ops', () => {
+    renderPopover(opsEvent);
+
+    const link = screen.getByText(GUEST_LINK);
+    expect(link.getAttribute('href')).toBe(HOST_LINK);
   });
 
   it('opens the organizer link from the virtual location', () => {
@@ -66,13 +86,11 @@ describe('EventDetailPopover undust meeting link', () => {
     expect(screen.getByTitle(GUEST_LINK).getAttribute('href')).toBe(HOST_LINK);
   });
 
-  it('keeps the guest link for a guest', () => {
-    renderPopover(
-      makeEvent({ locations: { loc1: { '@type': 'Location', name: GUEST_LINK } } }),
-      ['pb@b-technologie.fr']
-    );
+  it('keeps the guest link everywhere for a guest', () => {
+    renderPopover(opsEvent, ['pb@b-technologie.fr']);
 
     expect(screen.getByTitle(GUEST_LINK).getAttribute('href')).toBe(GUEST_LINK);
+    expect(screen.getByText(GUEST_LINK).getAttribute('href')).toBe(GUEST_LINK);
   });
 
   it('leaves other meeting links alone', () => {

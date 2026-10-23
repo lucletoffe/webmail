@@ -159,17 +159,21 @@ export function EventDetailPopover({
   const meeting = useMemo(() => findMeetingLink(event), [event]);
   const virtualLocation = meeting?.uri ?? null;
 
+  // Every link of the event that joins the meeting opens through here: the
+  // organizer of an undust room gets its organizer link, the link shown stays
+  // the one the guests received.
+  const joinHref = useCallback(
+    (uri: string) => meetingJoinHref(uri, event, currentUserEmails),
+    [event, currentUserEmails]
+  );
+
   // A URL opens as a link, a location that only names the service joins the
-  // meeting, a postal address opens in the maps. Joining an undust room opens
-  // its organizer link for the organizer (meetingJoinHref); the link shown
-  // stays the one the guests received.
+  // meeting, a postal address opens in the maps.
   const locationHref = useMemo(() => {
     if (!locationName) return null;
     const action = locationAction(locationName, meeting);
-    return action.kind === "url"
-      ? meetingJoinHref(action.uri, event, currentUserEmails)
-      : mapsUrl(action.query);
-  }, [locationName, meeting, event, currentUserEmails]);
+    return action.kind === "url" ? joinHref(action.uri) : mapsUrl(action.query);
+  }, [locationName, meeting, joinHref]);
   const [locationCopied, setLocationCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -472,7 +476,7 @@ export function EventDetailPopover({
           <div className="flex items-start gap-2.5">
             <Video className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <a
-              href={meetingJoinHref(virtualLocation, event, currentUserEmails)}
+              href={joinHref(virtualLocation)}
               target="_blank"
               rel="noreferrer"
               className="text-sm text-primary hover:underline truncate"
@@ -542,7 +546,7 @@ export function EventDetailPopover({
           <div className="flex items-start gap-2.5">
             <AlignLeft className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <p className="text-sm text-muted-foreground whitespace-pre-line line-clamp-3 break-words">
-              <LinkifiedText text={event.description} />
+              <LinkifiedText text={event.description} hrefFor={joinHref} />
             </p>
           </div>
         )}

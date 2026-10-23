@@ -14,16 +14,20 @@ const HOST_LINK = "https://ops.undust.co/meet/m-ee59ee19aad5be55?host=1";
 const LUC = ["luc@undust.co"];
 
 // Forme réelle d'un événement créé par Ops (JMAP luc@, 23/10) : le lien est
-// dans locations[].name, l'organisateur est le participant roles.owner.
+// dans locations[].name et dans la description, l'organisateur est le
+// participant roles.owner.
 function makeEvent(
-  participants: Record<string, Partial<CalendarParticipant>> | null
+  participants: Record<string, Partial<CalendarParticipant>> | null,
+  overrides: Partial<CalendarEvent> = {}
 ): CalendarEvent {
   return {
     "@type": "Event",
     id: "ev1",
     title: "PCM Technologie - Potentiel IA",
     locations: { loc1: { "@type": "Location", name: GUEST_LINK } },
+    description: `Lien visio : ${GUEST_LINK}\nQuand : lundi 23 novembre 2026, 15h00 – 15h45 (heure de Paris)`,
     participants,
+    ...overrides,
   } as unknown as CalendarEvent;
 }
 
@@ -200,9 +204,19 @@ describe("undust-meet", () => {
       expect(hostJoinUrl(GUEST_LINK, event, LUC)).toBe(HOST_LINK);
     });
 
-    it("traite un événement sans participants comme le sien", () => {
-      expect(hostJoinUrl(GUEST_LINK, makeEvent(null), LUC)).toBe(HOST_LINK);
-      expect(hostJoinUrl(GUEST_LINK, makeEvent({}), [])).toBe(HOST_LINK);
+    it.each([
+      ["null", null],
+      ["vides", {}],
+    ])("traite un événement aux participants %s comme le sien", (_label, participants) => {
+      expect(hostJoinUrl(GUEST_LINK, makeEvent(participants), [])).toBe(HOST_LINK);
+    });
+
+    it("reconnaît l'organisateur par l'adresse organisateur de l'événement (forme Stalwart)", () => {
+      const event = makeEvent(
+        { luc: { calendarAddress: "mailto:luc@undust.co" }, client: { calendarAddress: "mailto:pb@b-technologie.fr" } },
+        { organizerCalendarAddress: "mailto:Luc@undust.co" }
+      );
+      expect(hostJoinUrl(GUEST_LINK, event, LUC)).toBe(HOST_LINK);
     });
 
     it("laisse le lien invité à un invité", () => {
@@ -258,9 +272,13 @@ describe("undust-meet", () => {
       expect(meetingJoinHref(GUEST_LINK, organizedByLuc, LUC)).toBe(GUEST_LINK);
     });
 
-    it("laisse le lien tel quel à un invité ou pour un autre lien", () => {
+    it("laisse le lien tel quel à un invité", () => {
       vi.stubGlobal("window", { location: { hostname: "webmail.undust.co" } });
       expect(meetingJoinHref(GUEST_LINK, organizedBySomeoneElse, LUC)).toBe(GUEST_LINK);
+    });
+
+    it("laisse tel quel un lien qui n'est pas une salle undust", () => {
+      vi.stubGlobal("window", { location: { hostname: "webmail.undust.co" } });
       expect(meetingJoinHref("https://zoom.us/j/123", organizedByLuc, LUC)).toBe("https://zoom.us/j/123");
     });
   });

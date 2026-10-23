@@ -87,8 +87,8 @@ export function hostJoinUrl(
 
 /**
  * Ce qu'ouvre l'action « Rejoindre » d'un lien de réunion : le lien
- * organisateur sur l'instance undust (`hostJoinUrl`), le lien lui-même
- * partout ailleurs. Le texte affiché reste le lien invité.
+ * organisateur (`hostJoinUrl`) sur l'instance undust, sinon le lien
+ * lui-même. Le texte affiché reste le lien invité.
  */
 export function meetingJoinHref(
   uri: string,
