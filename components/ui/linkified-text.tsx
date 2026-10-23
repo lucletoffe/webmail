@@ -7,7 +7,7 @@ interface LinkifiedTextProps {
   /** Plain text, as stored on the object (no markup is interpreted). */
   text: string;
   className?: string;
-  /** Where a URL of the text opens, when not the URL itself; the text shown never changes. */
+  /** Another http(s) URL a link of the text opens instead of its own (anything else is ignored); the text shown never changes. */
   hrefFor?: (url: string) => string;
 }
 

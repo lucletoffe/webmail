@@ -757,7 +757,7 @@ describe('email-sanitization', () => {
       expect(link?.getAttribute('href')).toBe(href);
     });
 
-    it.each(['javascript:alert(1)', 'mailto:x@example.com', '', '/relative'])(
+    it.each(['javascript:alert(1)', 'javascript:alert(1)//https://x.com', 'mailto:x@example.com', '', '/relative'])(
       'keeps the URL as href when hrefFor returns a non-http(s) %j',
       (target) => {
         const result = plainTextToSafeHtml('https://x.com/r', '', () => target);
