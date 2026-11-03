@@ -21,6 +21,10 @@ ENV NEXT_PUBLIC_DEFAULT_LOCALE=$NEXT_PUBLIC_DEFAULT_LOCALE
 # `git rev-parse` inside the build can't find it - CI must pass it in.
 ARG GIT_COMMIT=unknown
 ENV GIT_COMMIT=$GIT_COMMIT
+# undust fork: where the calendar reserves a video room (lib/undust-meet.ts).
+# Empty keeps the built-in default. Baked in at build time.
+ARG NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL=
+ENV NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL=$NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL
 # The mock JMAP server (DEV_MOCK_JMAP) accepts any password and is for
 # `npm run dev` only; images ship without it.
 # `next build` type-checks every .ts file, and some unit tests import the
