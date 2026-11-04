@@ -628,9 +628,7 @@ export function EmailComposer({
     : primaryIdentity;
   // The organisation signature applies here as below (hooks/use-org-signature.ts).
   const initialSignatureIdentity = useOrgSignatureIdentity(
-    (initialCurrentIdentityForSig?.htmlSignature || initialCurrentIdentityForSig?.textSignature)
-      ? initialCurrentIdentityForSig
-      : primaryIdentity,
+    initialCurrentIdentityForSig,
     initialCurrentIdentityForSig,
     (initialCurrentIdentityForSig?.id && stripCrossAccountIdentityPrefix(initialCurrentIdentityForSig.id).localAccountId)
       || composerAccountIdRef.current,
@@ -1072,9 +1070,6 @@ export function EmailComposer({
   const [validationErrors, setValidationErrors] = useState<{ to?: boolean; body?: boolean }>({});
   const [shakeField, setShakeField] = useState<string | null>(null);
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(initialData?.selectedIdentityId ?? null);
-  // Set once the user picks From by hand. Their pick then brings its own
-  // signature, also when it has none (see ownSignatureIdentity).
-  const [identityPickedByUser, setIdentityPickedByUser] = useState(false);
   const [subAddressTag, setSubAddressTag] = useState<string>(initialData?.subAddressTag ?? '');
   const [fromOverrideChosen, setFromOverrideEnabled] = useState<boolean>(initialData?.fromOverrideEnabled ?? false);
   // With the admin's customFromEnabled gate off, a draft saved with a custom
@@ -1286,14 +1281,11 @@ export function EmailComposer({
       && stripCrossAccountIdentityPrefix(identity.id).localAccountId === currentIdentityParts.localAccountId)
     ? currentIdentity.email
     : null;
-  // Alias identities often lack a configured signature - fall back to the primary
-  // identity's signature so replies (which auto-select a matching alias) still
-  // populate the user's signature. An identity the user picked by hand keeps
-  // its own, also an empty one: switching to a team address without a
-  // signature sent the team mail with the personal signature.
-  const ownSignatureIdentity = identityPickedByUser || currentIdentity?.htmlSignature || currentIdentity?.textSignature
-    ? currentIdentity
-    : primaryIdentity;
+  // Each identity signs with its own signature, an empty one included: no
+  // borrowing from the primary identity. A reply that auto-selects a personal
+  // or a client's address (luc@letoffe.me, a methode-ec2r.com alias) went out
+  // with the work signature of the primary (undust fork).
+  const ownSignatureIdentity = currentIdentity;
   // Then the organisation signature: the default for an identity without
   // one, or in place of every signature when the admin locked it. Plugins
   // may rewrite the result (onSignatureRender), except a locked one.
@@ -4501,7 +4493,6 @@ export function EmailComposer({
                   value={selectedIdentityId || primaryIdentity?.id || ''}
                   onChange={(e) => {
                     setSelectedIdentityId(e.target.value);
-                    setIdentityPickedByUser(true);
                     notifyIdentitySelected(identities, e.target.value);
                   }}
                   className="flex-1 bg-transparent text-sm text-foreground outline-none cursor-pointer hover:text-muted-foreground transition-colors min-w-0 truncate"

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { Identity } from '@/lib/jmap/types';
 import { effectiveSignatureIdentity, isSignatureEnforced, type FilledSignature } from '@/lib/org-signature';
-import { companyName, orgSignatureSetup, policyForSender, type OrgSignatureSetup } from '@/lib/org/signature-state';
+import { companyName, forSender, orgSignatureSetup, policyForSender, type OrgSignatureSetup } from '@/lib/org/signature-state';
 import { subjectForAccount, useAccountSubjects } from '@/lib/org/account-subjects';
 import { usePolicyStore } from '@/stores/policy-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -16,7 +16,10 @@ function useSenderPolicy(email: string | undefined, accountId: string | null | u
   // Re-read when another account's subject has been worked out.
   const accountSubjects = useAccountSubjects((s) => s.subjects);
   return useMemo(
-    () => policyForSender({ policy, rawPolicy, subject, resolveFor }, email, subjectForAccount(accountId)),
+    () => {
+      const sender = subjectForAccount(accountId);
+      return { policy: policyForSender({ policy, rawPolicy, subject, resolveFor }, email, sender), subject: sender };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [policy, rawPolicy, subject, resolveFor, email, accountId, accountSubjects],
   );
@@ -28,14 +31,14 @@ function useSenderPolicy(email: string | undefined, accountId: string | null | u
  * one when left out), and how the signature is restricted.
  */
 export function useOrgSignatureSetup(sending: Sender, accountId?: string | null): OrgSignatureSetup {
-  const policy = useSenderPolicy(sending?.email, accountId);
+  const { policy, subject } = useSenderPolicy(sending?.email, accountId);
   const details = useSettingsStore((s) => s.signatureDetails);
   const company = companyName();
   const name = sending?.name;
   const email = sending?.email;
   return useMemo(
-    () => orgSignatureSetup(policy, { name: name ?? '', email: email ?? '' }, details, company),
-    [policy, name, email, details, company],
+    () => forSender(orgSignatureSetup(policy, { name: name ?? '', email: email ?? '' }, details, company), email, subject),
+    [policy, subject, name, email, details, company],
   );
 }
 
