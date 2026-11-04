@@ -8,10 +8,11 @@ import { CalendarDays, MapPin, Users } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
+import { withAlpha } from "@/lib/color-transform";
 import { getEventColor } from "./event-card";
 import { getEventDayBounds, getEventEndDate, getEventStartDate, getPrimaryCalendarId } from "@/lib/calendar-utils";
 import { displayNow, isDisplayToday } from "@/lib/timezone";
-import { getParticipantCount, isDeclinedByUser } from "@/lib/calendar-participants";
+import { getParticipantCount, isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import { useScrollWindow } from "@/hooks/use-scroll-window";
 import type { ScrollWindowViewProps } from "@/lib/calendar-scroll-window";
 import type { CalendarEvent, Calendar } from "@/lib/jmap/types";
@@ -253,6 +254,26 @@ export function CalendarAgendaView({
                 ? Object.values(ev.locations)[0]?.name
                 : null;
               const meta = [locationName, calendar?.name].filter(Boolean).join(" · ");
+              // A pending RSVP paints the row with a diagonal hatch in the
+              // calendar colour: lists keep the same visual language as
+              // month/week/day cards (ordre Luc 16/10/2026, LPBvKUOr §3).
+              // `withAlpha` keeps the gradient valid when the calendar colour
+              // is not a 7-char hex (fred review 17ajQpph N2).
+              const isPending = !isInactive && isPendingForUser(ev, currentUserEmails);
+              const pendingRowStyle = isPending
+                ? { backgroundImage: `repeating-linear-gradient(45deg, ${withAlpha(color, 0.13)} 0 2px, transparent 2px 10px)` }
+                : undefined;
+              const statusLabel = isPending ? t("participants.pending_badge") : null;
+              // The row label stays at least as rich as EventCard's, so a
+              // pending row is not LESS informative to a screen reader
+              // (fred review N3).
+              const rowAriaLabel = [
+                ev.title || t("events.no_title"),
+                ev.showWithoutTime ? t("events.all_day") : `${formatTime(start)} – ${formatTime(end)}`,
+                calendar?.name,
+                locationName,
+                statusLabel,
+              ].filter(Boolean).join(", ");
 
               return (
                 <button
@@ -262,7 +283,9 @@ export function CalendarAgendaView({
                   onMouseLeave={() => onHoverLeave?.()}
                   onContextMenu={onContextMenuEvent ? (e) => onContextMenuEvent(e, ev) : undefined}
                   className="w-full flex items-start gap-3 px-2 rounded-md hover:bg-muted/60 transition-colors text-start"
-                  style={{ paddingBlock: 'var(--density-item-py)' }}
+                  style={{ paddingBlock: 'var(--density-item-py)', ...pendingRowStyle }}
+                  title={statusLabel || undefined}
+                  aria-label={rowAriaLabel}
                 >
                   <span className="w-28 sm:w-32 flex-shrink-0 text-sm text-muted-foreground tabular-nums">
                     {ev.showWithoutTime ? t("events.all_day") : <bdi dir="ltr">{`${formatTime(start)} – ${formatTime(end)}`}</bdi>}
@@ -284,6 +307,16 @@ export function CalendarAgendaView({
                         {ev.title || t("events.no_title")}
                       </span>
                     </div>
+                    {isPending && (
+                      <div className="mt-0.5">
+                        <span
+                          className="inline-block text-[0.625rem] uppercase tracking-wide rounded-sm px-1.5 py-0.5 border"
+                          style={{ color, borderColor: color }}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+                    )}
                     {(meta || getParticipantCount(ev) > 0) && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 min-w-0">
                         {locationName && <MapPin className="w-3 h-3 flex-shrink-0" />}

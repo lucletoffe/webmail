@@ -4440,6 +4440,7 @@
       "decline": "Weigeren",
       "tentative": "Voorlopig",
       "needs_action": "Reactie vereist",
+      "pending_badge": "Awaiting reply",
       "remove": "Verwijderen",
       "edit": "Bewerken",
       "email_placeholder": "E-mailadres toevoegen of contacten zoeken",

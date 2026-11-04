@@ -4440,6 +4440,7 @@
       "decline": "Absagen",
       "tentative": "Vorläufig",
       "needs_action": "Antwort ausstehend",
+      "pending_badge": "Awaiting reply",
       "remove": "Entfernen",
       "edit": "Bearbeiten",
       "email_placeholder": "E-Mail-Adresse hinzufügen oder Kontakte durchsuchen",

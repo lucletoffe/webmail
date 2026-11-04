@@ -4440,6 +4440,7 @@
       "decline": "Keeldu",
       "tentative": "Esialgne",
       "needs_action": "Vajab vastust",
+      "pending_badge": "Ootab vastust",
       "remove": "Eemalda",
       "edit": "Muuda",
       "email_placeholder": "Lisa e-posti aadress või otsi kontaktidest",

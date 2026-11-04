@@ -4440,6 +4440,7 @@
       "decline": "Elutasítás",
       "tentative": "Előzetes",
       "needs_action": "Művelet szükséges",
+      "pending_badge": "Awaiting reply",
       "remove": "Eltávolítás",
       "edit": "Szerkesztés",
       "email_placeholder": "E-mail cím hozzáadása vagy névjegy keresése",

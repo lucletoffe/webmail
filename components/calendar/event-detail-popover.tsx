@@ -20,6 +20,7 @@ import { formatEventAlertsLabel } from "./alert-list-editor";
 import {
   getUserParticipantId,
   getParticipantList,
+  isPendingForUser,
 } from "@/lib/calendar-participants";
 import { canUserRsvp, getEventEditability, type EditabilityContext } from "@/lib/calendar-editability";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
@@ -240,6 +241,15 @@ export function EventDetailPopover({
   );
 
   const answerView = useAnswerView(event, calendar, currentUserEmails, canRsvp && !!userParticipantId);
+
+  // Mirror of the hatched block in the calendar views: the detail popover
+  // calls out "awaiting your reply" above the RSVP buttons so the user sees
+  // what the stripes already told them (ordre Luc 16/10/2026, LPBvKUOr §3).
+  const isPending = useMemo(
+    () => isPendingForUser(event, currentUserEmails),
+    [event, currentUserEmails]
+  );
+  const showPendingNotice = isPending && answerView.targets.some((target) => target.kind === "self");
 
   const formatTime = useCallback(
     (d: Date) => format(d, timeFormat === "12h" ? "h:mm a" : "HH:mm"),
@@ -693,12 +703,24 @@ export function EventDetailPopover({
         </div>
       )}
 
-      {/* RSVP bars: the user's own, and "Answer for <owner>" in a calendar shared with them. */}
+      {/* RSVP bars: the user's own, and "Answer for <owner>" in a calendar shared with them.
+          Above them, the "awaiting your reply" cue mirrors the hatched block
+          in the calendar views. */}
+      {onRsvp && showPendingNotice && (
+        <p className="px-4 pt-3 border-t border-border text-xs font-medium text-warning flex items-center gap-1.5" data-testid="pending-notice">
+          <span
+            aria-hidden="true"
+            className="inline-block w-3 h-3 rounded-xs border border-warning"
+            style={{ backgroundImage: `repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 3px)` }}
+          />
+          {t("participants.pending_badge")}
+        </p>
+      )}
       {onRsvp && (
         <AnswerBars
           view={answerView}
           size="xs"
-          className="px-4 py-3 border-t border-border empty:hidden"
+          className={cn("px-4 py-3 empty:hidden", !showPendingNotice && "border-t border-border")}
           onRespond={(target, status) => onRsvp(status, target)}
         />
       )}

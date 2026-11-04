@@ -4440,6 +4440,7 @@
       "decline": "Odmítnout",
       "tentative": "Nezávazně",
       "needs_action": "Vyžaduje akci",
+      "pending_badge": "Awaiting reply",
       "remove": "Odstranit",
       "edit": "Upravit",
       "email_placeholder": "Přidejte e-mailovou adresu nebo vyhledejte kontakty",

@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import type { CalendarEvent, Calendar } from "@/lib/jmap/types";
 import { format } from "date-fns";
 import { ChevronDown, ChevronUp, Users } from "@/components/icons";
-import { getParticipantCount, isDeclinedByUser } from "@/lib/calendar-participants";
+import { getParticipantCount, isDeclinedByUser, isPendingForUser } from "@/lib/calendar-participants";
 import { getEventEndDate, getEventStartDate } from "@/lib/calendar-utils";
 import { useSettingsStore, type MonthTimedEventStyle } from "@/stores/settings-store";
-import { readableTextOn } from "@/lib/color-transform";
+import { readableTextOn, withAlpha } from "@/lib/color-transform";
 import { useLongPress } from "@/hooks/use-long-press";
 import { useCvdColor } from "@/hooks/use-cvd-color";
 
@@ -62,9 +62,15 @@ function getEventColor(event: CalendarEvent, calendar?: Calendar): string {
 
 // Events are solid blocks of their calendar colour; declined and cancelled
 // ones drop the fill and keep a 1px border in it (repos/branding/APP.md).
+// Events are solid blocks of their calendar colour; declined and cancelled
+// ones drop the fill and keep a 1px border in it (repos/branding/APP.md).
 // With light event colours on (the Outlook look, as on the printout) an
 // event is a light tint of its colour with a bar in it at the start
 // (eventFillClass) and text in the text colour.
+// Pending RSVPs — the user has not yet accepted or declined — paint diagonal
+// stripes over the event's own fill, so the slot still reads as "that time"
+// without looking like a firm commitment: it forces an answer before the
+// slot counts as taken (ordre Luc 16/10/2026, decision LPBvKUOr §3).
 // Everything is drawn with box-shadow, so the selection ring joins the list
 // here and the browser's focus outline stays free.
 /**
@@ -76,14 +82,29 @@ export function eventTextColor(color: string): string {
   return `color-mix(in srgb, ${color} 55%, var(--color-foreground))`;
 }
 
+/**
+ * The hatch tone of a pending event. On a solid fill it follows the label
+ * colour readableTextOn picks from the fill's luminance — translucent white
+ * on a dark calendar colour, translucent black on a light one — so it never
+ * disappears dark-on-dark (fred review 17ajQpph B1). On the light tint it is
+ * the calendar colour itself, as in the agenda list.
+ */
+function pendingStripe(color: string, tinted: boolean | undefined): string {
+  if (tinted) return withAlpha(color, 0.35);
+  return readableTextOn(color) === "#ffffff" ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)";
+}
+
 export function eventFillStyle(
   color: string,
-  { inactive, separated, selected, tinted }: { inactive: boolean; separated?: boolean; selected?: boolean; tinted?: boolean },
+  { inactive, pending, separated, selected, tinted }: { inactive: boolean; pending?: boolean; separated?: boolean; selected?: boolean; tinted?: boolean },
 ): CSSProperties {
   const shadows: string[] = [];
   if (selected) shadows.push("0 0 0 2px var(--color-primary)");
   else if (separated) shadows.push("0 0 0 1px var(--color-background)");
   if (inactive) shadows.push(`inset 0 0 0 1px ${color}`);
+  // Pending wins over the plain fill but loses to inactive (a declined or
+  // cancelled event still reads as a hollow outline, not a hatched block).
+  if (!inactive && pending) shadows.push(`inset 0 0 0 1px ${color}`);
   const fill: CSSProperties = inactive
     ? { backgroundColor: "var(--color-background)", color: eventTextColor(color) }
     : tinted
@@ -93,6 +114,11 @@ export function eventFillStyle(
         ["--start-bar" as string]: color,
       }
       : { backgroundColor: color, color: readableTextOn(color) };
+  if (!inactive && pending) {
+    // The stripe goes on top of the usual fill: the calendar colour still
+    // wins the reading, 2px / 10px bands at 45° only break it up.
+    fill.backgroundImage = `repeating-linear-gradient(45deg, ${pendingStripe(color, tinted)} 0 2px, transparent 2px 10px)`;
+  }
   return shadows.length > 0 ? { ...fill, boxShadow: shadows.join(", ") } : fill;
 }
 
@@ -158,10 +184,22 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
   // iTIP CANCEL marks the attendee's copy with status "cancelled" instead of
   // deleting it (#572), and a declined invitation stays on the calendar too
   // (#1110) - render both struck through and dimmed.
+  //
+  // A pending RSVP — the user has been invited and has not yet replied, or
+  // the organizer has only proposed the meeting (STATUS:TENTATIVE) — is
+  // hatched with diagonal stripes (ordre Luc 16/10/2026, LPBvKUOr §3): the
+  // slot shows at its real time without reading as a firm booking.
   const isCancelled = event.status === "cancelled";
   const isDeclined = !isCancelled && isDeclinedByUser(event, currentUserEmails);
+  const isPending = !isCancelled && !isDeclined && isPendingForUser(event, currentUserEmails);
   const isInactive = isCancelled || isDeclined;
-  const statusLabel = isCancelled ? t("detail.cancelled") : isDeclined ? t("participants.declined") : null;
+  const statusLabel = isCancelled
+    ? t("detail.cancelled")
+    : isDeclined
+      ? t("participants.declined")
+      : isPending
+        ? t("participants.pending_badge")
+        : null;
   const ariaLabel = `${event.title || t("events.no_title")}, ${spokenTime}${calendarName ? `, ${calendarName}` : ""}${statusLabel ? `, ${statusLabel}` : ""}`;
 
   const handleDragStart = useCallback((e: DragEvent) => {
@@ -248,7 +286,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
           eventFillClass(tinted, isInactive),
           className
         )}
-        style={{ ...eventFillStyle(color, { inactive: isInactive, selected: isSelected, tinted }), ...style }}
+        title={isPending ? t("participants.pending_badge") : undefined}
+        style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, selected: isSelected, tinted }), ...style }}
       >
         {/* The whole width, aligned to the title's own start: a short English
             title in Arabic sat at the right, a cut one filled to the left. */}
@@ -280,6 +319,7 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
           tabIndex={tabbable ? undefined : -1}
           {...dragProps}
           data-timed-style={textStyle}
+          title={isPending ? t("participants.pending_badge") : undefined}
           className={cn(
             "w-full h-full text-start rounded-xs px-1.5 py-0.5 text-xs overflow-hidden",
             "hover:bg-muted transition-colors cursor-pointer",
@@ -294,7 +334,14 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
         >
           <div className="flex items-center gap-1 min-w-0">
             {textStyle === "dot" && (
-              <span data-event-dot aria-hidden="true" className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+              // A pending RSVP is a hollow ring: it marks the slot without
+              // claiming it is taken, as on the month view's mobile dots.
+              <span
+                data-event-dot
+                aria-hidden="true"
+                className={cn("w-2 h-2 rounded-full flex-shrink-0", isPending && "border bg-transparent")}
+                style={isPending ? { borderColor: color } : { backgroundColor: color }}
+              />
             )}
             <span className="flex-shrink-0 font-normal opacity-85">{safeFormat(startDate, timeFmt)}</span>
             <span dir="auto" className="flex-1 min-w-0 truncate text-start font-medium">{event.title || t("events.no_title")}</span>
@@ -325,7 +372,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
           eventFillClass(tinted, isInactive),
           className
         )}
-        style={{ ...eventFillStyle(color, { inactive: isInactive, selected: isSelected, tinted }), ...style }}
+        title={isPending ? t("participants.pending_badge") : undefined}
+        style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, selected: isSelected, tinted }), ...style }}
       >
         <div className="flex items-center gap-1 min-w-0">
           {showTimeInMonthView && !event.showWithoutTime && (
@@ -368,7 +416,8 @@ export function EventCard({ event, calendar, variant, onClick, onMouseEnter, onM
         eventFillClass(tinted, isInactive),
         className
       )}
-      style={{ ...eventFillStyle(color, { inactive: isInactive, separated: true, selected: isSelected, tinted }), ...style }}
+      title={isPending ? t("participants.pending_badge") : undefined}
+      style={{ ...eventFillStyle(color, { inactive: isInactive, pending: isPending, separated: true, selected: isSelected, tinted }), ...style }}
     >
       {continuesBefore && <ChevronUp aria-hidden="true" className="absolute top-0.5 end-0.5 w-3 h-3 opacity-85" />}
       {continuesAfter && <ChevronDown aria-hidden="true" className="absolute bottom-0.5 end-0.5 w-3 h-3 opacity-85" />}
