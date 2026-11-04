@@ -163,6 +163,9 @@ export const NON_REQUEST_HOSTS: readonly { host: string; files: readonly string[
   { host: 'develop.sentry.dev', why: 'link to the envelope format in a comment', files: ['lib/error-reporting/envelope.ts'] },
   { host: 'extensions.bulwarkmail.org', why: 'signed statement type URIs', files: ['lib/admin/directory-keys.ts'] },
   { host: 'www.w3.org', why: 'XML namespaces', files: ['components/ui/flag-icons.tsx', 'lib/favicon-badge.ts'] },
+  // undust fork: the operator's own servers, not a third party.
+  { host: 'webmail.undust.co', why: 'undust fork: the hostname the visio button is shown on, compared with location.hostname', files: ['lib/undust-meet.ts'] },
+  { host: 'ops.undust.co', why: "undust fork: the operator's own Ops server (first party), which reserves a visio room from webmail.undust.co only; the no-third-party mode does not concern it", files: ['lib/undust-meet.ts', 'components/calendar/event-modal.tsx'] },
   { host: 'creativecommons.org', why: 'licence metadata inside an SVG', files: ['components/ui/flag-icons.tsx'] },
   { host: 'github.com', why: 'source code link (AGPL) and SVG metadata', files: ['components/settings/about-data-settings.tsx', 'components/ui/flag-icons.tsx'] },
   { host: 'www.rfc-editor.org', why: 'comments', files: ['lib/jmap/client.ts'] },
