@@ -188,15 +188,17 @@ describe('reply/forward inline image cid normalization', () => {
 
   function mockClient() {
     const fetchBlobArrayBuffer = vi.fn().mockResolvedValue(PNG_MAGIC);
+    const uploadBlob = vi.fn(async (file: File) => ({ blobId: `blob-${file.name}`, size: file.size, type: file.type }));
     useAuthStore.setState({
       client: {
         fetchBlobArrayBuffer,
+        uploadBlob,
         hasDelayedSend: () => false,
         supportsPrincipals: () => false,
         getMaxDelayedSend: () => 0,
       } as never,
     });
-    return { fetchBlobArrayBuffer };
+    return { fetchBlobArrayBuffer, uploadBlob };
   }
 
   it('sends a reply with the image inlined by cid, not duplicated as a regular attachment', async () => {
@@ -284,5 +286,33 @@ describe('reply/forward inline image cid normalization', () => {
     expect(sent.attachments).toEqual([
       expect.objectContaining({ blobId: 'blob-1', cid: 'logo123@sender' }),
     ]);
+  });
+  it('sends a quoted image whose part is missing without uploading its stand-in', async () => {
+    const { uploadBlob } = mockClient();
+    const onSend = vi.fn();
+
+    render(
+      <EmailComposer
+        mode="reply"
+        onSend={onSend}
+        replyTo={{
+          from: [{ email: 'sender@example.com', name: 'Sender' }],
+          subject: 'Hello',
+          // The original refers to a part it doesn't carry: the composer
+          // shows a transparent data: GIF in its place.
+          htmlBody: '<p>Hi</p><img src="cid:missing@sender">',
+          quoteHeaderHtml: 'On X, Sender wrote:',
+          attachments: [],
+        }}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByTestId('composer-send')[0]);
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    const sent = onSend.mock.calls[0][0] as { attachments?: unknown[] };
+    expect(uploadBlob).not.toHaveBeenCalled();
+    expect(sent.attachments).toBeUndefined();
   });
 });

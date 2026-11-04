@@ -104,6 +104,7 @@ import "@/lib/org/outgoing";
 import { SubAddressHelper } from "@/components/identity/sub-address-helper";
 import { generateSubAddress } from "@/lib/sub-addressing";
 import { substitutePlaceholders, spliceTemplateAboveSignature, composeBodyHasUserContent, embedTemplateImages } from "@/lib/template-utils";
+import { inlineDataImages } from "@/lib/inline-data-images";
 import { findUnfilledPlaceholders, stripEmbeddedSignatureHtml } from "@/lib/placeholder-check";
 import enMessages from "@/locales/en/common.json";
 import { TemplatePicker } from "@/components/templates/template-picker";
@@ -128,6 +129,7 @@ import { RecipientsRejectedError, RequestTimeoutError, ScheduleTooLateError, Sen
 import {
   rewriteCidImagesForEditor,
   replaceInlineImagePlaceholders,
+  INLINE_IMAGE_PLACEHOLDER,
   collectInlineImageCids,
   sniffImageMime,
   formatRecipient,
@@ -3325,11 +3327,22 @@ export function EmailComposer({
     return new Set(Array.from(doc.querySelectorAll('img[data-cid]'), (img) => img.getAttribute('data-cid') ?? ''));
   };
 
+  type InlineImage = typeof inlineImagesRef.current[number];
+  type InlineAttachment = { blobId: string; name: string; type: string; size: number; disposition: 'inline'; cid: string };
+  const inlineAttachment = (e: InlineImage): InlineAttachment => ({
+    blobId: e.blobId,
+    name: e.name,
+    type: e.type,
+    size: e.size,
+    disposition: 'inline',
+    cid: e.cid,
+  });
+
   // Rewrite data: URLs of dropped images (tagged with data-cid) into cid:
   // references so recipient clients that strip data URIs can still render them.
   const rewriteInlineImages = (html: string): {
     html: string;
-    attachments: Array<{ blobId: string; name: string; type: string; size: number; disposition: 'inline'; cid: string }>;
+    attachments: InlineAttachment[];
   } => {
     const known = inlineImagesRef.current;
     const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
@@ -3357,15 +3370,34 @@ export function EmailComposer({
 
     return {
       html: doc.body.innerHTML,
-      attachments: Array.from(used.values()).map((e) => ({
-        blobId: e.blobId,
-        name: e.name,
-        type: e.type,
-        size: e.size,
-        disposition: 'inline' as const,
-        cid: e.cid,
-      })),
+      attachments: Array.from(used.values()).map(inlineAttachment),
     };
+  };
+
+  // The data: images still in the HTML as it goes (a signature's logo, the
+  // images of a re-opened draft, what a finaliser or plugin added) go out as
+  // cid: parts too. `uploads` lives for one send: an image met again on a
+  // later pass reuses its part. The stand-in of a quoted image that never
+  // loaded is not one of the message's images and stays as it is.
+  const inlineOutgoingDataImages = async (
+    html: string | undefined,
+    uploads: Map<string, Promise<{ cid: string } | null>>,
+  ): Promise<{ html: string | undefined; attachments: InlineAttachment[] }> => {
+    if (!html) return { html, attachments: [] };
+    const inlined = await inlineDataImages(html, (file, src) => {
+      if (src === INLINE_IMAGE_PLACEHOLDER) return Promise.resolve(null);
+      let uploaded = uploads.get(src);
+      if (!uploaded) {
+        uploaded = handleImageUpload(file);
+        uploads.set(src, uploaded);
+      }
+      return uploaded;
+    });
+    const attachments = inlined.cids
+      .map((cid) => inlineImagesRef.current.find((e) => e.cid === cid))
+      .filter((e): e is InlineImage => !!e)
+      .map(inlineAttachment);
+    return { html: inlined.html, attachments };
   };
 
   // Guard against double-submit. Rapid Send clicks (or a click racing the
@@ -3802,7 +3834,9 @@ export function EmailComposer({
       // aborted or failed handler sent nothing: keep the message and its
       // draft, and never fall back to sending it unsigned (#1207). It signs
       // or encrypts the message with the `last` finalisers' additions.
+      const dataImageUploads = new Map<string, Promise<{ cid: string } | null>>();
       const sealed = lastStage(finalHtmlBody, finalBody);
+      const sealedInline = await inlineOutgoingDataImages(sealed.html, dataImageUploads);
       // The label as it stands now, from the policy of the sending account.
       const labelPolicy = labelsPolicyFor({ email: currentIdentity?.email, accountId: composingAccountId });
       const sendLabel = resolveLabel(labelPolicy, classificationRef.current.choice, labelOriginal);
@@ -3817,7 +3851,7 @@ export function EmailComposer({
         cc: ccAddresses.map(r => formatRecipient(r.name, r.email)),
         bcc: bccAddresses.map(r => formatRecipient(r.name, r.email)),
         subject: takeoverLabelled.subject,
-        htmlBody: sealed.html || '',
+        htmlBody: sealedInline.html || '',
         textBody: sealed.text,
         identityId: currentIdentity?.id || '',
         fromEmail,
@@ -3828,7 +3862,8 @@ export function EmailComposer({
         attachments: [
           ...sentAttachments
             .map(a => ({ name: a.name, type: a.type || 'application/octet-stream', size: a.size, blobId: a.blobId, cid: a.cid })),
-          ...inlineAttachments.map(a => ({ name: a.name, type: a.type, size: a.size, blobId: a.blobId, cid: a.cid })),
+          ...[...inlineAttachments, ...sealedInline.attachments]
+            .map(a => ({ name: a.name, type: a.type, size: a.size, blobId: a.blobId, cid: a.cid })),
         ],
       };
       let pluginOutcome: Awaited<ReturnType<typeof emailHooks.onComposeSend.takeOver>>;
@@ -3904,6 +3939,8 @@ export function EmailComposer({
         }
         // Below whatever the plugins added (a footer), the `last` finalisers.
         const sealedOutgoing = lastStage(outgoing.htmlBody, outgoing.textBody);
+        const outgoingInline = await inlineOutgoingDataImages(sealedOutgoing.html, dataImageUploads);
+        uploadedAttachments.push(...outgoingInline.attachments);
         // The label after the plugins had their say, so none can drop it.
         const labelled = classifyOutgoing(labelPolicy, sendLabel, { subject: outgoing.subject, headers: outgoing.headers });
 
@@ -3939,7 +3976,7 @@ export function EmailComposer({
           bcc: outgoing.bcc,
           subject: labelled.subject,
           body: sealedOutgoing.text,
-          htmlBody: sealedOutgoing.html || undefined,
+          htmlBody: outgoingInline.html || undefined,
           draftId: finalDraftId && !draftElsewhere ? finalDraftId : undefined,
           draftAccountId: finalDraftId && !draftElsewhere ? draftAccountAtSend : undefined,
           fromEmail,
