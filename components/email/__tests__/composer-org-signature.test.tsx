@@ -607,3 +607,116 @@ describe('organisation disclaimer in the composer', () => {
     }
   });
 });
+
+/**
+ * Gmail and Outlook don't show data: images, so a logo embedded in the
+ * organisation signature (policy.json) went out invisible. It goes out as
+ * a cid: part, like an image pasted into the body.
+ */
+describe('an image in the organisation signature', () => {
+  // A 1×1 PNG.
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const LOGO = `<img src="data:image/png;base64,${PNG}" alt="ACME logo">`;
+  const LOGO_SIGNATURE = { ...ORG_SIGNATURE, html: `${ORG_SIGNATURE.html}<p>${LOGO}</p>` };
+
+  type Sent = { htmlBody?: string; attachments?: Array<{ blobId: string; name: string; type: string; disposition?: string; cid?: string }> };
+  let uploadBlob: ReturnType<typeof vi.fn>;
+
+  function setLogoPolicy(disclaimer = DEFAULT_ORGANISATION_POLICY.disclaimer) {
+    const policy: SettingsPolicy = {
+      ...DEFAULT_POLICY,
+      restrictions: { signature: { locked: true } },
+      organisation: { ...DEFAULT_ORGANISATION_POLICY, signature: LOGO_SIGNATURE, disclaimer },
+    };
+    usePolicyStore.setState({ policy, rawPolicy: policy, subject: null });
+  }
+
+  /** The one inline part the sent HTML shows the logo with. */
+  function expectLogoPart(sent: Sent, imagesInHtml = 1) {
+    expect(sent.htmlBody).not.toContain('data:image');
+    expect(sent.attachments).toEqual([
+      expect.objectContaining({ blobId: 'blob-image-1.png', name: 'image-1.png', type: 'image/png', disposition: 'inline' }),
+    ]);
+    const cid = sent.attachments![0].cid!;
+    expect(cid).toMatch(/@webmail$/);
+    expect(countOf(sent.htmlBody!, `<img src="cid:${cid}" alt="ACME logo">`)).toBe(imagesInHtml);
+  }
+
+  beforeEach(() => {
+    resetSendPipeline();
+    registerOrgOutgoing();
+    useSettingsStore.setState({
+      signatureDetails: { title: 'CEO', department: '', phone: '+49 30 1', mobile: '' },
+    } as never);
+    uploadBlob = vi.fn(async (file: File) => ({ blobId: `blob-${file.name}`, size: file.size, type: file.type }));
+    useAuthStore.setState({
+      client: { uploadBlob, hasDelayedSend: () => false, supportsPrincipals: () => false, getMaxDelayedSend: () => 0 } as never,
+    });
+    setLogoPolicy();
+  });
+  afterEach(() => {
+    resetSendPipeline();
+    useAuthStore.setState({ client: null });
+    useSettingsStore.setState({ plainTextMode: false });
+    setOrgPolicy({ signature: null });
+    vi.clearAllMocks();
+  });
+
+  it('sends the logo as an inline cid: part, uploaded once', async () => {
+    const onSend = vi.fn();
+    render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+    const sent = await send(onSend) as Sent;
+
+    expect(uploadBlob).toHaveBeenCalledTimes(1);
+    expect(countOf(sent.htmlBody!, 'ACME Ltd')).toBe(1);
+    expectLogoPart(sent);
+  });
+
+  it('sends the same logo in the signature and the disclaimer as one part', async () => {
+    setLogoPolicy({ html: `<p>Confidential</p><p>${LOGO}</p>`, text: '' });
+    const onSend = vi.fn();
+    render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+    const sent = await send(onSend) as Sent;
+
+    expect(uploadBlob).toHaveBeenCalledTimes(1);
+    expectLogoPart(sent, 2);
+  });
+
+  it('hands a signing or encrypting plugin the logo as a cid: part', async () => {
+    const taken = vi.fn();
+    sendPlugins.takeOver = taken;
+    try {
+      render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={vi.fn()} />);
+      fireEvent.click(sendButton());
+      await waitFor(() => expect(taken).toHaveBeenCalledTimes(1));
+      const request = taken.mock.calls[0][0] as { htmlBody: string; attachments: Array<{ blobId: string; cid?: string }> };
+
+      expect(request.htmlBody).not.toContain('data:image');
+      expect(request.attachments).toEqual([expect.objectContaining({ blobId: 'blob-image-1.png' })]);
+      expect(request.htmlBody).toContain(`src="cid:${request.attachments[0].cid}"`);
+    } finally {
+      sendPlugins.takeOver = null;
+    }
+  });
+
+  it('uploads nothing for a plain-text mail', async () => {
+    useSettingsStore.setState({ plainTextMode: true });
+    const onSend = vi.fn();
+    render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+    const sent = await send(onSend) as Sent & { body: string };
+
+    expect(uploadBlob).not.toHaveBeenCalled();
+    expect(sent.htmlBody).toBeUndefined();
+    expect(sent.attachments).toBeUndefined();
+  });
+
+  it('still sends the logo as it is when its upload fails', async () => {
+    uploadBlob.mockRejectedValue(new Error('upload refused'));
+    const onSend = vi.fn();
+    render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+    const sent = await send(onSend) as Sent;
+
+    expect(sent.htmlBody).toContain(LOGO);
+    expect(sent.attachments).toBeUndefined();
+  });
+});
