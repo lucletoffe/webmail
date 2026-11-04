@@ -1780,6 +1780,17 @@
         "error_over_quota": "Šim kontam pasta serverī ir pārāk daudz push reģistrāciju (ierobežojums parasti ir 15). Paziņojumu iestatījumos atsauciet ierīces, kuras vairs neizmantojat, un mēģiniet vēlreiz."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Īsinājumtaustiņi",
+      "description": "Piešķiriet pasta darbībām savus taustiņus, piemēram, Ctrl + E arhivēšanai. Izvēlētais taustiņš aizstāj noklusējuma taustiņu.",
+      "change": "Mainīt",
+      "reset": "Atjaunot",
+      "reset_all": "Atjaunot visus īsinājumtaustiņus",
+      "recording": "Nospiediet jauno taustiņu… (Esc, lai atceltu)",
+      "invalid": "{key} nevar izmantot: to rezervē lietotne vai pārlūks.",
+      "taken": "{key} jau tiek izmantots darbībai “{action}”.",
+      "fixed_keys": "Pārvietošanās taustiņi sarakstā (j, k, bultiņas, Enter, Esc, g secības), x, ? un Ctrl/⌘ + A nemainās."
+    },
     "language_region": {
       "title": "Valoda, reģions un laiks",
       "description": "Valoda, datuma formāts, laika formāts un citas reģionālās preferences",

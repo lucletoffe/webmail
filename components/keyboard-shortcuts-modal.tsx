@@ -13,6 +13,7 @@ import {
   type ShortcutSection,
 } from "@/lib/keyboard-shortcuts";
 import { shortcutAlternatives } from "@/lib/shortcut-keys";
+import { formatCombo } from "@/lib/shortcut-bindings";
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
 import { usePathname } from "@/i18n/navigation";
@@ -43,6 +44,7 @@ export function KeyboardShortcutsModal({ isOpen, onClose, app }: KeyboardShortcu
   const contentRef = useRef<HTMLDivElement>(null);
   const interfaceLayout = useSettingsStore((state) => state.interfaceLayout);
   const singleKeyShortcuts = useSettingsStore((state) => state.singleKeyShortcuts);
+  const shortcutBindings = useSettingsStore((state) => state.shortcutBindings);
   const shell = useProInterfaceActive() ? "pro" : "standard";
   const features = usePolicyStore((s) => s.policy.features);
   // Plugin buttons in the composer that have a shortcut (composer-toolbar-actions).
@@ -54,6 +56,11 @@ export function KeyboardShortcutsModal({ isOpen, onClose, app }: KeyboardShortcu
     entries.filter((entry) => (!entry.layout || entry.layout === interfaceLayout)
       && (!entry.shell || entry.shell === shell)
       && (!entry.feature || (features[entry.feature] ?? true)));
+  // A key the user chose in the settings replaces the built-in ones.
+  const keyOf = (entry: ShortcutEntry) => {
+    const custom = entry.action ? shortcutBindings?.[entry.action] : undefined;
+    return custom ? formatCombo(custom) : entry.key;
+  };
 
   const apps = SHORTCUT_APPS.filter((a) => a.sections.some((s) => shown(s.entries).length > 0));
   const currentApp = app ?? shortcutAppForPath(pathname ?? "/");
@@ -142,7 +149,7 @@ export function KeyboardShortcutsModal({ isOpen, onClose, app }: KeyboardShortcu
                   {rows.map((shortcut) => (
                     <ShortcutRow
                       key={`${shortcut.key}:${shortcut.description}`}
-                      shortcutKey={shortcut.key}
+                      shortcutKey={keyOf(shortcut)}
                       description={t(shortcut.description)}
                     />
                   ))}

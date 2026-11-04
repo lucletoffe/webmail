@@ -1780,6 +1780,17 @@
         "error_over_quota": "Tento účet má na poštovním serveru příliš mnoho registrací push (limit je obvykle 15). V nastavení oznámení odvolejte zařízení, která už nepoužíváte, a zkuste to znovu."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Klávesové zkratky",
+      "description": "Přiřaďte akcím s poštou vlastní klávesy, například Ctrl + E pro archivaci. Zvolená klávesa nahradí výchozí.",
+      "change": "Změnit",
+      "reset": "Obnovit",
+      "reset_all": "Obnovit všechny zkratky",
+      "recording": "Stiskněte novou klávesu… (Esc pro zrušení)",
+      "invalid": "{key} nelze použít: vyhrazuje si ji aplikace nebo prohlížeč.",
+      "taken": "{key} už používá akce „{action}“.",
+      "fixed_keys": "Klávesy pro pohyb v seznamu (j, k, šipky, Enter, Esc, sekvence g), x, ? a Ctrl/⌘ + A zůstávají beze změny."
+    },
     "language_region": {
       "title": "Jazyk, region a čas",
       "description": "Jazyk, formát data, formát času a další regionální předvolby",

@@ -1780,6 +1780,17 @@
         "error_over_quota": "Questo account ha troppe registrazioni push sul server di posta (il limite di solito è 15). Revoca i dispositivi che non usi più nelle impostazioni delle notifiche, poi riprova."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Scorciatoie da tastiera",
+      "description": "Assegna tasti personalizzati alle azioni sulla posta, ad esempio Ctrl + E per archiviare. Il tasto scelto sostituisce quello predefinito.",
+      "change": "Modifica",
+      "reset": "Ripristina",
+      "reset_all": "Ripristina tutte le scorciatoie",
+      "recording": "Premi il nuovo tasto… (Esc per annullare)",
+      "invalid": "Impossibile usare {key}: è riservato all'app o al browser.",
+      "taken": "{key} è già usato da «{action}».",
+      "fixed_keys": "I tasti per muoversi nell'elenco (j, k, frecce, Invio, Esc, sequenze g), x, ? e Ctrl/⌘ + A non cambiano."
+    },
     "language_region": {
       "title": "Lingua, regione e ora",
       "description": "Lingua, formato data, formato ora e altre preferenze regionali",

@@ -135,7 +135,7 @@ describe('useKeyboardShortcuts: n opens the next unread message', () => {
   });
 
   it('is listed in the help modal under navigation', () => {
-    expect(KEYBOARD_SHORTCUTS.navigation).toContainEqual({ key: 'n', description: 'shortcuts.navigation.next_unread' });
+    expect(KEYBOARD_SHORTCUTS.navigation).toContainEqual({ key: 'n', description: 'shortcuts.navigation.next_unread', action: 'next-unread' });
   });
 });
 

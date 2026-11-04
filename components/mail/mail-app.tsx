@@ -1202,6 +1202,7 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
   // reach the selection again back in the list.
   const shortcutsTargetSelection = selectedEmailKeys.size > 0 && !(mvShell && !cursorOnly && selectedEmail);
   const singleKeyShortcuts = useSettingsStore((s) => s.singleKeyShortcuts);
+  const shortcutBindings = useSettingsStore((s) => s.shortcutBindings);
   useKeyboardShortcuts({
     enabled: isAuthenticated && !showComposer,
     singleKeyShortcuts,
@@ -1209,6 +1210,7 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
     selectedEmailId: selectedEmail?.id,
     selectionCount: selectedEmailKeys.size,
     mountainViewKeys: mvShell,
+    customBindings: shortcutBindings,
     handlers: keyboardHandlers,
   });
   // Ctrl+Z / z: undo the last mail actions, newest first.

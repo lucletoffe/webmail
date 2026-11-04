@@ -63,3 +63,19 @@ describe('keyboard shortcuts help with single-key shortcuts off', () => {
     expect(screen.getByText('shortcuts.tip')).toBeInTheDocument();
   });
 });
+
+// A key the user chose in Settings > General replaces the built-in one in the help.
+describe('keyboard shortcuts help with a custom key', () => {
+  it('lists the custom key of an action instead of its built-in key', () => {
+    nav.pathname = '/';
+    useSettingsStore.setState({ shortcutBindings: { archive: 'mod+e' } });
+    try {
+      render(<KeyboardShortcutsModal isOpen onClose={() => {}} />);
+      const row = screen.getByText('shortcuts.actions.archive').parentElement!;
+      expect(row.querySelector('kbd')?.textContent).toBe('Ctrl + E');
+      expect(row.querySelectorAll('kbd')).toHaveLength(1);
+    } finally {
+      useSettingsStore.setState({ shortcutBindings: {} });
+    }
+  });
+});
