@@ -8266,7 +8266,8 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
       result = await client.rescheduleEmailSubmission(submissionId, emailId, identityId, delayedUntil, accountId ?? owner?.scheduledAccountId);
       const pendingUndoSend = get().pendingUndoSend;
       if (pendingUndoSend?.submissionId === submissionId && inAccount(pendingUndoSend.submissionAccountId)) {
-        set({ pendingUndoSend: { ...pendingUndoSend, submissionId: result.emailSubmissionId || submissionId, sendAt: result.sendAt || delayedUntil } });
+        // A reschedule may re-stamp the message as a new Email (rescheduleEmailSubmission).
+        set({ pendingUndoSend: { ...pendingUndoSend, emailId: result.emailId || pendingUndoSend.emailId, submissionId: result.emailSubmissionId || submissionId, sendAt: result.sendAt || delayedUntil } });
       }
       return result;
     } catch (error) {
@@ -8281,10 +8282,12 @@ export const useEmailStore = create<EmailStore>((set, get) => ({
     } finally {
       await get().fetchScheduledEmails(client);
       if (result && get().selectedEmail?.id === emailId) {
-        const refreshed = get().scheduledEmails.find(email => email.id === emailId && inAccount(email.scheduledAccountId));
+        const releasedId = result.emailId || emailId;
+        const refreshed = get().scheduledEmails.find(email => email.id === releasedId && inAccount(email.scheduledAccountId));
         set(state => ({
           selectedEmail: refreshed || (state.selectedEmail ? {
             ...state.selectedEmail,
+            id: releasedId,
             emailSubmissionId: result?.emailSubmissionId || submissionId,
             scheduledSendAt: result?.sendAt || delayedUntil,
             scheduledIdentityId: identityId,
