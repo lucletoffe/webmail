@@ -869,8 +869,16 @@ export function EmailComposer({
   // and the signature stays editable/removable in the editor (#329). A body
   // that already carries it (a #823 draft, the stash of a compose in
   // progress) is left alone.
+  //
+  // undust fork: a re-opened draft (`draftId`) is never signed here. A draft
+  // Bulwark wrote carries its signature between the data-signature-block
+  // markers, or none because the user removed it; one without the markers
+  // came from elsewhere - our agents drop signed drafts into Drafts over JMAP
+  // - and its author chose how it ends: signing it again sent two signatures.
+  // A mailto: body or a stash without a draft still gets it (#848).
   const withSignatureEmbedded = (provided: string): string => {
     if (!shouldEmbedSignatureInNewMail) return provided;
+    if (initialData?.draftId) return provided;
     if (plainTextMode) {
       if (plainTextBodyHasSignature(provided, initialSignatureIdentity)) return provided;
       return appendPlainTextSignature(provided, initialSignatureIdentity, {

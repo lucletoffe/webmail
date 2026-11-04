@@ -233,8 +233,10 @@ describe('re-opened draft signature (#848)', () => {
     vi.clearAllMocks();
   });
 
-  it('sends a re-opened reply draft with exactly one signature', async () => {
-    const sent = await sendAndCapture(REOPENED_REPLY_DRAFT);
+  // undust fork: only a body without a draft behind it (a mailto: link, a
+  // stash) is signed on mount; a re-opened draft keeps the end it has.
+  it('sends a body handed in without a draft with exactly one signature', async () => {
+    const sent = await sendAndCapture({ ...REOPENED_REPLY_DRAFT, draftId: null as unknown as string });
 
     expect(sent.htmlBody).toContain('<b>Alice</b>');
     expect(countOf(sent.htmlBody!, SIGNATURE_BLOCK_MARKER)).toBe(1);
@@ -245,7 +247,7 @@ describe('re-opened draft signature (#848)', () => {
   });
 
   it('does not show the read-only preview as a second copy of the embedded signature', () => {
-    render(<EmailComposer initialData={REOPENED_REPLY_DRAFT} />);
+    render(<EmailComposer initialData={{ ...REOPENED_REPLY_DRAFT, draftId: null as unknown as string }} />);
     // The editor is mocked, so the only way "Alice" could appear is the
     // below-editor preview - and the signature is in the body now.
     expect(screen.queryByText('Alice')).not.toBeInTheDocument();
@@ -272,15 +274,42 @@ describe('re-opened draft signature (#848)', () => {
     }
   });
 
+  // Our agents drop drafts into Drafts over JMAP, signed by hand. Re-opened and
+  // sent from Bulwark, they went out with a second signature (undust fork).
+  it('sends a draft written elsewhere with only the signature its text ends with', async () => {
+    const body = '<p>Bonjour Bob,</p><p>Voici le chiffrage.</p><p>Luc Létoffé<br>undust</p>';
+    const sent = await sendAndCapture({ ...REOPENED_REPLY_DRAFT, body });
+
+    expect(sent.htmlBody).not.toContain('Alice');
+    expect(sent.htmlBody).not.toContain(SIGNATURE_RANGE_MARKER);
+    expect(countOf(sent.htmlBody!, 'Luc Létoffé')).toBe(1);
+    expect(sent.htmlBody).toMatch(/Luc Létoffé<br>undust<\/p>(<\/div>)?$/);
+    expect(sent.body).not.toContain('Alice');
+    expect(countOf(sent.body, 'Luc Létoffé')).toBe(1);
+  });
+
+  it('shows no signature preview under a re-opened draft written elsewhere', () => {
+    render(<EmailComposer initialData={REOPENED_REPLY_DRAFT} />);
+    expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+  });
+
   describe('plain text mode', () => {
-    it('appends the text signature to a re-opened draft that lacks it', async () => {
+    it('appends the text signature to a body handed in without a draft', async () => {
       useSettingsStore.setState({ plainTextMode: true });
       const sent = await sendAndCapture({
         ...REOPENED_REPLY_DRAFT,
+        draftId: null as unknown as string,
         body: 'Thanks, looks good.\n\n> original mail',
       });
 
       expect(sent.body).toBe('Thanks, looks good.\n\n> original mail\n\n-- \nAlice');
+    });
+
+    it('leaves a re-opened plain-text draft as it ends', async () => {
+      useSettingsStore.setState({ plainTextMode: true });
+      const sent = await sendAndCapture({ ...REOPENED_REPLY_DRAFT, body: 'Thanks, looks good.\n\n> original mail' });
+
+      expect(sent.body).toBe('Thanks, looks good.\n\n> original mail');
     });
 
     it('does not duplicate a text signature the draft already ends with', async () => {
