@@ -96,3 +96,56 @@ describe('inlineDataImages', () => {
     expect(await inlineDataImages(html, async () => null)).toEqual({ html, cids: [] });
   });
 });
+
+describe('inlineDataImages upload concurrency', () => {
+  // Twelve distinct 1-pixel PNGs: the same image with a different trailing byte each.
+  const distinctImages = (count: number) => Array.from({ length: count }, (_, i) => {
+    const bytes = Uint8Array.from(atob(PNG), (c) => c.charCodeAt(0));
+    const padded = new Uint8Array([...bytes, i]);
+    return `<img src="data:image/png;base64,${btoa(String.fromCharCode(...padded))}">`;
+  }).join('');
+
+  function trackingUploader() {
+    let active = 0;
+    let peak = 0;
+    let n = 0;
+    const upload = vi.fn(async () => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active--;
+      return { cid: `img${++n}@webmail` };
+    });
+    return { upload, peak: () => peak };
+  }
+
+  it.each([
+    [undefined, 1],
+    [2, 2],
+    [4, 4],
+  ])('with concurrency %s uploads at most %s at a time', async (concurrency, expectedPeak) => {
+    const { upload, peak } = trackingUploader();
+
+    const out = await inlineDataImages(distinctImages(12), upload, concurrency === undefined ? undefined : { concurrency });
+
+    expect(upload).toHaveBeenCalledTimes(12);
+    expect(out.cids).toHaveLength(12);
+    expect(peak()).toBe(expectedPeak);
+  });
+
+  it('keeps each image matched to the cid of its own upload', async () => {
+    // Later images finish first; each cid names the trailing byte of its file.
+    const upload = vi.fn(async (file: File) => {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const tag = bytes[bytes.length - 1];
+      await new Promise((resolve) => setTimeout(resolve, 20 - tag * 3));
+      return { cid: `img-${tag}@webmail` };
+    });
+
+    const out = await inlineDataImages(distinctImages(6), upload, { concurrency: 3 });
+
+    expect(images(out.html).map((img) => img.getAttribute('src'))).toEqual(
+      [0, 1, 2, 3, 4, 5].map((i) => `cid:img-${i}@webmail`),
+    );
+  });
+});
