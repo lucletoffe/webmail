@@ -39,6 +39,22 @@ function allParts(email: EmailCreate): BodyPart[] {
   return out;
 }
 
+// next dev compiles the app page and the mock server's route on first use;
+// until then a request can come back empty. Ask for both until they answer.
+test.beforeAll(async ({ request }) => {
+  test.setTimeout(480_000);
+  for (const path of ["/", "/api/dev-jmap/.well-known/jmap"]) {
+    await expect.poll(async () => {
+      try {
+        const status = (await request.get(path, { timeout: 240_000, maxRedirects: 0 })).status();
+        return status < 500;
+      } catch {
+        return false;
+      }
+    }, { message: `${path} answers`, timeout: 470_000, intervals: [2_000] }).toBe(true);
+  }
+});
+
 async function signIn(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: /^sign in$/i }).first().click();

@@ -1,5 +1,5 @@
 import { escapeHtml, sanitizeEmailHtml } from './email-sanitization';
-import { embedDataImages, type DataImageUpload } from './inline-data-images';
+import { embedDataImages, type DataImageOptions, type DataImageUpload } from './inline-data-images';
 import type { EmailTemplate } from './template-types';
 import { BUILT_IN_PLACEHOLDERS } from './template-types';
 import { generateUUID } from './utils';
@@ -152,8 +152,8 @@ export function composeBodyHasUserContent(prevHtml: string): boolean {
  * pasted-image upload - and tag it with the returned cid; the send path then
  * turns it into a cid: part (#1490). An image whose upload fails is left as is.
  */
-export async function embedTemplateImages(html: string, upload: DataImageUpload): Promise<string> {
-  const embedded = await embedDataImages(html, upload, (img, cid) => img.setAttribute('data-cid', cid));
+export async function embedTemplateImages(html: string, upload: DataImageUpload, options?: DataImageOptions): Promise<string> {
+  const embedded = await embedDataImages(html, upload, (img, cid) => img.setAttribute('data-cid', cid), options);
   return embedded.html;
 }
 

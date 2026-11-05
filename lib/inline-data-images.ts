@@ -13,6 +13,16 @@ const DATA_IMAGE = /^data:(image\/(?:png|jpe?g|gif|webp|bmp|avif));base64,([a-z0
 /** Resolves null when the image was not uploaded; it is then left as it is. */
 export type DataImageUpload = (file: File, src: string) => Promise<{ cid: string } | null>;
 
+export interface DataImageOptions {
+  /**
+   * Uploads at most this many images at a time (default 1). A server takes
+   * only so many uploads at once (maxConcurrentUpload, 4 on Stalwart) and
+   * refuses the rest, so a quoted newsletter must not upload all its images
+   * together.
+   */
+  concurrency?: number;
+}
+
 function dataImageFile(src: string, name: string): File | null {
   const match = DATA_IMAGE.exec(src);
   if (!match) return null;
@@ -26,6 +36,20 @@ function dataImageFile(src: string, name: string): File | null {
   }
 }
 
+/** `run` on every item, at most `limit` at a time; results in input order. */
+async function mapLimited<T, R>(items: T[], limit: number, run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await run(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, lane));
+  return results;
+}
+
 /**
  * Uploads the data: images of `html` and lets `place` point each image at
  * its cid. Returns the body (unchanged when no image was placed) and the
@@ -35,6 +59,7 @@ export async function embedDataImages(
   html: string,
   upload: DataImageUpload,
   place: (img: Element, cid: string) => void,
+  { concurrency = 1 }: DataImageOptions = {},
 ): Promise<{ html: string; cids: string[] }> {
   if (!/<img\b[^>]*\bsrc\s*=\s*["']?\s*data:image\//i.test(html)) return { html, cids: [] };
   const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
@@ -44,10 +69,10 @@ export async function embedDataImages(
   if (images.length === 0) return { html, cids: [] };
   // The same image shown twice goes out as one part.
   const sources = Array.from(new Set(images.map(({ src }) => src)));
-  const cids = new Map(await Promise.all(sources.map(async (src, i) => {
+  const cids = new Map(await mapLimited(sources, concurrency, async (src, i) => {
     const file = dataImageFile(src, `image-${i + 1}`);
     return [src, file ? (await upload(file, src))?.cid : undefined] as const;
-  })));
+  }));
   const placed = new Set<string>();
   for (const { img, src } of images) {
     const cid = cids.get(src);
@@ -64,9 +89,13 @@ export async function embedDataImages(
  * message as it goes, so what was added after the editor (the signature, the
  * organisation's signature, a plugin's footer) goes out as parts too.
  */
-export function inlineDataImages(html: string, upload: DataImageUpload): Promise<{ html: string; cids: string[] }> {
+export function inlineDataImages(
+  html: string,
+  upload: DataImageUpload,
+  options?: DataImageOptions,
+): Promise<{ html: string; cids: string[] }> {
   return embedDataImages(html, upload, (img, cid) => {
     img.setAttribute('src', `cid:${cid}`);
     img.removeAttribute('data-cid');
-  });
+  }, options);
 }

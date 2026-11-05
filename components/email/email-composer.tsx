@@ -105,6 +105,7 @@ import { SubAddressHelper } from "@/components/identity/sub-address-helper";
 import { generateSubAddress } from "@/lib/sub-addressing";
 import { substitutePlaceholders, spliceTemplateAboveSignature, composeBodyHasUserContent, embedTemplateImages } from "@/lib/template-utils";
 import { inlineDataImages } from "@/lib/inline-data-images";
+import { maxConcurrentUploads } from "@/lib/jmap/upload-concurrency";
 import { findUnfilledPlaceholders, stripEmbeddedSignatureHtml } from "@/lib/placeholder-check";
 import enMessages from "@/locales/en/common.json";
 import { TemplatePicker } from "@/components/templates/template-picker";
@@ -2132,39 +2133,52 @@ export function EmailComposer({
     }
   };
 
+  // Uploads an image shown in the body and registers it for the send path,
+  // which sends it as the returned cid. Throws when the upload fails.
+  const uploadInlineImage = useCallback(async (file: File): Promise<{ src: string; cid: string }> => {
+    if (!client) throw new Error('No client');
+    const readAsDataUrl = new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve((e.target?.result as string) ?? null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+    const [{ blobId }, dataUrl] = await Promise.all([
+      (composerClientRef.current ?? client).uploadBlob(file),
+      readAsDataUrl,
+    ]);
+    if (!dataUrl) throw new Error('Failed to read image as data URL');
+    const cid = `${generateUUID()}@webmail`;
+    inlineImagesRef.current.push({
+      cid,
+      blobId,
+      type: file.type || 'application/octet-stream',
+      name: file.name,
+      size: file.size,
+      dataUrl,
+      uploadedAt: Date.now(),
+    });
+    return { src: dataUrl, cid };
+  }, [client]);
+
+  // The server takes only so many uploads at once (see embedDataImages).
+  const inlineUploadConcurrency = useCallback((): number => {
+    const target = composerClientRef.current ?? client;
+    return target?.getCapabilities ? maxConcurrentUploads(target) : 1;
+  }, [client]);
+
   const handleImageUpload = useCallback(async (
     file: File,
   ): Promise<{ src: string; cid: string } | null> => {
     if (!client) return null;
     try {
-      const readAsDataUrl = new Promise<string | null>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) ?? null);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(file);
-      });
-      const [{ blobId }, dataUrl] = await Promise.all([
-        (composerClientRef.current ?? client).uploadBlob(file),
-        readAsDataUrl,
-      ]);
-      if (!dataUrl) throw new Error('Failed to read image as data URL');
-      const cid = `${generateUUID()}@webmail`;
-      inlineImagesRef.current.push({
-        cid,
-        blobId,
-        type: file.type || 'application/octet-stream',
-        name: file.name,
-        size: file.size,
-        dataUrl,
-        uploadedAt: Date.now(),
-      });
-      return { src: dataUrl, cid };
+      return await uploadInlineImage(file);
     } catch (error) {
       debug.error(`Failed to upload inline image ${file.name}:`, error);
       toast.error(t('upload_failed', { filename: file.name }));
       return null;
     }
-  }, [client, t]);
+  }, [client, t, uploadInlineImage]);
 
   const handleTemplateSelect = useCallback(async (template: EmailTemplate, filledValues: Record<string, string>) => {
     let filledSubject = Object.keys(filledValues).length > 0
@@ -2192,7 +2206,7 @@ export function EmailComposer({
       bodyContent = plainTextMode ? rendered.text : sanitizePluginBodyHtml(rendered.html);
     }
     // Its data: images go out as cid: parts, like pasted ones (#1490).
-    if (!plainTextMode) bodyContent = await embedTemplateImages(bodyContent, handleImageUpload);
+    if (!plainTextMode) bodyContent = await embedTemplateImages(bodyContent, handleImageUpload, { concurrency: inlineUploadConcurrency() });
 
     if (mode === 'compose') {
       // An empty template subject must not wipe one the user typed (#540).
@@ -2278,7 +2292,7 @@ export function EmailComposer({
 
     setShowTemplatePicker(false);
     notifyTemplateApplied(template);
-  }, [mode, plainTextMode, signatureIdentity, signatureSeparatorEnabled, handleImageUpload]);
+  }, [mode, plainTextMode, signatureIdentity, signatureSeparatorEnabled, handleImageUpload, inlineUploadConcurrency]);
 
   useEffect(() => {
     const handleTemplateKey = (e: KeyboardEvent) => {
@@ -3367,24 +3381,30 @@ export function EmailComposer({
   };
 
   // The data: images still in the HTML as it goes (a signature's logo, the
-  // images of a re-opened draft, what a finaliser or plugin added) go out as
-  // cid: parts too. `uploads` lives for one send: an image met again on a
-  // later pass reuses its part. The stand-in of a quoted image that never
-  // loaded is not one of the message's images and stays as it is.
+  // images of a re-opened or quoted message, what a finaliser or plugin
+  // added) go out as cid: parts too. `uploads` lives for one send: an image
+  // met again on a later pass reuses its part while the upload is fresh
+  // (see INLINE_UPLOAD_REFRESH_MS). The message goes out anyway, so a failed
+  // upload leaves its image as it is without a word to the user. The
+  // stand-in of a quoted image that never loaded is not one of the
+  // message's images and stays as it is.
+  type DataImageUploads = Map<string, { at: number; uploaded: Promise<{ cid: string } | null> }>;
   const inlineOutgoingDataImages = async (
     html: string | undefined,
-    uploads: Map<string, Promise<{ cid: string } | null>>,
+    uploads: DataImageUploads,
   ): Promise<{ html: string | undefined; attachments: InlineAttachment[] }> => {
     if (!html) return { html, attachments: [] };
     const inlined = await inlineDataImages(html, (file, src) => {
       if (src === INLINE_IMAGE_PLACEHOLDER) return Promise.resolve(null);
-      let uploaded = uploads.get(src);
-      if (!uploaded) {
-        uploaded = handleImageUpload(file);
-        uploads.set(src, uploaded);
-      }
+      const cached = uploads.get(src);
+      if (cached && Date.now() - cached.at < INLINE_UPLOAD_REFRESH_MS) return cached.uploaded;
+      const uploaded = uploadInlineImage(file).catch((error) => {
+        debug.warn('email', `Sending the image ${file.name} as a data: URI, its upload failed:`, error);
+        return null;
+      });
+      uploads.set(src, { at: Date.now(), uploaded });
       return uploaded;
-    });
+    }, { concurrency: inlineUploadConcurrency() });
     const attachments = inlined.cids
       .map((cid) => inlineImagesRef.current.find((e) => e.cid === cid))
       .filter((e): e is InlineImage => !!e)
@@ -3826,9 +3846,13 @@ export function EmailComposer({
       // aborted or failed handler sent nothing: keep the message and its
       // draft, and never fall back to sending it unsigned (#1207). It signs
       // or encrypts the message with the `last` finalisers' additions.
-      const dataImageUploads = new Map<string, Promise<{ cid: string } | null>>();
+      const dataImageUploads: DataImageUploads = new Map();
       const sealed = lastStage(finalHtmlBody, finalBody);
-      const sealedInline = await inlineOutgoingDataImages(sealed.html, dataImageUploads);
+      // Only uploaded for a plugin that may take the send over: without one
+      // the standard send below does it, after the plugins' transforms.
+      const sealedInline = emailHooks.onComposeSend.size > 0
+        ? await inlineOutgoingDataImages(sealed.html, dataImageUploads)
+        : { html: sealed.html, attachments: [] };
       // The label as it stands now, from the policy of the sending account.
       const labelPolicy = labelsPolicyFor({ email: currentIdentity?.email, accountId: composingAccountId });
       const sendLabel = resolveLabel(labelPolicy, classificationRef.current.choice, labelOriginal);

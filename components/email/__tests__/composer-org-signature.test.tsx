@@ -9,6 +9,7 @@ import { registerOrgOutgoing } from '@/lib/org/outgoing';
 import { resetSendPipeline } from '@/lib/outgoing/send-pipeline';
 import { DEFAULT_POLICY, type SettingsPolicy } from '@/lib/admin/types';
 import { DEFAULT_ORGANISATION_POLICY } from '@/lib/admin/organisation-policy';
+import { toast } from '@/stores/toast-store';
 
 // ─── Heavy component mocks (mirrors composer-reply-signature.test.tsx) ─
 
@@ -23,6 +24,9 @@ const signaturePlugin = vi.hoisted(() => ({ on: false }));
 const sendPlugins = vi.hoisted(() => ({
   footer: false,
   takeOver: null as null | ((request: { htmlBody: string; textBody: string }) => void),
+  // A takeover handler is registered but leaves the send to the host.
+  passThrough: false,
+  onTransform: null as null | (() => void),
 }));
 vi.mock('@/components/email/rich-text-editor', () => ({
   RichTextEditor: ({ content, onChange, onEditorReady }: {
@@ -178,7 +182,7 @@ vi.mock('@/stores/template-store', () => {
 // ─── Misc dependency mocks ────────────────────────────────────────────────────
 
 vi.mock('@/stores/toast-store', () => ({
-  toast: { info: () => {}, error: () => {}, success: () => {} },
+  toast: { info: () => {}, error: vi.fn(), success: () => {} },
 }));
 
 vi.mock('@/lib/plugin-hooks', () => ({
@@ -202,6 +206,7 @@ vi.mock('@/lib/plugin-hooks', () => ({
     onBeforeDraftAutoSave: { transform: async (draft: unknown) => draft },
     onBeforeEmailSend: { intercept: async () => true, interceptOutcome: async () => 'allowed' },
     onComposeSend: {
+      get size() { return sendPlugins.takeOver || sendPlugins.passThrough ? 1 : 0; },
       takeOver: async (request: { htmlBody: string; textBody: string }) => {
         if (!sendPlugins.takeOver) return 'default';
         sendPlugins.takeOver(request);
@@ -209,7 +214,7 @@ vi.mock('@/lib/plugin-hooks', () => ({
       },
     },
     onTransformOutgoingEmail: {
-      transform: async (email: { htmlBody: string; textBody: string }) => (sendPlugins.footer
+      transform: async (email: { htmlBody: string; textBody: string }) => (sendPlugins.onTransform?.(), sendPlugins.footer
         ? { ...email, htmlBody: `${email.htmlBody}<p>Plugin footer</p>`, textBody: `${email.textBody}\n\nPlugin footer` }
         : email),
     },
@@ -710,7 +715,7 @@ describe('an image in the organisation signature', () => {
     expect(sent.attachments).toBeUndefined();
   });
 
-  it('still sends the logo as it is when its upload fails', async () => {
+  it('still sends the logo as it is, without a word, when its upload fails', async () => {
     uploadBlob.mockRejectedValue(new Error('upload refused'));
     const onSend = vi.fn();
     render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
@@ -718,5 +723,58 @@ describe('an image in the organisation signature', () => {
 
     expect(sent.htmlBody).toContain(LOGO);
     expect(sent.attachments).toBeUndefined();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('uploads after the plugins\' transforms when no plugin may take the send over', async () => {
+    const uploadsAtTransform: number[] = [];
+    sendPlugins.onTransform = () => uploadsAtTransform.push(uploadBlob.mock.calls.length);
+    try {
+      const onSend = vi.fn();
+      render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+      expectLogoPart(await send(onSend) as Sent);
+      expect(uploadsAtTransform).toEqual([0]);
+      expect(uploadBlob).toHaveBeenCalledTimes(1);
+    } finally {
+      sendPlugins.onTransform = null;
+    }
+  });
+
+  describe('with a takeover plugin that leaves the send to the host', () => {
+    let offset = 0;
+    beforeEach(() => {
+      offset = 0;
+      sendPlugins.passThrough = true;
+      let n = 0;
+      uploadBlob.mockImplementation(async (file: File) => ({ blobId: `blob-${++n}`, size: file.size, type: file.type }));
+      const realNow = Date.now.bind(Date);
+      vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+    });
+    afterEach(() => {
+      sendPlugins.passThrough = false;
+      sendPlugins.onTransform = null;
+      vi.restoreAllMocks();
+    });
+
+    it('reuses the upload of the takeover pass', async () => {
+      const onSend = vi.fn();
+      render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+      const sent = await send(onSend) as Sent;
+
+      expect(uploadBlob).toHaveBeenCalledTimes(1);
+      expect(sent.attachments).toEqual([expect.objectContaining({ blobId: 'blob-1', disposition: 'inline' })]);
+    });
+
+    it('uploads again when the first upload may have expired by the standard send', async () => {
+      // A slow plugin transform: 31 s pass between the two passes.
+      sendPlugins.onTransform = () => { offset += 31_000; };
+      const onSend = vi.fn();
+      render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={onSend} />);
+      const sent = await send(onSend) as Sent;
+
+      expect(uploadBlob).toHaveBeenCalledTimes(2);
+      expect(sent.attachments).toEqual([expect.objectContaining({ blobId: 'blob-2', disposition: 'inline' })]);
+      expect(sent.htmlBody).toContain(`src="cid:${sent.attachments![0].cid}"`);
+    });
   });
 });
