@@ -16,7 +16,7 @@ export const ORGANISATION_POLICY = {
   },
 };
 
-export const PORT = Number(process.env.COMPOSE_E2E_PORT || 3152);
+export const PORT = Number(process.env.COMPOSE_E2E_PORT || 3154);
 
 /**
  * The test server's admin config and state. One fixed path per port: the
