@@ -1344,6 +1344,11 @@ export function EmailComposer({
     // With automatic insertion off the body never got a signature spliced
     // in, so there is nothing to swap.
     if (!autoSignatureEnabled) return;
+    // undust fork: a re-opened draft only has a signature Bulwark put there
+    // swapped, never one added (see withSignatureEmbedded). Its identities
+    // can arrive after it opened (cold start, PWA, restored composer), which
+    // reads here as an identity change.
+    const reopenedDraft = !!initialData?.draftId;
 
     if (plainTextMode) {
       // A new plain-text message carries the signature at the end of the
@@ -1351,7 +1356,9 @@ export function EmailComposer({
       if (!identityChanged && !contentChanged) return;
       const options = { separator: signatureSeparatorEnabled };
       if (mode === 'compose') {
-        setBody((prev) => replacePlainTextSignature(prev, previousIdentity, signatureIdentity, options));
+        setBody((prev) => reopenedDraft && !(previousIdentity && plainTextBodyHasSignature(prev, previousIdentity))
+          ? prev
+          : replacePlainTextSignature(prev, previousIdentity, signatureIdentity, options));
         return;
       }
       // The signature identity of a reply is often only known after the body
@@ -1371,8 +1378,9 @@ export function EmailComposer({
     // quoted body - see removeSignatureRange), or removed when the new
     // identity has no signature.
     const currentHtml = serializeEditorContent(editor);
-    // Only a new identity (or a first signature) brings one into a body without one.
-    if (!bringsSignature && !containsEmbeddedSignature(currentHtml)) return;
+    // Only a new identity (or a first signature) brings one into a body
+    // without one, and never into a re-opened draft.
+    if ((reopenedDraft || !bringsSignature) && !containsEmbeddedSignature(currentHtml)) return;
     const nextHtml = replaceEmbeddedSignature(currentHtml, buildEmbeddedSignatureHtml(signatureIdentity, {
       embed: true,
       separator: signatureSeparatorEnabled,
