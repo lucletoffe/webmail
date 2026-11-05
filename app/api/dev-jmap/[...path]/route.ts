@@ -61,6 +61,10 @@ interface MockEmail {
   htmlBody: { partId: string; blobId: string; size: number; type: string }[];
   bodyValues: Record<string, { value: string }>;
   attachments?: { partId: string; blobId: string; size: number; name: string; type: string }[];
+  /** The Date header; set on messages created or imported here. */
+  sentAt?: string;
+  /** The raw message (uploadedBlobs); set on messages created or imported here. */
+  blobId?: string;
 }
 
 let stateCounter = 1;
@@ -1790,6 +1794,92 @@ function handleEmailGet(args: MethodArgs, callId: string): MethodResult {
   return ['Email/get', { accountId: ACCOUNT_ID, state: nextState(), list: result, notFound: [] }, callId];
 }
 
+const addressList = (list: { name?: string; email: string }[]) =>
+  list.map((a) => (a.name ? `"${a.name}" <${a.email}>` : a.email)).join(', ');
+
+/** An RFC 5322 message for a mock email, for Email/import and downloads of its blob. */
+function rawMessage(email: MockEmail, text: string): Uint8Array {
+  const header = [
+    `From: ${addressList(email.from)}`,
+    `To: ${addressList(email.to)}`,
+    `Subject: ${email.subject}`,
+    `Date: ${new Date(email.sentAt ?? email.receivedAt).toUTCString().replace('GMT', '+0000')}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8',
+  ].join('\r\n');
+  return new TextEncoder().encode(`${header}\r\n\r\n${text}`);
+}
+
+/** The top-level header fields of a raw message, unfolded, by lower-case name. */
+function rawHeaders(bytes: Uint8Array): { fields: Map<string, string>; body: string } {
+  const text = new TextDecoder().decode(bytes);
+  const split = text.search(/\r?\n\r?\n/);
+  const head = split === -1 ? text : text.slice(0, split);
+  const body = split === -1 ? '' : text.slice(split).replace(/^\r?\n\r?\n/, '');
+  const fields = new Map<string, string>();
+  for (const line of head.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/)) {
+    const colon = line.indexOf(':');
+    if (colon > 0) fields.set(line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim());
+  }
+  return { fields, body };
+}
+
+function parseAddressList(value: string | undefined): { name: string; email: string }[] {
+  if (!value) return [];
+  return value.split(',').map((part) => {
+    const match = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(part);
+    return match ? { name: match[1].trim(), email: match[2].trim() } : { name: '', email: part.trim() };
+  }).filter((a) => a.email);
+}
+
+/**
+ * Email/import (RFC 8621 §4.8): a message from an uploaded blob. The Date
+ * header becomes sentAt, as on a real server, so a re-stamped copy (the
+ * reschedule of a held message) can be checked.
+ */
+function handleEmailImport(args: MethodArgs, callId: string): MethodResult {
+  const created: Record<string, { id: string; blobId: string; threadId: string; size: number }> = {};
+  const notCreated: Record<string, { type: string; description?: string }> = {};
+  for (const [key, data] of Object.entries((args.emails ?? {}) as Record<string, Record<string, unknown>>)) {
+    const blobId = data.blobId as string;
+    const blob = uploadedBlobs.get(blobId);
+    if (!blob) {
+      notCreated[key] = { type: 'blobNotFound' };
+      continue;
+    }
+    const { fields, body } = rawHeaders(blob.bytes);
+    const date = fields.get('date') ? new Date(fields.get('date')!) : new Date();
+    const id = `email-import-${Date.now()}-${key}`;
+    const email: MockEmail = {
+      id,
+      threadId: `thread-import-${Date.now()}-${key}`,
+      mailboxIds: (data.mailboxIds as Record<string, boolean>) || {},
+      keywords: (data.keywords as Record<string, boolean>) || {},
+      size: blob.bytes.byteLength,
+      receivedAt: typeof data.receivedAt === 'string' ? data.receivedAt : new Date().toISOString(),
+      sentAt: Number.isNaN(date.getTime()) ? undefined : date.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      blobId,
+      from: parseAddressList(fields.get('from')),
+      to: parseAddressList(fields.get('to')),
+      cc: parseAddressList(fields.get('cc')),
+      subject: fields.get('subject') ?? '',
+      preview: body.slice(0, 120),
+      hasAttachment: false,
+      textBody: [],
+      htmlBody: [],
+      bodyValues: {},
+    };
+    emails.unshift(email);
+    emailCreationIds.set(key, id);
+    created[key] = { id, blobId, threadId: email.threadId, size: email.size };
+  }
+  return ['Email/import', {
+    accountId: ACCOUNT_ID, oldState: nextState(), newState: nextState(),
+    created: Object.keys(created).length ? created : null,
+    notCreated: Object.keys(notCreated).length ? notCreated : null,
+  }, callId];
+}
+
 function handleEmailSet(args: MethodArgs, callId: string): MethodResult {
   const updated: Record<string, null> = {};
   const created: Record<string, { id: string }> = {};
@@ -1870,6 +1960,11 @@ function handleEmailSet(args: MethodArgs, callId: string): MethodResult {
         htmlBody: [],
         bodyValues: {},
       };
+      // A raw copy, so Email/import of its blob works like on a real server.
+      newEmail.sentAt = typeof data.sentAt === 'string' ? data.sentAt : newEmail.receivedAt;
+      if (typeof data.receivedAt === 'string') newEmail.receivedAt = data.receivedAt;
+      newEmail.blobId = `blob-raw-${newId}`;
+      uploadedBlobs.set(newEmail.blobId, { bytes: rawMessage(newEmail, previewText), type: 'message/rfc822' });
       emails.unshift(newEmail);
       emailCreationIds.set(key, newId);
       created[key] = { id: newId };
@@ -2464,6 +2559,7 @@ const METHOD_HANDLERS: Record<string, MethodHandler> = {
   'Email/query': handleEmailQuery,
   'Email/get': handleEmailGet,
   'Email/set': handleEmailSet,
+  'Email/import': handleEmailImport,
   'Email/changes': (_args, callId) => ['Email/changes', { accountId: ACCOUNT_ID, oldState: nextState(), newState: nextState(), hasMoreChanges: false, created: [], updated: [], destroyed: [] }, callId],
   'Thread/get': handleThreadGet,
   'Identity/get': handleIdentityGet,

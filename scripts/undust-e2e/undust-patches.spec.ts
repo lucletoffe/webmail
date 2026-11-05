@@ -108,14 +108,41 @@ test("a scheduled mail is stamped with its release time, and Send now re-checks 
     expect(Math.abs(Date.parse(draft.sentAt as string) - (Date.now() + holdFor * 1000))).toBeLessThan(5 * 60_000);
   }
 
-  // Send now from Scheduled: the reschedule looks at the stamp before it releases.
+  // Send now from Scheduled: the message goes out re-stamped with the time
+  // of now (sched2), as a copy imported before the original is canceled.
+  const importedIds: string[] = [];
+  page.on("response", async (response) => {
+    if (!response.url().includes("/api/dev-jmap/api") || response.request().method() !== "POST") return;
+    const body = await response.json().catch(() => null) as { methodResponses?: MethodCall[] } | null;
+    for (const [name, result] of body?.methodResponses ?? []) {
+      if (name === "Email/import") importedIds.push(...Object.values((result.created ?? {}) as Record<string, { id: string }>).map((c) => c.id));
+    }
+  });
   await page.getByRole("button", { name: /scheduled/i }).first().click().catch(() => {});
   await page.locator('[data-tour="email-list"] [role="row"]', { hasText: "e2e scheduled" }).first().click();
   const before = calls.length;
+  const clickedAt = Date.now();
   await page.locator('[data-tour="email-viewer"]').getByTitle(/^send now$/i).first().click();
   await expect.poll(() => callsOf(calls.slice(before), "EmailSubmission/set").some((args) => !!args.create)).toBe(true);
-  const probe = callsOf(calls.slice(before), "Email/get").find((args) => (args.properties as string[] | undefined)?.includes("sentAt") && (args.properties as string[]).includes("blobId"));
-  expect(probe).toBeTruthy();
+
+  const sent = calls.slice(before);
+  const importAt = sent.findIndex(([name]) => name === "Email/import");
+  const cancelAt = sent.findIndex(([name, args]) => name === "EmailSubmission/set" && !!args.update);
+  expect(importAt).toBeGreaterThan(-1);
+  expect(importAt).toBeLessThan(cancelAt);
+  // The replacement submission sends that copy.
+  await expect.poll(() => importedIds.length).toBe(1);
+  const replacement = callsOf(sent, "EmailSubmission/set").map((args) => Object.values((args.create ?? {}) as Record<string, { emailId: string }>)[0]).find(Boolean);
+  expect(replacement?.emailId).toBe(importedIds[0]);
+  // The copy's Date header, as the server read it from the imported raw
+  // message, is the time of the click, not tomorrow's release time.
+  const answer = await page.request.post("/api/dev-jmap/api", {
+    data: { methodCalls: [["Email/get", { accountId: "dev-account-001", ids: [importedIds[0]], properties: ["sentAt", "subject"] }, "c0"]] },
+  });
+  const copy = ((await answer.json()) as { methodResponses: MethodCall[] }).methodResponses[0][1].list as Array<{ sentAt: string; subject: string }>;
+  expect(copy[0].subject).toBe("e2e scheduled");
+  expect(Math.abs(Date.parse(copy[0].sentAt) - clickedAt)).toBeLessThan(2 * 60_000);
+  expect(Date.parse(copy[0].sentAt)).toBeLessThan(Date.parse(draft.sentAt as string) - 3600_000);
 });
 
 test("an invitation awaiting a reply is hatched in the calendar", async ({ page }) => {

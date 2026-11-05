@@ -524,3 +524,53 @@ describe('dev-jmap mock in a build made without it', () => {
     }
   });
 });
+
+// undust fork: Email/import, so the e2e can follow a re-stamped copy.
+describe('dev-jmap mock server: Email/import', () => {
+  async function api(methodCalls: unknown[]) {
+    const { POST } = await import('../../app/api/dev-jmap/[...path]/route');
+    const res = await POST(new Request('http://localhost:3000/api/dev-jmap/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', host: 'localhost:3000' },
+      body: JSON.stringify({ methodCalls }),
+    }) as never, { params: Promise.resolve({ path: ['api'] }) });
+    return (await res.json()).methodResponses as Array<[string, Record<string, unknown>, string]>;
+  }
+
+  it('imports a message from its uploaded blob, the Date header as sentAt', async () => {
+    const { POST } = await import('../../app/api/dev-jmap/[...path]/route');
+    const raw = 'From: Dev User <dev@localhost>\r\nTo: bob@example.com\r\nSubject: Hi\r\nDate: Thu, 05 Nov 2026 06:45:00 +0000\r\n\r\nbody';
+    const upload = await POST(new Request('http://localhost:3000/api/dev-jmap/upload/dev-account-001/', {
+      method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: raw,
+    }) as never, { params: Promise.resolve({ path: ['upload', 'dev-account-001'] }) });
+    const { blobId } = await upload.json();
+
+    const [[name, result]] = await api([['Email/import', {
+      accountId: 'dev-account-001',
+      emails: { k1: { blobId, mailboxIds: { 'mb-drafts': true }, keywords: { $draft: true }, receivedAt: '2026-11-05T06:45:00Z' } },
+    }, 'c0']]);
+    expect(name).toBe('Email/import');
+    const id = (result.created as Record<string, { id: string }>).k1.id;
+
+    const [[, got]] = await api([['Email/get', { accountId: 'dev-account-001', ids: [id], properties: ['sentAt', 'receivedAt', 'subject', 'to', 'blobId'] }, 'c1']]);
+    expect((got.list as unknown[])[0]).toMatchObject({ sentAt: '2026-11-05T06:45:00Z', receivedAt: '2026-11-05T06:45:00Z', subject: 'Hi', to: [{ email: 'bob@example.com' }], blobId });
+  });
+
+  it('gives a created message a raw blob that imports back with its sentAt', async () => {
+    const [[, set]] = await api([['Email/set', { accountId: 'dev-account-001', create: { d1: { subject: 'Later', sentAt: '2026-11-06T08:00:00Z', receivedAt: '2026-11-06T08:00:00Z', mailboxIds: { 'mb-drafts': true } } } }, 'c0']]);
+    const id = (set.created as Record<string, { id: string }>).d1.id;
+    const [[, got]] = await api([['Email/get', { accountId: 'dev-account-001', ids: [id], properties: ['sentAt', 'blobId'] }, 'c1']]);
+    const { blobId, sentAt } = (got.list as Array<{ blobId: string; sentAt: string }>)[0];
+    expect(sentAt).toBe('2026-11-06T08:00:00Z');
+
+    const [[, imported]] = await api([['Email/import', { accountId: 'dev-account-001', emails: { k2: { blobId, mailboxIds: {} } } }, 'c2']]);
+    const copy = (imported.created as Record<string, { id: string }>).k2.id;
+    const [[, again]] = await api([['Email/get', { accountId: 'dev-account-001', ids: [copy], properties: ['sentAt', 'subject'] }, 'c3']]);
+    expect((again.list as unknown[])[0]).toMatchObject({ sentAt: '2026-11-06T08:00:00Z', subject: 'Later' });
+  });
+
+  it('refuses a blob it does not have', async () => {
+    const [[, result]] = await api([['Email/import', { accountId: 'dev-account-001', emails: { k3: { blobId: 'nope', mailboxIds: {} } } }, 'c0']]);
+    expect(result.notCreated).toEqual({ k3: { type: 'blobNotFound' } });
+  });
+});
