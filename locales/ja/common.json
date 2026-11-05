@@ -1780,6 +1780,17 @@
         "error_over_quota": "このアカウントはメールサーバー上のプッシュ登録が多すぎます（上限は通常 15 件）。通知設定で使用していないデバイスを取り消してから、もう一度お試しください。"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "キーボードショートカット",
+      "description": "メール操作に独自のキーを割り当てます（例: Ctrl + E でアーカイブ）。選んだキーは既定のキーに置き換わります。",
+      "change": "変更",
+      "reset": "元に戻す",
+      "reset_all": "すべてのショートカットを元に戻す",
+      "recording": "新しいキーを押してください…（Esc でキャンセル）",
+      "invalid": "{key} は使用できません: アプリまたはブラウザーが使用しています。",
+      "taken": "{key} は「{action}」で既に使われています。",
+      "fixed_keys": "一覧の移動キー（j、k、矢印、Enter、Esc、g シーケンス）、x、?、Ctrl/⌘ + A は変更できません。"
+    },
     "language_region": {
       "title": "言語、地域、時刻",
       "description": "言語、日付形式、時刻形式、その他の地域設定",
@@ -4406,6 +4417,13 @@
       "description": "説明",
       "location": "場所",
       "meeting_link": "会議リンク",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "開始日",
       "end_date": "終了日",
       "start_time": "開始時刻",
@@ -4440,6 +4458,7 @@
       "decline": "辞退",
       "tentative": "仮承諾",
       "needs_action": "未回答",
+      "pending_badge": "Awaiting reply",
       "remove": "削除",
       "edit": "編集",
       "email_placeholder": "メールアドレスを追加または連絡先を検索",

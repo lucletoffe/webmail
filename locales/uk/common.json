@@ -1780,6 +1780,17 @@
         "error_over_quota": "Цей обліковий запис має забагато push-реєстрацій на поштовому сервері (зазвичай дозволено 15). Відкличте в налаштуваннях сповіщень пристрої, якими ви більше не користуєтеся, і спробуйте ще раз."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Комбінації клавіш",
+      "description": "Призначте власні клавіші діям із поштою, наприклад Ctrl + E для архівування. Вибрана клавіша замінює стандартну.",
+      "change": "Змінити",
+      "reset": "Скинути",
+      "reset_all": "Скинути всі комбінації",
+      "recording": "Натисніть нову клавішу… (Esc — скасувати)",
+      "invalid": "{key} не можна використати: її займає застосунок або браузер.",
+      "taken": "{key} уже використовується для «{action}».",
+      "fixed_keys": "Клавіші переміщення списком (j, k, стрілки, Enter, Esc, послідовності g), x, ? і Ctrl/⌘ + A не змінюються."
+    },
     "language_region": {
       "title": "Мова, регіон і час",
       "description": "Мова, формат дати, формат часу та інші регіональні налаштування",
@@ -4406,6 +4417,13 @@
       "description": "опис",
       "location": "Розташування",
       "meeting_link": "Посилання на зустріч",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Дата початку",
       "end_date": "Кінцева дата",
       "start_time": "Час початку",
@@ -4440,6 +4458,7 @@
       "decline": "Відхилити",
       "tentative": "Орієнтовний",
       "needs_action": "Потребує дії",
+      "pending_badge": "Awaiting reply",
       "remove": "видалити",
       "edit": "Редагувати",
       "email_placeholder": "Додайте електронну адресу або знайдіть контакти",

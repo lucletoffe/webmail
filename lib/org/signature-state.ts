@@ -55,6 +55,27 @@ export function policyForSender(
   return view.resolveFor({ email: subject.email, groups: [address] });
 }
 
+/**
+ * Whether the organisation signature speaks for mail sent from `email` by
+ * the account `subject`: an address in the account's own domain, or one of
+ * its group accounts. Another domain's address on the same login (a
+ * personal one, a client's) is not the organisation's, and its mail takes
+ * neither the organisation default nor a locked one. With no subject known,
+ * every address is the organisation's, as upstream.
+ */
+export function isOrganisationSender(email: string | undefined, subject: PolicySubject | null): boolean {
+  const address = email?.trim().toLowerCase();
+  if (!address || !subject?.email) return true;
+  if (subject.groups.some((group) => group.toLowerCase() === address)) return true;
+  const domainOf = (value: string) => value.slice(value.lastIndexOf('@') + 1);
+  return domainOf(address) === domainOf(subject.email.trim().toLowerCase());
+}
+
+/** The setup without the signature for a sender it does not speak for (isOrganisationSender). */
+export function forSender(setup: OrgSignatureSetup, email: string | undefined, subject: PolicySubject | null): OrgSignatureSetup {
+  return isOrganisationSender(email, subject) ? setup : { ...setup, signature: null };
+}
+
 export interface OrgSignatureSetup {
   /** Filled for the sending identity; null when the admin set no signature. */
   signature: FilledSignature | null;
@@ -91,8 +112,13 @@ export function currentOrgSignatureSetup(
   sending: Pick<Identity, 'name' | 'email'> | null | undefined,
   accountId?: string | null,
 ): OrgSignatureSetup {
-  const policy = policyForSender(usePolicyStore.getState(), sending?.email, subjectForAccount(accountId));
-  return orgSignatureSetup(policy, sending, useSettingsStore.getState().signatureDetails, companyName());
+  const subject = subjectForAccount(accountId);
+  const policy = policyForSender(usePolicyStore.getState(), sending?.email, subject);
+  return forSender(
+    orgSignatureSetup(policy, sending, useSettingsStore.getState().signatureDetails, companyName()),
+    sending?.email,
+    subject,
+  );
 }
 
 /** effectiveSignatureIdentity with the setup read from the stores now. */

@@ -1,4 +1,5 @@
 import type { IJMAPClient, UploadedEmailImport, UploadedEmailImportResult } from "@/lib/jmap/client-interface";
+import { maxConcurrentUploads } from "@/lib/jmap/upload-concurrency";
 import type { Mailbox } from "@/lib/jmap/types";
 import { checkpointKey, deleteCheckpoint, readCheckpoint, writeCheckpoint } from "./checkpoints";
 import { holdLock } from "./locks";
@@ -132,13 +133,6 @@ export function quotaFrom(body: string): { files?: number; bytes?: number } {
  */
 export function uploadWindowEnd(now: number, windowMs = UPLOAD_WINDOW_MS): number {
   return (Math.floor(now / windowMs) + 1) * windowMs;
-}
-
-function maxConcurrentUploads(client: IJMAPClient): number {
-  const core = client.getCapabilities()["urn:ietf:params:jmap:core"] as { maxConcurrentUpload?: unknown } | undefined;
-  const uploads = typeof core?.maxConcurrentUpload === "number" && core.maxConcurrentUpload > 0 ? core.maxConcurrentUpload : 4;
-  // Uploads and imports share the request slots with the rest of the app; leave it two.
-  return Math.max(1, Math.min(uploads, (client.getMaxConcurrentRequests?.() ?? 4) - 2));
 }
 
 /**

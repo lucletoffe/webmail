@@ -1783,6 +1783,17 @@
         "sound_desc": "Play an audio alert for calendar reminders"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Keyboard shortcuts",
+      "description": "Give the mail actions your own keys, such as Ctrl + E to archive. A key you choose replaces the built-in one.",
+      "change": "Change",
+      "reset": "Reset",
+      "reset_all": "Reset all shortcuts",
+      "recording": "Press the new key… (Esc to cancel)",
+      "invalid": "{key} can't be used: the app or the browser keeps it.",
+      "taken": "{key} is already used by “{action}”.",
+      "fixed_keys": "Moving through the list (j, k, arrows, Enter, Esc, g sequences), x, ? and Ctrl/⌘ + A keep their keys."
+    },
     "language_region": {
       "title": "Language, region & time",
       "description": "Language, date format, time format, and other regional preferences",
@@ -4406,6 +4417,13 @@
       "description": "Description",
       "location": "Location",
       "meeting_link": "Meeting link",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Start date",
       "end_date": "End date",
       "start_time": "Start time",
@@ -4440,6 +4458,7 @@
       "decline": "Decline",
       "tentative": "Tentative",
       "needs_action": "Needs action",
+      "pending_badge": "Awaiting reply",
       "remove": "Remove",
       "edit": "Edit",
       "email_placeholder": "Add email address or search contacts",

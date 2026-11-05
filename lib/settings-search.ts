@@ -75,6 +75,7 @@ export const tabSearchEntries: Record<Tab, SettingsSearchEntry[]> = {
     { label: 'protocol_handlers.mailto_label' },
     { label: 'protocol_handlers.webcal_label' },
     { label: 'protocol_handlers.protocol_open_mode_label', advanced: true },
+    { label: 'settings.keyboard_shortcuts.title' },
     { label: 'tour.settings_section' },
     { label: 'tour.restart_title' },
     { label: 'tour.show_on_new_devices_title', advanced: true },

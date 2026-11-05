@@ -1780,6 +1780,17 @@
         "error_over_quota": "У этой учётной записи слишком много push-регистраций на почтовом сервере (обычно разрешено 15). Отзовите неиспользуемые устройства в настройках уведомлений и повторите попытку."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Сочетания клавиш",
+      "description": "Назначьте свои клавиши действиям с почтой, например Ctrl + E для архивации. Выбранная клавиша заменяет стандартную.",
+      "change": "Изменить",
+      "reset": "Сбросить",
+      "reset_all": "Сбросить все сочетания",
+      "recording": "Нажмите новую клавишу… (Esc — отмена)",
+      "invalid": "{key} нельзя использовать: её занимает приложение или браузер.",
+      "taken": "{key} уже используется для «{action}».",
+      "fixed_keys": "Клавиши перемещения по списку (j, k, стрелки, Enter, Esc, последовательности g), x, ? и Ctrl/⌘ + A не меняются."
+    },
     "language_region": {
       "title": "Язык, регион и время",
       "description": "Язык, формат даты, формат времени и другие региональные настройки",
@@ -4406,6 +4417,13 @@
       "description": "Описание",
       "location": "Место",
       "meeting_link": "Ссылка на встречу",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Дата начала",
       "end_date": "Дата окончания",
       "start_time": "Время начала",
@@ -4440,6 +4458,7 @@
       "decline": "Отклонить",
       "tentative": "Предварительно",
       "needs_action": "Требует ответа",
+      "pending_badge": "Awaiting reply",
       "remove": "Удалить",
       "edit": "Редактировать",
       "email_placeholder": "Добавьте адрес или найдите контакт",

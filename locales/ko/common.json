@@ -1780,6 +1780,17 @@
         "error_over_quota": "이 계정은 메일 서버에 푸시 등록이 너무 많습니다(한도는 보통 15개). 알림 설정에서 더 이상 사용하지 않는 기기를 해지한 후 다시 시도하세요."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "키보드 단축키",
+      "description": "메일 작업에 원하는 키를 지정하세요. 예: Ctrl + E로 보관. 선택한 키가 기본 키를 대신합니다.",
+      "change": "변경",
+      "reset": "초기화",
+      "reset_all": "모든 단축키 초기화",
+      "recording": "새 키를 누르세요… (Esc로 취소)",
+      "invalid": "{key}은(는) 사용할 수 없습니다: 앱이나 브라우저가 사용하는 키입니다.",
+      "taken": "{key}은(는) 이미 '{action}'에 사용 중입니다.",
+      "fixed_keys": "목록 이동 키(j, k, 화살표, Enter, Esc, g 시퀀스), x, ?, Ctrl/⌘ + A는 바뀌지 않습니다."
+    },
     "language_region": {
       "title": "언어, 지역 및 시간",
       "description": "언어, 날짜 형식, 시간 형식 및 기타 지역 환경설정",
@@ -4406,6 +4417,13 @@
       "description": "설명",
       "location": "위치",
       "meeting_link": "화상 회의 링크",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "시작 날짜",
       "end_date": "종료 날짜",
       "start_time": "시작 시간",
@@ -4440,6 +4458,7 @@
       "decline": "거절",
       "tentative": "미정",
       "needs_action": "응답 필요",
+      "pending_badge": "Awaiting reply",
       "remove": "삭제",
       "edit": "편집",
       "email_placeholder": "이메일을 추가하거나 연락처를 검색하세요",

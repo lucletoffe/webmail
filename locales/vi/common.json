@@ -1795,6 +1795,17 @@
         "sound_desc": "Phát âm báo cho lời nhắc lịch"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Phím tắt",
+      "description": "Gán phím riêng cho các thao tác thư, chẳng hạn Ctrl + E để lưu trữ. Phím bạn chọn sẽ thay thế phím mặc định.",
+      "change": "Thay đổi",
+      "reset": "Đặt lại",
+      "reset_all": "Đặt lại tất cả phím tắt",
+      "recording": "Nhấn phím mới… (Esc để hủy)",
+      "invalid": "Không thể dùng {key}: ứng dụng hoặc trình duyệt giữ phím này.",
+      "taken": "{key} đã được dùng cho “{action}”.",
+      "fixed_keys": "Di chuyển trong danh sách (j, k, mũi tên, Enter, Esc, chuỗi g), x, ? và Ctrl/⌘ + A giữ nguyên phím."
+    },
     "language_region": {
       "title": "Ngôn ngữ, khu vực và thời gian",
       "description": "Ngôn ngữ, định dạng ngày giờ và các tùy chọn khu vực khác",
@@ -4418,6 +4429,13 @@
       "description": "Mô tả",
       "location": "Địa điểm",
       "meeting_link": "Liên kết cuộc họp",
+      "undust_meet_generate": "Tạo liên kết video undust",
+      "undust_meet_generating": "Đang tạo…",
+      "undust_meet_prompt": "Thêm liên kết video undust vào sự kiện này?",
+      "undust_meet_prompt_yes": "Có",
+      "undust_meet_prompt_no": "Không",
+      "undust_meet_error": "Không thể tạo liên kết video (mã {code}).",
+      "undust_meet_error_401": "Phiên Ops đã hết hạn. Đăng nhập Ops rồi thử lại:",
       "start_date": "Ngày bắt đầu",
       "end_date": "Ngày kết thúc",
       "start_time": "Thời gian bắt đầu",
@@ -4452,6 +4470,7 @@
       "decline": "Từ chối",
       "tentative": "Tạm thời",
       "needs_action": "Cần hành động",
+      "pending_badge": "Chờ phản hồi",
       "remove": "Xóa",
       "edit": "Chỉnh sửa",
       "email_placeholder": "Thêm địa chỉ email hoặc tìm kiếm liên hệ",

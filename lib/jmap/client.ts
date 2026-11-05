@@ -1485,6 +1485,59 @@ export interface SubmissionSendOptions {
   labelHeaders?: Record<string, string>;
 }
 
+/**
+ * The moment a held (FUTURERELEASE) message is released, as a JMAP UTCDate.
+ * The message is stamped with it rather than with the moment the user clicked
+ * "schedule": sentAt becomes the Date header the recipient sees, receivedAt the
+ * time the Sent mailbox shows. Seconds precision, no fractional part.
+ */
+export function scheduledReleaseDate(delayedUntil: string): string {
+  return new Date(delayedUntil).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * How far a held message's stamp may sit from its new release time before a
+ * reschedule re-stamps it. "Send now" from the undo toast moves the release
+ * by the few seconds of the send delay: not worth a new copy.
+ */
+export const RESTAMP_TOLERANCE_MS = 60_000;
+
+const RFC5322_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const RFC5322_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** An RFC 5322 date-time in UTC: "Thu, 05 Nov 2026 06:45:00 +0000". */
+export function rfc5322Date(date: Date): string {
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${RFC5322_DAYS[date.getUTCDay()]}, ${two(date.getUTCDate())} ${RFC5322_MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()} `
+    + `${two(date.getUTCHours())}:${two(date.getUTCMinutes())}:${two(date.getUTCSeconds())} +0000`;
+}
+
+/**
+ * The raw message with its top-level Date header set to `date`, every other
+ * byte left as it was (the body, a signed or encrypted part, the header
+ * order). The header is handled one byte per character: TextDecoder's
+ * "latin1" is windows-1252 and would not give back the 8-bit bytes.
+ */
+export function withDateHeader(raw: Uint8Array, date: Date): Uint8Array {
+  let end = raw.length;
+  let newline = '\r\n';
+  for (let i = 0; i < raw.length - 1; i++) {
+    if (raw[i] !== 0x0a) continue;
+    if (raw[i + 1] === 0x0a) { end = i + 1; newline = i > 0 && raw[i - 1] === 0x0d ? '\r\n' : '\n'; break; }
+    if (raw[i + 1] === 0x0d && raw[i + 2] === 0x0a) { end = i + 1; newline = '\r\n'; break; }
+  }
+  let header = '';
+  for (let i = 0; i < end; i++) header += String.fromCharCode(raw[i]);
+  const dateLine = `Date: ${rfc5322Date(date)}${newline}`;
+  // A header field runs on over the lines that start with a space or a tab.
+  const field = /^Date:[^\n]*\n(?:[ \t][^\n]*\n)*/im;
+  const nextHeader = field.test(header) ? header.replace(field, dateLine) : dateLine + header;
+  const out = new Uint8Array(nextHeader.length + raw.length - end);
+  for (let i = 0; i < nextHeader.length; i++) out[i] = nextHeader.charCodeAt(i);
+  out.set(raw.subarray(end), nextHeader.length);
+  return out;
+}
+
 /** The MAIL FROM / RCPT TO parameters the options translate to. */
 export function submissionEnvelopeParameters(options: SubmissionSendOptions | undefined, holdForSeconds?: number): {
   mailFrom: Record<string, string | null>;
@@ -5237,6 +5290,15 @@ export class JMAPClient implements IJMAPClient {
       keywords: { "$seen": true, "$draft": true },
       mailboxIds: { [draftsMailbox.id]: true },
     };
+
+    if (delayedUntil) {
+      // Without this the server stamps the creation time: a mail scheduled at
+      // 23:11 for 06:45 goes out at 06:45 but reads "sent 23:11", both for the
+      // recipient (Date header) and in the sender's Sent mailbox (receivedAt).
+      const releaseAt = scheduledReleaseDate(delayedUntil);
+      emailCreate.sentAt = releaseAt;
+      emailCreate.receivedAt = releaseAt;
+    }
 
     if (options?.requestReadReceipt) {
       // RFC 8098: ask the recipient's client to return a Message Disposition
@@ -11766,6 +11828,9 @@ export class JMAPClient implements IJMAPClient {
             blobId,
             mailboxIds: { [importMailboxId]: true },
             keywords: draftMailboxId ? { '$seen': true, '$draft': true } : { '$seen': true },
+            // The Date header is baked into the raw message; at least file the
+            // Sent copy at the release time (see scheduledReleaseDate).
+            ...(delayedUntil ? { receivedAt: scheduledReleaseDate(delayedUntil) } : {}),
           },
         },
       }, '0'],
@@ -12143,6 +12208,50 @@ export class JMAPClient implements IJMAPClient {
     }
   }
 
+  /**
+   * A copy of a held message stamped with the new release time `releaseAt`
+   * (ms), in Drafts like a message about to be submitted, or null when its
+   * stamp is already within RESTAMP_TOLERANCE_MS of it. The copy is the raw
+   * message with only its Date header changed, imported with the release
+   * time as receivedAt (the time the Sent mailbox shows).
+   */
+  private async restampForRelease(emailId: string, releaseAt: number, accountId: string, draftsMailboxId: string | undefined): Promise<string | null> {
+    const response = await this.request([
+      ['Email/get', { accountId, ids: [emailId], properties: ['sentAt', 'blobId', 'mailboxIds', 'keywords'] }, '0'],
+    ]);
+    const stored = response.methodResponses?.[0]?.[1]?.list?.[0] as
+      | { sentAt?: string; blobId?: string; mailboxIds?: Record<string, boolean>; keywords?: Record<string, boolean> }
+      | undefined;
+    if (!stored?.blobId) return null;
+    const stampedAt = stored.sentAt ? Date.parse(stored.sentAt) : NaN;
+    if (Number.isFinite(stampedAt) && Math.abs(stampedAt - releaseAt) <= RESTAMP_TOLERANCE_MS) return null;
+
+    const release = new Date(Math.ceil(releaseAt / 1000) * 1000);
+    const raw = new Uint8Array(await this.fetchBlobArrayBuffer(stored.blobId, 'message.eml', 'message/rfc822', accountId));
+    const file = new File([withDateHeader(raw, release) as BlobPart], 'message.eml', { type: 'message/rfc822' });
+    const { blobId } = await this.uploadBlob(file, accountId);
+    const importResponse = await this.request([
+      ['Email/import', {
+        accountId,
+        emails: {
+          restamped: {
+            blobId,
+            mailboxIds: draftsMailboxId ? { [draftsMailboxId]: true } : stored.mailboxIds ?? {},
+            keywords: { ...(stored.keywords ?? {}), $draft: true, $seen: true },
+            receivedAt: scheduledReleaseDate(release.toISOString()),
+          },
+        },
+      }, '0'],
+    ]);
+    const [name, result] = importResponse.methodResponses?.[0] ?? [];
+    const id = name === 'Email/import' ? result?.created?.restamped?.id as string | undefined : undefined;
+    if (!id) {
+      const reason = result?.notCreated?.restamped ?? result;
+      throw jmapError(`Email/import failed: ${reason?.description || reason?.type || 'unknown'}`, reason);
+    }
+    return id;
+  }
+
   async rescheduleEmailSubmission(submissionId: string, emailId: string, identityId: string, delayedUntil: string, accountId?: string): Promise<SendEmailResult> {
     // Keep the replacement in the same account as the original: a shared
     // submission rescheduled through the primary account would be recreated
@@ -12182,7 +12291,7 @@ export class JMAPClient implements IJMAPClient {
 
     type Created = { id: string; sendAt?: string; deliveryStatus?: Record<string, DeliveryStatus> };
     // `until`: when the submission goes out (ms); absent, at once.
-    const createSubmission = async (until: number | undefined): Promise<Created> => {
+    const createSubmission = async (until: number | undefined, submitEmailId = emailId): Promise<Created> => {
       // HOLDFOR counts from when the server takes the request, so a retry
       // after making room takes the time spent off it.
       const holdFor = () => until === undefined ? undefined : Math.max(1, Math.ceil((until - Date.now()) / 1000));
@@ -12191,7 +12300,7 @@ export class JMAPClient implements IJMAPClient {
         return this.request([
           ['EmailSubmission/set', {
             accountId: submissionAccountId,
-            create: { replacement: { emailId, identityId: submissionIdentityId, ...(envelope ? { envelope } : {}) } },
+            create: { replacement: { emailId: submitEmailId, identityId: submissionIdentityId, ...(envelope ? { envelope } : {}) } },
             ...(draftsMailbox && sentMailbox ? {
               onSuccessUpdateEmail: {
                 '#replacement': {
@@ -12228,15 +12337,37 @@ export class JMAPClient implements IJMAPClient {
       return { id, sendAt: result?.created?.replacement?.sendAt, deliveryStatus: statusReadBack.deliveryStatus };
     };
 
-    // Cancel first. Some servers allow only one active submission per Email
-    // and reject a second create for the same emailId, and servers that undo
+    // Cancel before the replacement submission is created. Some servers allow
+    // only one active submission per Email and reject a second create for the
+    // same emailId, and servers that undo
     // onSuccessUpdateEmail on cancel would pull the message back to Drafts if
     // the original were canceled after the replacement existed (#1308).
     // If this fails, nothing has changed and the original still goes out -
     // unless it went out already ("Send now" of a message due any moment).
+    //
+    // The held message is stamped with its release time (scheduledReleaseDate).
+    // Moved by more than a few seconds - "Send now" on a mail due tomorrow,
+    // a later time - it would go out with the old stamp, possibly dated in
+    // the future. An Email cannot change, so a re-stamped copy replaces it.
+    // The copy is made before the cancel: a tab closed in between leaves the
+    // original scheduled (and a spare copy in Drafts), never a message that
+    // was canceled and goes nowhere. Without a copy the message still goes,
+    // as it did before.
+    const restampedId = await this.restampForRelease(emailId, holdUntil, submissionAccountId, draftsMailbox?.id)
+      .catch((error) => {
+        console.error('Failed to re-stamp the rescheduled message with its new release time:', error);
+        return null;
+      });
+    const releaseEmailId = restampedId ?? emailId;
+    // The cancel is the lock: of two "Send now" at once, the second finds the
+    // original canceled and takes its own copy back out.
     try {
       await this.cancelEmailSubmission(submissionId, submissionAccountId);
     } catch (error) {
+      if (restampedId) {
+        await this.deleteEmail(restampedId, submissionAccountId)
+          .catch((cleanupError) => console.error('Failed to remove the re-stamped copy after a failed cancel:', cleanupError));
+      }
       const status = await this.getSubmissionStatus(submissionId, submissionAccountId).catch(() => undefined);
       if (status === 'final' || status === 'canceled') throw new NoLongerScheduledError(status === 'final');
       throw error;
@@ -12253,9 +12384,10 @@ export class JMAPClient implements IJMAPClient {
       return delivery.rejected;
     };
 
+
     let replacement: Created;
     try {
-      replacement = await createSubmission(holdUntil);
+      replacement = await createSubmission(holdUntil, releaseEmailId);
       // The recipients are checked again for the replacement, and a throttle
       // used up since the original was taken can refuse some or all of them.
       // When it took nobody the reschedule counts as failed; when it took
@@ -12264,6 +12396,11 @@ export class JMAPClient implements IJMAPClient {
       if (refused) throw new RecipientsRejectedError(refused);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to reschedule email';
+      // The original is the one put back; its copy goes.
+      if (restampedId) {
+        await this.deleteEmail(restampedId, submissionAccountId)
+          .catch((cleanupError) => console.error('Failed to remove the re-stamped copy after reschedule failure:', cleanupError));
+      }
       // Put the original back at its old time. HOLDFOR with the seconds that
       // are left, not HOLDUNTIL: servers disagree on the HOLDUNTIL value format
       // (RFC 3339 vs Unix seconds), every FUTURERELEASE server takes HOLDFOR.
@@ -12289,10 +12426,14 @@ export class JMAPClient implements IJMAPClient {
       if (error instanceof RecipientsRejectedError || error instanceof SubmissionQuotaError) throw error;
       throw new Error(`Reschedule failed and the message is no longer scheduled: ${message}`);
     }
+    if (restampedId) {
+      await this.deleteEmail(emailId, submissionAccountId)
+        .catch((cleanupError) => console.error('Failed to remove the message the re-stamped copy replaced:', cleanupError));
+    }
     const rejected = rejectedRecipients(replacement.deliveryStatus).rejected;
     const finalSendAt = replacement.sendAt || await this.getEmailSubmissionSendAt(replacement.id, submissionAccountId);
     return {
-      scheduled: true, emailId, emailSubmissionId: replacement.id, sendAt: finalSendAt,
+      scheduled: true, emailId: releaseEmailId, emailSubmissionId: replacement.id, sendAt: finalSendAt,
       ...(rejected.length > 0 ? { rejectedRecipients: rejected } : {}),
     };
   }

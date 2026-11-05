@@ -1780,6 +1780,17 @@
         "error_over_quota": "Esta cuenta tiene demasiados registros push en el servidor de correo (el límite suele ser 15). Revoca los dispositivos que ya no uses en la configuración de notificaciones e inténtalo de nuevo."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Atajos de teclado",
+      "description": "Asigna tus propias teclas a las acciones del correo, por ejemplo Ctrl + E para archivar. La tecla que elijas sustituye a la predeterminada.",
+      "change": "Cambiar",
+      "reset": "Restablecer",
+      "reset_all": "Restablecer todos los atajos",
+      "recording": "Pulsa la nueva tecla… (Esc para cancelar)",
+      "invalid": "No se puede usar {key}: la aplicación o el navegador la reservan.",
+      "taken": "{key} ya se usa para «{action}».",
+      "fixed_keys": "Las teclas para moverse por la lista (j, k, flechas, Intro, Esc, secuencias g), x, ? y Ctrl/⌘ + A no cambian."
+    },
     "language_region": {
       "title": "Idioma, Región y Hora",
       "description": "Idioma, formato de fecha, formato de hora y otras preferencias regionales",
@@ -4406,6 +4417,13 @@
       "description": "Descripción",
       "location": "Ubicación",
       "meeting_link": "Enlace de reunión",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Fecha de inicio",
       "end_date": "Fecha de fin",
       "start_time": "Hora de inicio",
@@ -4440,6 +4458,7 @@
       "decline": "Rechazar",
       "tentative": "Provisional",
       "needs_action": "Pendiente de respuesta",
+      "pending_badge": "Awaiting reply",
       "remove": "Eliminar",
       "edit": "Editar",
       "email_placeholder": "Añadir dirección de correo o buscar contactos",

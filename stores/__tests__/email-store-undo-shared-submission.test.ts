@@ -111,6 +111,23 @@ describe('scheduled mail of two accounts with the same ids', () => {
     expect(client.rescheduleEmailSubmission).toHaveBeenCalledWith('f', 'maaaaad', 'b', '2099-01-02T10:00:00Z', GROUP);
   });
 
+  // A reschedule that moves the release re-stamps the message as a new Email.
+  it('follows the re-stamped message to its new id', async () => {
+    const client = makeClient();
+    const restamped = { ...team, id: 'naaaaae', emailSubmissionId: 'g' } as ScheduledEmail;
+    (client as unknown as { rescheduleEmailSubmission: unknown }).rescheduleEmailSubmission = vi.fn().mockResolvedValue({ scheduled: true, emailId: 'naaaaae', emailSubmissionId: 'g' });
+    (client.getScheduledEmails as ReturnType<typeof vi.fn>).mockResolvedValue({ emails: [own, restamped], hasMore: false, total: 2, nextPosition: 2 });
+    useEmailStore.setState({
+      selectedEmail: team as never,
+      pendingUndoSend: { submissionId: 'f', emailId: 'maaaaad', identityId: 'b', submissionAccountId: GROUP, sendAt: team.scheduledSendAt } as never,
+    });
+
+    await useEmailStore.getState().rescheduleScheduledEmail(client, 'f', 'maaaaad', 'b', '2099-01-02T10:00:00Z', GROUP);
+
+    expect(useEmailStore.getState().selectedEmail?.id).toBe('naaaaae');
+    expect(useEmailStore.getState().pendingUndoSend).toMatchObject({ emailId: 'naaaaae', submissionId: 'g' });
+  });
+
   it('lists both when they come on different pages', async () => {
     const client = makeClient();
     (client as unknown as { pruneEmailSubmissions: unknown }).pruneEmailSubmissions = vi.fn().mockResolvedValue(undefined);

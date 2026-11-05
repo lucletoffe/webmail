@@ -1,5 +1,6 @@
 import type { InterfaceLayout } from "@/stores/settings-store";
 import type { FeatureGates } from "@/lib/admin/types";
+import type { CustomizableShortcutAction } from "@/lib/shortcut-bindings";
 
 /**
  * One row of the help modal. `key` is written in the shortcut notation of
@@ -15,6 +16,8 @@ export interface ShortcutEntry {
   readonly shell?: "pro" | "standard";
   /** Listed only while this admin policy feature gate is on. */
   readonly feature?: keyof FeatureGates;
+  /** The action behind the row when its key can be changed in the settings (lib/shortcut-bindings). */
+  readonly action?: CustomizableShortcutAction;
 }
 
 /** A titled group of rows. A section with no rows (after filtering) is not drawn. */

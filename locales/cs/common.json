@@ -1780,6 +1780,17 @@
         "error_over_quota": "Tento účet má na poštovním serveru příliš mnoho registrací push (limit je obvykle 15). V nastavení oznámení odvolejte zařízení, která už nepoužíváte, a zkuste to znovu."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Klávesové zkratky",
+      "description": "Přiřaďte akcím s poštou vlastní klávesy, například Ctrl + E pro archivaci. Zvolená klávesa nahradí výchozí.",
+      "change": "Změnit",
+      "reset": "Obnovit",
+      "reset_all": "Obnovit všechny zkratky",
+      "recording": "Stiskněte novou klávesu… (Esc pro zrušení)",
+      "invalid": "{key} nelze použít: vyhrazuje si ji aplikace nebo prohlížeč.",
+      "taken": "{key} už používá akce „{action}“.",
+      "fixed_keys": "Klávesy pro pohyb v seznamu (j, k, šipky, Enter, Esc, sekvence g), x, ? a Ctrl/⌘ + A zůstávají beze změny."
+    },
     "language_region": {
       "title": "Jazyk, region a čas",
       "description": "Jazyk, formát data, formát času a další regionální předvolby",
@@ -4406,6 +4417,13 @@
       "description": "Popis",
       "location": "Místo",
       "meeting_link": "Odkaz na schůzku",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Datum zahájení",
       "end_date": "Datum ukončení",
       "start_time": "Čas zahájení",
@@ -4440,6 +4458,7 @@
       "decline": "Odmítnout",
       "tentative": "Nezávazně",
       "needs_action": "Vyžaduje akci",
+      "pending_badge": "Awaiting reply",
       "remove": "Odstranit",
       "edit": "Upravit",
       "email_placeholder": "Přidejte e-mailovou adresu nebo vyhledejte kontakty",

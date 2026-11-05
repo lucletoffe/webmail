@@ -1780,6 +1780,17 @@
         "error_over_quota": "To konto ma zbyt wiele rejestracji push na serwerze poczty (limit wynosi zwykle 15). Unieważnij nieużywane urządzenia w ustawieniach powiadomień i spróbuj ponownie."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Skróty klawiszowe",
+      "description": "Przypisz własne klawisze do działań na poczcie, np. Ctrl + E do archiwizowania. Wybrany klawisz zastępuje domyślny.",
+      "change": "Zmień",
+      "reset": "Przywróć",
+      "reset_all": "Przywróć wszystkie skróty",
+      "recording": "Naciśnij nowy klawisz… (Esc, aby anulować)",
+      "invalid": "Nie można użyć {key}: zastrzega go aplikacja lub przeglądarka.",
+      "taken": "{key} jest już używany przez „{action}”.",
+      "fixed_keys": "Klawisze poruszania się po liście (j, k, strzałki, Enter, Esc, sekwencje g), x, ? i Ctrl/⌘ + A pozostają bez zmian."
+    },
     "language_region": {
       "title": "Język, region i czas",
       "description": "Język, format daty, format godziny i inne preferencje regionalne",
@@ -4406,6 +4417,13 @@
       "description": "Opis",
       "location": "Lokalizacja",
       "meeting_link": "Link do spotkania",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Data rozpoczęcia",
       "end_date": "Data zakończenia",
       "start_time": "Godzina rozpoczęcia",
@@ -4440,6 +4458,7 @@
       "decline": "Odrzuć",
       "tentative": "Wstępnie",
       "needs_action": "Wymaga działania",
+      "pending_badge": "Awaiting reply",
       "remove": "Usuń",
       "edit": "Edytuj",
       "email_placeholder": "Dodaj adres e-mail lub wyszukaj kontakty",

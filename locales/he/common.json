@@ -1745,6 +1745,17 @@
         "error_over_quota": "לחשבון זה יש יותר מדי רישומי פוש בשרת הדואר (המגבלה היא בדרך כלל 15). בטל בהגדרות ההתראות מכשירים שאינך משתמש בהם עוד, ונסה שוב."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "קיצורי מקלדת",
+      "description": "הגדירו מקשים משלכם לפעולות הדואר, למשל Ctrl + E לארכוב. המקש שתבחרו מחליף את מקש ברירת המחדל.",
+      "change": "שינוי",
+      "reset": "איפוס",
+      "reset_all": "איפוס כל הקיצורים",
+      "recording": "הקישו על המקש החדש… (Esc לביטול)",
+      "invalid": "לא ניתן להשתמש ב-{key}: האפליקציה או הדפדפן שומרים אותו לעצמם.",
+      "taken": "{key} כבר משמש עבור „{action}”.",
+      "fixed_keys": "מקשי התנועה ברשימה (j, k, חיצים, Enter, Esc, רצפי g), x, ? ו-Ctrl/⌘ + A נשארים כפי שהם."
+    },
     "language_region": {
       "title": "שפה ואזור",
       "description": "הגדר את העדפות השפה והאזור",
@@ -4325,6 +4336,13 @@
       "description": "תיאור",
       "location": "מיקום",
       "meeting_link": "קישור לפגישה",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "תאריך התחלה",
       "end_date": "תאריך סיום",
       "start_time": "שעת התחלה",
@@ -4359,6 +4377,7 @@
       "decline": "דחייה",
       "tentative": "טנטטיבי",
       "needs_action": "צריך פעולה",
+      "pending_badge": "Awaiting reply",
       "remove": "הסר",
       "email_placeholder": "הוסף כתובת אימייל או חפש אנשי קשר",
       "send_invitations": "שלח הזמנות למשתתפים",

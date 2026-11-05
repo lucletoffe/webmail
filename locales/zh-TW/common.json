@@ -1783,6 +1783,17 @@
         "sound_desc": "播放行事曆提醒的音訊提醒"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "鍵盤快速鍵",
+      "description": "為郵件操作設定你自己的按鍵，例如以 Ctrl + E 封存。你選擇的按鍵會取代預設按鍵。",
+      "change": "變更",
+      "reset": "還原",
+      "reset_all": "還原所有快速鍵",
+      "recording": "請按下新的按鍵…（按 Esc 取消）",
+      "invalid": "無法使用 {key}：應用程式或瀏覽器已占用此按鍵。",
+      "taken": "{key} 已被「{action}」使用。",
+      "fixed_keys": "在清單中移動的按鍵（j、k、方向鍵、Enter、Esc、g 序列）、x、? 和 Ctrl/⌘ + A 保持不變。"
+    },
     "language_region": {
       "title": "語言、地區與時間",
       "description": "語言、日期格式、時間格式以及其他區域設定",
@@ -4406,6 +4417,13 @@
       "description": "描述",
       "location": "地點",
       "meeting_link": "會議連結",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "開始日期",
       "end_date": "結束日期",
       "start_time": "開始時間",
@@ -4440,6 +4458,7 @@
       "decline": "拒絕",
       "tentative": "暫定",
       "needs_action": "待處理",
+      "pending_badge": "Awaiting reply",
       "remove": "移除",
       "edit": "編輯",
       "email_placeholder": "新增電子郵件地址或搜尋聯絡人",

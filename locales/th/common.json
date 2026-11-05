@@ -3589,6 +3589,13 @@
       "description": "คำอธิบาย",
       "location": "สถานที่",
       "meeting_link": "ลิงก์การประชุม",
+      "undust_meet_generate": "สร้างลิงก์วิดีโอ undust",
+      "undust_meet_generating": "กำลังสร้าง…",
+      "undust_meet_prompt": "เพิ่มลิงก์วิดีโอ undust ให้กับกิจกรรมนี้หรือไม่",
+      "undust_meet_prompt_yes": "ใช่",
+      "undust_meet_prompt_no": "ไม่",
+      "undust_meet_error": "สร้างลิงก์วิดีโอไม่ได้ (รหัส {code})",
+      "undust_meet_error_401": "เซสชัน Ops หมดอายุ ลงชื่อเข้าใช้ Ops แล้วลองอีกครั้ง:",
       "start_date": "วันที่เริ่มต้น",
       "end_date": "วันที่สิ้นสุด",
       "start_time": "เวลาเริ่มต้น",
@@ -3623,6 +3630,7 @@
       "decline": "ปฏิเสธ",
       "tentative": "อาจจะไป",
       "needs_action": "รอการตอบรับ",
+      "pending_badge": "รอการตอบกลับ",
       "remove": "ลบออก",
       "edit": "แก้ไข",
       "email_placeholder": "เพิ่มที่อยู่อีเมลหรือค้นหาจากผู้ติดต่อ",
@@ -4467,6 +4475,17 @@
         "sound": "เสียงแจ้งเตือน",
         "sound_desc": "เล่นเสียงเตือนสำหรับกิจกรรมในปฏิทิน"
       }
+    },
+    "keyboard_shortcuts": {
+      "title": "แป้นพิมพ์ลัด",
+      "description": "กำหนดแป้นของคุณเองให้กับการทำงานของอีเมล เช่น Ctrl + E เพื่อเก็บถาวร แป้นที่คุณเลือกจะแทนที่แป้นเดิม",
+      "change": "เปลี่ยน",
+      "reset": "รีเซ็ต",
+      "reset_all": "รีเซ็ตแป้นพิมพ์ลัดทั้งหมด",
+      "recording": "กดแป้นใหม่… (Esc เพื่อยกเลิก)",
+      "invalid": "ใช้ {key} ไม่ได้: แอปหรือเบราว์เซอร์สงวนไว้",
+      "taken": "{key} ถูกใช้โดย “{action}” แล้ว",
+      "fixed_keys": "การเลื่อนในรายการ (j, k, ลูกศร, Enter, Esc, ลำดับ g), x, ? และ Ctrl/⌘ + A ยังคงใช้แป้นเดิม"
     },
     "language_region": {
       "title": "ภาษา ภูมิภาค และเวลา",

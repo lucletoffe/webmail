@@ -1780,6 +1780,17 @@
         "error_over_quota": "Dit account heeft te veel pushregistraties op de mailserver (de limiet is meestal 15). Trek in de meldingsinstellingen apparaten in die u niet meer gebruikt en probeer het opnieuw."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Sneltoetsen",
+      "description": "Geef de e-mailacties je eigen toetsen, zoals Ctrl + E om te archiveren. De gekozen toets vervangt de standaardtoets.",
+      "change": "Wijzigen",
+      "reset": "Herstellen",
+      "reset_all": "Alle sneltoetsen herstellen",
+      "recording": "Druk op de nieuwe toets… (Esc om te annuleren)",
+      "invalid": "{key} kan niet worden gebruikt: de app of de browser gebruikt deze toets.",
+      "taken": "{key} wordt al gebruikt door ‘{action}’.",
+      "fixed_keys": "De toetsen om door de lijst te bewegen (j, k, pijlen, Enter, Esc, g-reeksen), x, ? en Ctrl/⌘ + A blijven ongewijzigd."
+    },
     "language_region": {
       "title": "Taal, Regio & Tijd",
       "description": "Taal, datumnotatie, tijdnotatie en andere regionale voorkeuren",
@@ -4406,6 +4417,13 @@
       "description": "Beschrijving",
       "location": "Locatie",
       "meeting_link": "Vergaderlink",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Startdatum",
       "end_date": "Einddatum",
       "start_time": "Starttijd",
@@ -4440,6 +4458,7 @@
       "decline": "Weigeren",
       "tentative": "Voorlopig",
       "needs_action": "Reactie vereist",
+      "pending_badge": "Awaiting reply",
       "remove": "Verwijderen",
       "edit": "Bewerken",
       "email_placeholder": "E-mailadres toevoegen of contacten zoeken",

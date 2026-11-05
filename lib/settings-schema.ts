@@ -453,6 +453,9 @@ export const DENIED_SETTINGS: readonly string[] = [
 export const NOT_YET_SETTINGS: readonly string[] = [
   'messageListOrder', 'filesSettings', 'activeThemeId', 'birthdayCalendarColor', 'vacationBlockCalendar',
   'writingLanguage',
+  // undust fork: custom keys (lib/shortcut-bindings); a key needs the
+  // conflict checks of the recorder (shortcutConflict), not a value check.
+  'shortcutBindings',
 ];
 
 /** Line breaks, tabs and other control characters. */

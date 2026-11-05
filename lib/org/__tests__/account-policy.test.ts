@@ -4,6 +4,7 @@ import { finalizeOutgoing, resetSendPipeline, type OutgoingContext } from '@/lib
 import { registerOrgOutgoing } from '@/lib/org/outgoing';
 import { resetAccountSubjects } from '@/lib/org/account-subjects';
 import { useOrgSignatureSetup } from '@/hooks/use-org-signature';
+import { isOrganisationSender } from '@/lib/org/signature-state';
 import { DEFAULT_POLICY, type SettingsPolicy } from '@/lib/admin/types';
 import { DEFAULT_ORGANISATION_POLICY } from '@/lib/admin/organisation-policy';
 import { resolvePolicy } from '@/lib/admin/policy-scopes';
@@ -79,7 +80,32 @@ describe('the account a message goes out from', () => {
     const team = { name: 'Team', email: 'team@org-two.test' };
     const { result } = renderHook(() => useOrgSignatureSetup(team, 'a2'));
     await waitFor(() => expect(result.current.signature?.text).toBe('Team Team'));
-    // The active account isn't in that group: its domain's signature.
-    expect(renderHook(() => useOrgSignatureSetup(team)).result.current.signature?.text).toBe('Example Team');
+    // The active account isn't in that group, and the address is not in its
+    // domain: the organisation signature doesn't speak for it (undust fork).
+    expect(renderHook(() => useOrgSignatureSetup(team)).result.current.signature).toBeNull();
+  });
+});
+
+// undust fork: the organisation signature is the organisation's, so it signs
+// mail from the account's own domain and its groups only. A personal or a
+// client's address on the same login (luc@letoffe.me next to luc@undust.co)
+// sends without it, locked or not; the disclaimer is not concerned.
+describe('the addresses the organisation signature speaks for', () => {
+  it('is the account domain and its groups, and every address while the account is unknown', () => {
+    const subject = { email: 'luc@undust.co', groups: ['team@shared.test'] };
+    expect(isOrganisationSender('ops@undust.co', subject)).toBe(true);
+    expect(isOrganisationSender('Team@Shared.test', subject)).toBe(true);
+    expect(isOrganisationSender('luc@letoffe.me', subject)).toBe(false);
+    expect(isOrganisationSender('luc@methode-ec2r.com', subject)).toBe(false);
+    expect(isOrganisationSender('luc@letoffe.me', null)).toBe(true);
+  });
+
+  it('leaves a locked signature off mail from another domain, in the composer and on send', () => {
+    const personal = { name: 'Alice', email: 'alice@personal.test' };
+    expect(renderHook(() => useOrgSignatureSetup(personal)).result.current.signature).toBeNull();
+    expect(renderHook(() => useOrgSignatureSetup({ name: 'Alice', email: 'alice@example.org' })).result.current.signature?.text).toBe('Example Alice');
+
+    const out = finalizeOutgoing(finalizeOutgoing({ text: 'Hi' }, { ...CONTEXT, fromEmail: 'alice@personal.test' }), CONTEXT, 'last');
+    expect(out.text).toBe('Hi\n\nEveryone disclaimer');
   });
 });

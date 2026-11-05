@@ -1202,6 +1202,7 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
   // reach the selection again back in the list.
   const shortcutsTargetSelection = selectedEmailKeys.size > 0 && !(mvShell && !cursorOnly && selectedEmail);
   const singleKeyShortcuts = useSettingsStore((s) => s.singleKeyShortcuts);
+  const shortcutBindings = useSettingsStore((s) => s.shortcutBindings);
   useKeyboardShortcuts({
     enabled: isAuthenticated && !showComposer,
     singleKeyShortcuts,
@@ -1209,6 +1210,7 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
     selectedEmailId: selectedEmail?.id,
     selectionCount: selectedEmailKeys.size,
     mountainViewKeys: mvShell,
+    customBindings: shortcutBindings,
     handlers: keyboardHandlers,
   });
   // Ctrl+Z / z: undo the last mail actions, newest first.
@@ -4061,20 +4063,17 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
 
     // Quick reply follows the composer's addressing rules and sends from the
     // address the message was delivered to (lib/outgoing/quick-reply-envelope.ts).
-    const { recipients, sendingIdentity, primaryIdentity } = quickReplyEnvelope(selectedEmail, identities);
+    const { recipients, sendingIdentity } = quickReplyEnvelope(selectedEmail, identities);
     if (recipients.length === 0) {
       throw new Error("No sender email found");
     }
     const headerFromEmail = sendingIdentity?.email;
     const headerFromName = sendingIdentity?.name || undefined;
 
-    // Alias and shared identities frequently carry no signature of their own,
-    // so fall back to the primary's - the composer does the same
-    // (`signatureIdentity`). Without it, quick-replying from a shared mailbox
-    // silently drops the user's signature.
-    const signatureIdentity = (sendingIdentity?.htmlSignature || sendingIdentity?.textSignature)
-      ? sendingIdentity
-      : primaryIdentity;
+    // The sending identity signs with its own signature, an empty one
+    // included, as in the composer: no borrowing from the primary identity
+    // (undust fork).
+    const signatureIdentity = sendingIdentity;
     // The classification label (enterprise pack): the original's, else the
     // default. A required label with neither: the full composer, with the
     // typed text, to pick one. Nothing is asked or sent before that.

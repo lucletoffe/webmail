@@ -1783,6 +1783,17 @@
         "sound_desc": "Afspil en lyd for kalenderpåmindelser"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Tastaturgenveje",
+      "description": "Giv mailhandlingerne dine egne taster, f.eks. Ctrl + E for at arkivere. Den tast, du vælger, erstatter standardtasten.",
+      "change": "Skift",
+      "reset": "Nulstil",
+      "reset_all": "Nulstil alle genveje",
+      "recording": "Tryk på den nye tast… (Esc for at annullere)",
+      "invalid": "{key} kan ikke bruges: appen eller browseren bruger den.",
+      "taken": "{key} bruges allerede af “{action}”.",
+      "fixed_keys": "Taster til at bevæge sig i listen (j, k, pile, Enter, Esc, g-sekvenser), x, ? og Ctrl/⌘ + A beholder deres taster."
+    },
     "language_region": {
       "title": "Sprog, region & tid",
       "description": "Sprog, datoformat, tidsformat og andre regionale indstillinger",
@@ -4406,6 +4417,13 @@
       "description": "Beskrivelse",
       "location": "Sted",
       "meeting_link": "Mødelink",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Startdato",
       "end_date": "Slutdato",
       "start_time": "Starttidspunkt",
@@ -4440,6 +4458,7 @@
       "decline": "Afvis",
       "tentative": "Foreløbig",
       "needs_action": "Kræver handling",
+      "pending_badge": "Awaiting reply",
       "remove": "Fjern",
       "edit": "Redigér",
       "email_placeholder": "Tilføj e-mailadresse eller søg efter kontakter",

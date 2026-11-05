@@ -1780,6 +1780,17 @@
         "error_over_quota": "Questo account ha troppe registrazioni push sul server di posta (il limite di solito è 15). Revoca i dispositivi che non usi più nelle impostazioni delle notifiche, poi riprova."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Scorciatoie da tastiera",
+      "description": "Assegna tasti personalizzati alle azioni sulla posta, ad esempio Ctrl + E per archiviare. Il tasto scelto sostituisce quello predefinito.",
+      "change": "Modifica",
+      "reset": "Ripristina",
+      "reset_all": "Ripristina tutte le scorciatoie",
+      "recording": "Premi il nuovo tasto… (Esc per annullare)",
+      "invalid": "Impossibile usare {key}: è riservato all'app o al browser.",
+      "taken": "{key} è già usato da «{action}».",
+      "fixed_keys": "I tasti per muoversi nell'elenco (j, k, frecce, Invio, Esc, sequenze g), x, ? e Ctrl/⌘ + A non cambiano."
+    },
     "language_region": {
       "title": "Lingua, regione e ora",
       "description": "Lingua, formato data, formato ora e altre preferenze regionali",
@@ -4406,6 +4417,13 @@
       "description": "Descrizione",
       "location": "Luogo",
       "meeting_link": "Link riunione",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Data di inizio",
       "end_date": "Data di fine",
       "start_time": "Ora di inizio",
@@ -4440,6 +4458,7 @@
       "decline": "Rifiuta",
       "tentative": "Provvisorio",
       "needs_action": "In attesa di risposta",
+      "pending_badge": "Awaiting reply",
       "remove": "Rimuovi",
       "edit": "Modifica",
       "email_placeholder": "Aggiungi indirizzo email o cerca contatti",

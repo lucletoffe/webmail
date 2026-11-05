@@ -1783,6 +1783,17 @@
         "sound_desc": "پخش صدا برای یادآورها"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "میانبرهای صفحه‌کلید",
+      "description": "برای کارهای ایمیل کلیدهای دلخواه خود را تعیین کنید، مثلاً Ctrl + E برای بایگانی. کلیدی که انتخاب می‌کنید جای کلید پیش‌فرض را می‌گیرد.",
+      "change": "تغییر",
+      "reset": "بازنشانی",
+      "reset_all": "بازنشانی همهٔ میانبرها",
+      "recording": "کلید جدید را فشار دهید… (Esc برای لغو)",
+      "invalid": "نمی‌توان از {key} استفاده کرد: برنامه یا مرورگر آن را نگه می‌دارد.",
+      "taken": "{key} از قبل برای «{action}» استفاده می‌شود.",
+      "fixed_keys": "کلیدهای جابه‌جایی در فهرست (j، k، پیکان‌ها، Enter، Esc، دنباله‌های g)، x، ? و Ctrl/⌘ + A تغییر نمی‌کنند."
+    },
     "language_region": {
       "title": "زبان، منطقه و زمان",
       "description": "تنظیمات زبان، فرمت تاریخ و زمان",
@@ -4406,6 +4417,13 @@
       "description": "توضیحات",
       "location": "مکان",
       "meeting_link": "لینک جلسه",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "تاریخ شروع",
       "end_date": "تاریخ پایان",
       "start_time": "زمان شروع",
@@ -4440,6 +4458,7 @@
       "decline": "رد کردن",
       "tentative": "احتمالی",
       "needs_action": "نیاز به اقدام",
+      "pending_badge": "Awaiting reply",
       "remove": "حذف",
       "edit": "ویرایش",
       "email_placeholder": "آدرس ایمیل را وارد کنید یا مخاطبین را جستجو کنید",

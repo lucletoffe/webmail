@@ -1783,6 +1783,17 @@
         "sound_desc": "Hangjelzés lejátszása naptári emlékeztetőkhöz"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Billentyűparancsok",
+      "description": "Adjon saját billentyűket a levelezési műveletekhez, például Ctrl + E az archiváláshoz. A választott billentyű felváltja az alapértelmezettet.",
+      "change": "Módosítás",
+      "reset": "Visszaállítás",
+      "reset_all": "Minden billentyűparancs visszaállítása",
+      "recording": "Nyomja meg az új billentyűt… (Esc a megszakításhoz)",
+      "invalid": "A(z) {key} nem használható: az alkalmazás vagy a böngésző foglalja.",
+      "taken": "A(z) {key} már a(z) „{action}” művelethez tartozik.",
+      "fixed_keys": "A listában mozgás billentyűi (j, k, nyilak, Enter, Esc, g-sorozatok), az x, a ? és a Ctrl/⌘ + A nem változnak."
+    },
     "language_region": {
       "title": "Nyelv, régió és idő",
       "description": "Nyelv, dátumformátum, időformátum és egyéb regionális beállítások",
@@ -4406,6 +4417,13 @@
       "description": "Leírás",
       "location": "Helyszín",
       "meeting_link": "Találkozó link",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Kezdő dátum",
       "end_date": "Befejező dátum",
       "start_time": "Kezdő idő",
@@ -4440,6 +4458,7 @@
       "decline": "Elutasítás",
       "tentative": "Előzetes",
       "needs_action": "Művelet szükséges",
+      "pending_badge": "Awaiting reply",
       "remove": "Eltávolítás",
       "edit": "Szerkesztés",
       "email_placeholder": "E-mail cím hozzáadása vagy névjegy keresése",

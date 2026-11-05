@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { Email } from "@/lib/jmap/types";
 import { isActivatableEventTarget, isAppShortcutBlocked, isEventInside, isSingleCharacterKey } from "@/lib/keyboard";
+import {
+  comboFromEvent,
+  customComboMap,
+  type CustomizableShortcutAction,
+  type ShortcutBindings,
+} from "@/lib/shortcut-bindings";
 import { keyboardHooks } from "@/lib/plugin-hooks";
+import { pluginShortcutLabel } from "@/lib/plugin-sandbox/shortcuts";
 
 export interface KeyboardShortcutHandlers {
   // Navigation
@@ -60,6 +67,30 @@ const GO_TO_KEYS: Record<string, GoToMailboxTarget> = {
 /** How long a pending `g` waits for its second key before lapsing. */
 const GO_TO_SEQUENCE_MS = 1500;
 
+/**
+ * The handler behind each action that can take a custom key, and what it
+ * needs, as in the built-in switch below: the message on screen, or that
+ * message or a selection.
+ */
+const CUSTOM_KEY_TARGETS: Record<
+  CustomizableShortcutAction,
+  { handler: Exclude<keyof KeyboardShortcutHandlers, "onExtendSelection" | "onGoToMailbox">; needs?: "email" | "target" }
+> = {
+  "reply": { handler: "onReply", needs: "email" },
+  "reply-all": { handler: "onReplyAll", needs: "email" },
+  "forward": { handler: "onForward", needs: "email" },
+  "toggle-star": { handler: "onToggleStar", needs: "email" },
+  "archive": { handler: "onArchive", needs: "target" },
+  "delete": { handler: "onDelete", needs: "target" },
+  "mark-as-unread": { handler: "onMarkAsUnread", needs: "target" },
+  "mark-as-read": { handler: "onMarkAsRead", needs: "target" },
+  "toggle-spam": { handler: "onToggleSpam", needs: "target" },
+  "compose": { handler: "onCompose" },
+  "focus-search": { handler: "onFocusSearch" },
+  "refresh": { handler: "onRefresh" },
+  "next-unread": { handler: "onNextUnread" },
+};
+
 export interface UseKeyboardShortcutsOptions {
   enabled?: boolean;
   /**
@@ -82,6 +113,8 @@ export interface UseKeyboardShortcutsOptions {
   emails: Email[];
   selectedEmailId?: string;
   selectionCount?: number;
+  /** The user's own keys (settings `shortcutBindings`); each replaces the action's built-in keys. */
+  customBindings?: ShortcutBindings;
   handlers: KeyboardShortcutHandlers;
 }
 
@@ -116,9 +149,11 @@ export function useKeyboardShortcuts({
   emails,
   selectedEmailId,
   selectionCount = 0,
+  customBindings,
   handlers,
 }: UseKeyboardShortcutsOptions) {
   const handlersRef = useRef(handlers);
+  const customCombos = useMemo(() => customComboMap(customBindings ?? {}), [customBindings]);
   // A `g` waiting for the letter that completes it. Held in a ref so the
   // listener stays stable; cleared on timeout, on completion, and on any key
   // that isn't part of a sequence.
@@ -151,9 +186,9 @@ export function useKeyboardShortcuts({
       const keyName = `${event.ctrlKey || event.metaKey ? "mod+" : ""}${event.shiftKey && key.length === 1 && /[a-z]/.test(key) ? "shift+" : ""}${key}`;
       // Runs a shortcut's action. Plugins may stop it first (onBeforeShortcut)
       // and hear about it after; with no plugin listening it runs at once.
-      const run = (action: string, fn: (() => void) | undefined) => {
+      const run = (action: string, fn: (() => void) | undefined, customKey?: string) => {
         if (!fn) return;
-        const payload = { key: keyName, action };
+        const payload = { key: customKey ?? keyName, action };
         const done = () => {
           fn();
           void keyboardHooks.onAfterShortcut.emit(payload);
@@ -165,6 +200,33 @@ export function useKeyboardShortcuts({
         void keyboardHooks.onBeforeShortcut.intercept(payload).then((ok) => { if (ok) done(); });
       };
       const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+      const hasBatchTarget = !!selectedEmailId || selectionCount > 0;
+
+      // The user's own keys come first, except the letter that completes a
+      // pending `g` sequence and a key a plugin installed later has taken.
+      // A custom key is always the app's, so the browser never sees it, even
+      // when the action has nothing to act on.
+      const combo = customCombos.size > 0 ? comboFromEvent(event) : null;
+      const customAction = combo ? customCombos.get(combo) : undefined;
+      const completesGoTo = mountainViewKeys && pendingGoTo.current !== null && !hasModifier && !!GO_TO_KEYS[key];
+      if (combo && customAction && !completesGoTo && !pluginShortcutLabel(event)) {
+        // Any key but the second half ends a pending `g` sequence.
+        if (pendingGoTo.current !== null) {
+          clearTimeout(pendingGoTo.current);
+          pendingGoTo.current = null;
+        }
+        event.preventDefault();
+        const target = CUSTOM_KEY_TARGETS[customAction];
+        const ready = target.needs === "email" ? !!selectedEmailId
+          : target.needs === "target" ? hasBatchTarget
+          : true;
+        if (ready) run(customAction, h[target.handler], combo);
+        return;
+      }
+      // An action that has a custom key no longer answers to its built-in ones.
+      const builtIn = (action: CustomizableShortcutAction, fn: (() => void) | undefined) => {
+        if (!customBindings?.[action]) run(action, fn);
+      };
 
       // Shortcuts that work with modifiers
       if (event.ctrlKey || event.metaKey) {
@@ -179,8 +241,6 @@ export function useKeyboardShortcuts({
 
       // Shortcuts that should NOT work with modifiers
       if (hasModifier) return;
-
-      const hasBatchTarget = !!selectedEmailId || selectionCount > 0;
 
       // Second half of a `g` sequence. Checked before the switch so `s`, `t`,
       // `a` and `d` reach the folder jump instead of star / reply-all.
@@ -240,9 +300,9 @@ export function useKeyboardShortcuts({
           if (selectedEmailId) {
             event.preventDefault();
             if (event.shiftKey) {
-              run("reply-all", h.onReplyAll);
+              builtIn("reply-all", h.onReplyAll);
             } else {
-              run("reply", h.onReply);
+              builtIn("reply", h.onReply);
             }
           }
           break;
@@ -250,28 +310,28 @@ export function useKeyboardShortcuts({
         case "a":
           if (selectedEmailId) {
             event.preventDefault();
-            run("reply-all", h.onReplyAll);
+            builtIn("reply-all", h.onReplyAll);
           }
           break;
 
         case "f":
           if (selectedEmailId) {
             event.preventDefault();
-            run("forward", h.onForward);
+            builtIn("forward", h.onForward);
           }
           break;
 
         case "s":
           if (selectedEmailId) {
             event.preventDefault();
-            run("toggle-star", h.onToggleStar);
+            builtIn("toggle-star", h.onToggleStar);
           }
           break;
 
         case "e":
           if (hasBatchTarget) {
             event.preventDefault();
-            run("archive", h.onArchive);
+            builtIn("archive", h.onArchive);
           }
           break;
 
@@ -280,40 +340,40 @@ export function useKeyboardShortcuts({
         case "backspace":
           if (hasBatchTarget) {
             event.preventDefault();
-            run("delete", h.onDelete);
+            builtIn("delete", h.onDelete);
           }
           break;
 
         case "u":
           if (hasBatchTarget) {
             event.preventDefault();
-            run("mark-as-unread", h.onMarkAsUnread);
+            builtIn("mark-as-unread", h.onMarkAsUnread);
           }
           break;
 
         case "i":
           if (hasBatchTarget && event.shiftKey) {
             event.preventDefault();
-            run("mark-as-read", h.onMarkAsRead);
+            builtIn("mark-as-read", h.onMarkAsRead);
           }
           break;
 
         case "!":
           if (hasBatchTarget) {
             event.preventDefault();
-            run("toggle-spam", h.onToggleSpam);
+            builtIn("toggle-spam", h.onToggleSpam);
           }
           break;
 
         // Global actions
         case "c":
           event.preventDefault();
-          run("compose", h.onCompose);
+          builtIn("compose", h.onCompose);
           break;
 
         case "/":
           event.preventDefault();
-          run("focus-search", h.onFocusSearch);
+          builtIn("focus-search", h.onFocusSearch);
           break;
 
         case "?":
@@ -324,7 +384,7 @@ export function useKeyboardShortcuts({
         case "g":
           if (event.shiftKey) {
             event.preventDefault();
-            run("refresh", h.onRefresh);
+            builtIn("refresh", h.onRefresh);
           } else if (mountainViewKeys && h.onGoToMailbox) {
             // Arm the sequence; the next key either completes it or lapses.
             event.preventDefault();
@@ -351,12 +411,12 @@ export function useKeyboardShortcuts({
         case "n":
           if (!event.shiftKey) {
             event.preventDefault();
-            run("next-unread", h.onNextUnread);
+            builtIn("next-unread", h.onNextUnread);
           }
           break;
       }
     },
-    [selectedEmailId, selectionCount, mountainViewKeys, singleKeyShortcuts, listSelector]
+    [selectedEmailId, selectionCount, mountainViewKeys, singleKeyShortcuts, listSelector, customCombos, customBindings]
   );
 
   // A pending sequence must not outlive the hook.

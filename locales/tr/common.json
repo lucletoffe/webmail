@@ -1780,6 +1780,17 @@
         "error_over_quota": "Bu hesabın posta sunucusunda çok fazla push kaydı var (sınır genellikle 15'tir). Artık kullanmadığınız cihazları bildirim ayarlarından iptal edip yeniden deneyin."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Klavye kısayolları",
+      "description": "Posta işlemlerine kendi tuşlarınızı atayın, örneğin arşivlemek için Ctrl + E. Seçtiğiniz tuş varsayılan tuşun yerini alır.",
+      "change": "Değiştir",
+      "reset": "Sıfırla",
+      "reset_all": "Tüm kısayolları sıfırla",
+      "recording": "Yeni tuşa basın… (iptal için Esc)",
+      "invalid": "{key} kullanılamaz: uygulama veya tarayıcı bu tuşu kullanıyor.",
+      "taken": "{key} zaten “{action}” için kullanılıyor.",
+      "fixed_keys": "Listede gezinme tuşları (j, k, oklar, Enter, Esc, g dizileri), x, ? ve Ctrl/⌘ + A değişmez."
+    },
     "language_region": {
       "title": "Dil, Bölge ve Saat",
       "description": "Dil, tarih biçimi, saat biçimi ve diğer bölgesel tercihler",
@@ -4406,6 +4417,13 @@
       "description": "Açıklama",
       "location": "Konum",
       "meeting_link": "Toplantı bağlantısı",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Başlangıç tarihi",
       "end_date": "Bitiş tarihi",
       "start_time": "Başlangıç saati",
@@ -4440,6 +4458,7 @@
       "decline": "Reddet",
       "tentative": "Geçici",
       "needs_action": "İşlem gerekiyor",
+      "pending_badge": "Awaiting reply",
       "remove": "Kaldır",
       "edit": "Düzenle",
       "email_placeholder": "E-posta adresi ekleyin veya kişileri arayın",

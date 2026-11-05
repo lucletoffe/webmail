@@ -1780,6 +1780,17 @@
         "error_over_quota": "Šim kontam pasta serverī ir pārāk daudz push reģistrāciju (ierobežojums parasti ir 15). Paziņojumu iestatījumos atsauciet ierīces, kuras vairs neizmantojat, un mēģiniet vēlreiz."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Īsinājumtaustiņi",
+      "description": "Piešķiriet pasta darbībām savus taustiņus, piemēram, Ctrl + E arhivēšanai. Izvēlētais taustiņš aizstāj noklusējuma taustiņu.",
+      "change": "Mainīt",
+      "reset": "Atjaunot",
+      "reset_all": "Atjaunot visus īsinājumtaustiņus",
+      "recording": "Nospiediet jauno taustiņu… (Esc, lai atceltu)",
+      "invalid": "{key} nevar izmantot: to rezervē lietotne vai pārlūks.",
+      "taken": "{key} jau tiek izmantots darbībai “{action}”.",
+      "fixed_keys": "Pārvietošanās taustiņi sarakstā (j, k, bultiņas, Enter, Esc, g secības), x, ? un Ctrl/⌘ + A nemainās."
+    },
     "language_region": {
       "title": "Valoda, reģions un laiks",
       "description": "Valoda, datuma formāts, laika formāts un citas reģionālās preferences",
@@ -4405,6 +4416,13 @@
       "description": "Apraksts",
       "location": "Vieta",
       "meeting_link": "Sapulces saite",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Sākuma datums",
       "end_date": "Beigu datums",
       "start_time": "Sākuma laiks",
@@ -4439,6 +4457,7 @@
       "decline": "Noraidīt",
       "tentative": "Pagaidām",
       "needs_action": "Nepieciešama atbilde",
+      "pending_badge": "Awaiting reply",
       "remove": "Noņemt",
       "edit": "Rediģēt",
       "email_placeholder": "Pievienojiet adresi vai kontaktu",

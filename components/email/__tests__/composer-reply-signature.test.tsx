@@ -335,6 +335,38 @@ describe('reply signature above the quote (#842)', () => {
     });
   });
 
+  // undust fork (sig1a): a reply the composer sends from an address without a
+  // signature (luc@letoffe.me, personal) goes out unsigned, even when the
+  // primary address (luc@undust.co) has one.
+  describe('reply from an address without a signature, signature above the quote', () => {
+    const UNDUST = { id: 'id-undust', email: 'luc@undust.co', name: 'Luc', htmlSignature: '<b>Luc undust</b>', textSignature: 'Luc undust' };
+    const PERSONAL = { id: 'id-perso', email: 'luc@letoffe.me', name: 'Luc', htmlSignature: '', textSignature: '' };
+    const TO_PERSONAL = { ...REPLY_TO, to: [{ email: 'luc@letoffe.me' }] };
+
+    it('sends an HTML reply with no signature', async () => {
+      useSettingsStore.setState({ signaturePosition: 'above_quote' });
+      setIdentities([UNDUST, PERSONAL]);
+      const onSend = vi.fn();
+      render(<EmailComposer mode="reply" replyTo={TO_PERSONAL} onSend={onSend} />);
+
+      expect(editorState.html).not.toContain('Luc undust');
+      const sent = await send(onSend);
+      expect(sent.htmlBody ?? '').not.toContain('Luc undust');
+      expect(sent.body).not.toContain('Luc undust');
+    });
+
+    it('sends a plain-text reply with no signature', async () => {
+      useSettingsStore.setState({ signaturePosition: 'above_quote', plainTextMode: true });
+      setIdentities([UNDUST, PERSONAL]);
+      const onSend = vi.fn();
+      render(<EmailComposer mode="reply" replyTo={TO_PERSONAL} onSend={onSend} />);
+
+      const sent = await send(onSend);
+      expect(sent.body).not.toContain('Luc undust');
+      expect(sent.body).not.toContain('-- ');
+    });
+  });
+
   it('still signs a reply below the quote at send time by default', async () => {
     setIdentities([UNSIGNED_ME, SALES]);
     const onSend = vi.fn();

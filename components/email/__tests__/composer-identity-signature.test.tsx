@@ -190,7 +190,8 @@ vi.mock('@/lib/template-utils', () => ({ substitutePlaceholders: (s: string) => 
  * Switching From to an identity without a signature kept the previous
  * identity's signature, so a mail from a team address went out with the
  * personal signature. An identity the composer picks itself (a reply to an
- * alias) still borrows the primary signature.
+ * alias: a personal or a client's address) does not borrow the primary
+ * signature either (undust fork).
  */
 
 const DRAFT = {
@@ -233,12 +234,22 @@ describe('composer signature follows the picked identity', () => {
     expect(sent.body).not.toContain('Alice');
   });
 
-  it('still borrows the primary signature for an identity it did not let the user pick', async () => {
+  it('sends from an identity without a signature unsigned, also one it picked itself', async () => {
     const onSend = vi.fn();
     render(<EmailComposer mode="reply" initialData={{ ...DRAFT, mode: 'reply', selectedIdentityId: 'id-team' }} onSend={onSend} />);
 
     const sent = await send(onSend);
-    expect(sent.htmlBody).toContain('<b>Alice</b>');
+    expect(sent.htmlBody).not.toContain('Alice');
+    expect(sent.body).not.toContain('Alice');
+  });
+
+  it('signs a new mail from an identity without a signature with nothing', async () => {
+    const onSend = vi.fn();
+    render(<EmailComposer initialData={{ ...DRAFT, selectedIdentityId: 'id-team' }} onSend={onSend} />);
+
+    const sent = await send(onSend);
+    expect(sent.htmlBody ?? '').not.toContain('Alice');
+    expect(sent.body).not.toContain('Alice');
   });
 
   it('swaps the signature in a plain-text message and brings it back', async () => {

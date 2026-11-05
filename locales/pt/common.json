@@ -1780,6 +1780,17 @@
         "error_over_quota": "Esta conta tem registros push demais no servidor de e-mail (o limite costuma ser 15). Revogue os dispositivos que você não usa mais nas configurações de notificação e tente novamente."
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Atalhos de teclado",
+      "description": "Atribua as suas próprias teclas às ações de e-mail, como Ctrl + E para arquivar. A tecla escolhida substitui a predefinida.",
+      "change": "Alterar",
+      "reset": "Repor",
+      "reset_all": "Repor todos os atalhos",
+      "recording": "Prima a nova tecla… (Esc para cancelar)",
+      "invalid": "Não é possível usar {key}: a aplicação ou o navegador reserva-a.",
+      "taken": "{key} já é usada por «{action}».",
+      "fixed_keys": "As teclas para percorrer a lista (j, k, setas, Enter, Esc, sequências g), x, ? e Ctrl/⌘ + A mantêm-se."
+    },
     "language_region": {
       "title": "Idioma, Região e Hora",
       "description": "Idioma, formato de data, formato de hora e outras preferências regionais",
@@ -4406,6 +4417,13 @@
       "description": "Descrição",
       "location": "Local",
       "meeting_link": "Link da reunião",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
       "start_date": "Data de início",
       "end_date": "Data de término",
       "start_time": "Hora de início",
@@ -4440,6 +4458,7 @@
       "decline": "Recusar",
       "tentative": "Provisório",
       "needs_action": "Aguardando resposta",
+      "pending_badge": "Awaiting reply",
       "remove": "Remover",
       "edit": "Editar",
       "email_placeholder": "Adicionar endereço de e-mail ou pesquisar contatos",

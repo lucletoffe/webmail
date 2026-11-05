@@ -1783,6 +1783,17 @@
         "sound_desc": "Mängi helimärguanne kalendri meeldetuletuste puhul"
       }
     },
+    "keyboard_shortcuts": {
+      "title": "Kiirklahvid",
+      "description": "Määra kirjatoimingutele oma klahvid, näiteks Ctrl + E arhiveerimiseks. Valitud klahv asendab vaikimisi klahvi.",
+      "change": "Muuda",
+      "reset": "Taasta",
+      "reset_all": "Taasta kõik kiirklahvid",
+      "recording": "Vajuta uut klahvi… (Esc tühistamiseks)",
+      "invalid": "{key} ei saa kasutada: rakendus või brauser kasutab seda.",
+      "taken": "{key} on juba kasutusel toimingu „{action}“ jaoks.",
+      "fixed_keys": "Loendis liikumise klahvid (j, k, nooled, Enter, Esc, g-järjestused), x, ? ja Ctrl/⌘ + A jäävad samaks."
+    },
     "language_region": {
       "title": "Keel, piirkond ja kellaaeg",
       "description": "Keel, kuupäevavorming, kellaajavorming ja muud piirkondlikud eelistused",
@@ -4406,6 +4417,13 @@
       "description": "Kirjeldus",
       "location": "Asukoht",
       "meeting_link": "Koosoleku link",
+      "undust_meet_generate": "Loo undusti videolink",
+      "undust_meet_generating": "Loomine…",
+      "undust_meet_prompt": "Kas lisada sellele sündmusele undusti videolink?",
+      "undust_meet_prompt_yes": "Jah",
+      "undust_meet_prompt_no": "Ei",
+      "undust_meet_error": "Videolinki ei õnnestunud luua (kood {code}).",
+      "undust_meet_error_401": "Opsi seanss aegus. Logi Opsi sisse ja proovi uuesti:",
       "start_date": "Alguskuupäev",
       "end_date": "Lõpukuupäev",
       "start_time": "Algusaeg",
@@ -4440,6 +4458,7 @@
       "decline": "Keeldu",
       "tentative": "Esialgne",
       "needs_action": "Vajab vastust",
+      "pending_badge": "Ootab vastust",
       "remove": "Eemalda",
       "edit": "Muuda",
       "email_placeholder": "Lisa e-posti aadress või otsi kontaktidest",
