@@ -62,8 +62,6 @@ function getEventColor(event: CalendarEvent, calendar?: Calendar): string {
 
 // Events are solid blocks of their calendar colour; declined and cancelled
 // ones drop the fill and keep a 1px border in it (repos/branding/APP.md).
-// Events are solid blocks of their calendar colour; declined and cancelled
-// ones drop the fill and keep a 1px border in it (repos/branding/APP.md).
 // With light event colours on (the Outlook look, as on the printout) an
 // event is a light tint of its colour with a bar in it at the start
 // (eventFillClass) and text in the text colour.
