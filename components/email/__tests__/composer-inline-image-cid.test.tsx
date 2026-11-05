@@ -315,4 +315,58 @@ describe('reply/forward inline image cid normalization', () => {
     expect(uploadBlob).not.toHaveBeenCalled();
     expect(sent.attachments).toBeUndefined();
   });
+  it('uploads the data: images of a quoted message at most maxConcurrentUpload at a time', async () => {
+    // 1×1 PNG with a different trailing byte each: four distinct images.
+    const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const quoted = [0, 1, 2, 3].map((i) => {
+      const bytes = [...Uint8Array.from(atob(PNG), (c) => c.charCodeAt(0)), i];
+      return `<img src="data:image/png;base64,${btoa(String.fromCharCode(...bytes))}" alt="pic ${i}">`;
+    }).join('');
+    let active = 0;
+    let peak = 0;
+    const uploadBlob = vi.fn(async (file: File) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      active--;
+      return { blobId: `blob-${uploadBlob.mock.calls.length}`, size: file.size, type: file.type };
+    });
+    useAuthStore.setState({
+      client: {
+        uploadBlob,
+        fetchBlobArrayBuffer: vi.fn(),
+        hasDelayedSend: () => false,
+        supportsPrincipals: () => false,
+        getMaxDelayedSend: () => 0,
+        // The server takes two uploads at once; six request slots leave room for four.
+        getCapabilities: () => ({ 'urn:ietf:params:jmap:core': { maxConcurrentUpload: 2 } }),
+        getMaxConcurrentRequests: () => 6,
+      } as never,
+    });
+    const onSend = vi.fn();
+
+    render(
+      <EmailComposer
+        mode="reply"
+        onSend={onSend}
+        replyTo={{
+          from: [{ email: 'sender@example.com', name: 'Sender' }],
+          subject: 'Newsletter',
+          htmlBody: `<p>Hi</p>${quoted}`,
+          quoteHeaderHtml: 'On X, Sender wrote:',
+          attachments: [],
+        }}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByTestId('composer-send')[0]);
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+
+    const sent = onSend.mock.calls[0][0] as { htmlBody?: string; attachments?: Array<{ disposition?: string }> };
+    expect(uploadBlob).toHaveBeenCalledTimes(4);
+    expect(peak).toBe(2);
+    expect(sent.attachments).toHaveLength(4);
+    expect(sent.htmlBody).not.toContain('data:image/png');
+  });
 });

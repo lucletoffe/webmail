@@ -85,10 +85,12 @@ test("a logo in the organisation signature goes out as an inline cid: part", asy
   await to.fill("bob@example.com");
   await to.press("Enter");
   await page.locator('[data-testid="composer-subject"]').first().fill("Logo check");
-  // Typed above the signature, which stays as the composer put it in.
-  await page.getByRole("textbox", { name: "Message" }).first().click();
-  await page.keyboard.press("ControlOrMeta+Home");
+  // Typed in the empty first paragraph, above the signature, which stays in
+  // the editor as the composer put it in.
+  const editor = page.getByRole("textbox", { name: "Message" }).first();
+  await editor.locator("p").first().click();
   await page.keyboard.type("Hello Bob");
+  await expect(editor.locator("[data-signature-block-node] img[alt='ACME logo']")).toHaveCount(1);
 
   const submission = page.waitForRequest((request) => request.url().includes("/api/dev-jmap/api") && submittedEmail(request) !== null);
   // The composer renders a Send button per layout; only one is visible.
@@ -96,10 +98,22 @@ test("a logo in the organisation signature goes out as an inline cid: part", asy
   const email = submittedEmail(await submission)!;
 
   const html = Object.values(email.bodyValues ?? {}).map((v) => v.value).find((v) => v.includes("<"))!;
-  expect(html).toMatch(/Hello Bob[\s\S]*Dev User/);
-  expect(html.match(/alt="ACME logo"/g)).toHaveLength(1);
   expect(html).not.toContain("data:image");
-  const cid = /<img[^>]*src="cid:([^"]+)"[^>]*alt="ACME logo"/.exec(html)?.[1];
+  // What the sent HTML holds, read with the browser's parser.
+  const shape = await page.evaluate((source) => {
+    const doc = new DOMParser().parseFromString(source, "text/html");
+    const greeting = Array.from(doc.querySelectorAll("p")).find((p) => p.textContent?.includes("Hello Bob"));
+    const logos = Array.from(doc.querySelectorAll("img[alt='ACME logo']"));
+    return {
+      greetingInSignature: greeting ? !!greeting.closest("[data-signature-block], [data-signature-block-node]") : null,
+      logos: logos.map((img) => ({ src: img.getAttribute("src") ?? "", inSignatureNode: !!img.closest("[data-signature-block-node]") })),
+    };
+  }, html);
+  expect(shape.greetingInSignature, "Hello Bob is in its own paragraph, outside the signature").toBe(false);
+  // The signature the editor kept is the one that goes; the finaliser adds no second copy.
+  expect(shape.logos).toHaveLength(1);
+  expect(shape.logos[0].inSignatureNode).toBe(true);
+  const cid = /^cid:(.+)$/.exec(shape.logos[0].src)?.[1];
   expect(cid, "the logo refers to a cid:").toBeTruthy();
 
   const part = allParts(email).find((p) => p.cid === cid);
