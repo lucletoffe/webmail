@@ -33,7 +33,18 @@ describe('rescheduleEmailSubmission re-stamps the held message', () => {
 
   const TOMORROW = Date.now() + 20 * 3600_000;
 
-  function scriptServer(storedSentAt: string) {
+  interface ServerOptions {
+    /** The server refuses the Email/import of the copy. */
+    importFails?: boolean;
+    /** The server refuses the replacement submission (invalidProperties). */
+    replacementRefused?: boolean;
+    /** Email/set destroy fails. */
+    destroyFails?: boolean;
+    /** The cancel is refused (cannotUnsend) while the original is still pending. */
+    cancelRefused?: boolean;
+  }
+
+  function scriptServer(storedSentAt: string, options: ServerOptions = {}) {
     const client = new JMAPClient('https://jmap.example.com', 'user@example.com', 'pass');
     Object.assign(client, {
       apiUrl: 'https://jmap.example.com/api',
@@ -64,6 +75,8 @@ describe('rescheduleEmailSubmission re-stamps the held message', () => {
       uploaded.push(new Uint8Array(await file.arrayBuffer()));
       return { blobId: 'blob-restamped', size: file.size, type: file.type };
     });
+    // What the server holds: the original submission's state, and each copy imported.
+    const state = { undoStatus: 'pending' as 'pending' | 'canceled', copies: 0 };
     const calls: Array<{ method: string; args: Record<string, unknown> }> = [];
     vi.spyOn(client as unknown as { request: JMAPClient['request'] }, 'request').mockImplementation(async (methodCalls) => {
       const [method, args] = methodCalls[0] as unknown as [string, Record<string, unknown>];
@@ -72,21 +85,36 @@ describe('rescheduleEmailSubmission re-stamps the held message', () => {
         case 'Identity/get':
           return { methodResponses: [[method, { list: [{ id: 'identity-1', email: 'user@example.com' }] }, '0']] };
         case 'EmailSubmission/get':
-          return { methodResponses: [[method, { list: [{ id: 'sub-old', identityId: 'identity-1', sendAt: storedSentAt, envelope: { rcptTo: [{ email: 'rcpt@example.com' }] } }] }, '0']] };
+          return { methodResponses: [[method, { list: [{ id: 'sub-old', identityId: 'identity-1', sendAt: storedSentAt, undoStatus: state.undoStatus, envelope: { rcptTo: [{ email: 'rcpt@example.com' }] } }] }, '0']] };
         case 'Email/get':
           return { methodResponses: [[method, { list: [{ id: 'email-1', sentAt: storedSentAt, blobId: 'blob-1', mailboxIds: { 'mb-sent': true }, keywords: { $seen: true } }] }, '0']] };
         case 'Email/import':
-          return { methodResponses: [[method, { created: { restamped: { id: 'email-2' } } }, '0']] };
+          if (options.importFails) return { methodResponses: [[method, { notCreated: { restamped: { type: 'invalidEmail' } } }, '0']] };
+          state.copies += 1;
+          return { methodResponses: [[method, { created: { restamped: { id: `copy-${state.copies}` } } }, '0']] };
         case 'Email/set':
+          if (options.destroyFails) return { methodResponses: [[method, { notDestroyed: Object.fromEntries((args.destroy as string[]).map((id) => [id, { type: 'forbidden' }])) }, '0']] };
           return { methodResponses: [[method, { destroyed: args.destroy ?? [] }, '0']] };
         case 'EmailSubmission/set':
-          if (args.update) return { methodResponses: [[method, { updated: { 'sub-old': null } }, '0']] };
+          if (args.update) {
+            if (options.cancelRefused || state.undoStatus === 'canceled') {
+              return { methodResponses: [[method, { notUpdated: { 'sub-old': { type: 'cannotUnsend' } } }, '0']] };
+            }
+            state.undoStatus = 'canceled';
+            return { methodResponses: [[method, { updated: { 'sub-old': null } }, '0']] };
+          }
           if (args.destroy) return { methodResponses: [[method, { destroyed: args.destroy }, '0']] };
+          if (options.replacementRefused && (args.create as Record<string, { emailId: string }>).replacement.emailId !== 'email-1') {
+            return { methodResponses: [[method, { notCreated: { replacement: { type: 'invalidProperties', properties: ['emailId'] } } }, '0']] };
+          }
           return { methodResponses: [[method, { created: { replacement: { id: 'sub-new', sendAt: new Date().toISOString() } } }, '0']] };
       }
       throw new Error(`unexpected call ${method}`);
     });
-    return { client, calls, uploaded };
+    const destroyed = () => calls.filter((c) => c.method === 'Email/set' && c.args.destroy).flatMap((c) => c.args.destroy as string[]);
+    const creates = () => calls.filter((c) => c.method === 'EmailSubmission/set' && c.args.create)
+      .map((c) => (c.args.create as Record<string, { emailId: string }>).replacement.emailId);
+    return { client, calls, uploaded, state, destroyed, creates };
   }
 
   it('sends a message scheduled for tomorrow now with the date of now, not of tomorrow', async () => {
@@ -101,10 +129,15 @@ describe('rescheduleEmailSubmission re-stamps the held message', () => {
     expect(imported.restamped).toMatchObject({ blobId: 'blob-restamped', mailboxIds: { 'mb-drafts': true }, keywords: { $seen: true, $draft: true } });
     expect(Math.abs(Date.parse(imported.restamped.receivedAt as string) - before)).toBeLessThan(10_000);
     const create = calls.find((c) => c.method === 'EmailSubmission/set' && c.args.create)!.args.create as Record<string, { emailId: string }>;
-    expect(create.replacement.emailId).toBe('email-2');
+    expect(create.replacement.emailId).toBe('copy-1');
     // The copy replaces the old message.
     expect(calls.find((c) => c.method === 'Email/set' && c.args.destroy)?.args.destroy).toEqual(['email-1']);
-    expect(result).toMatchObject({ scheduled: true, emailId: 'email-2', emailSubmissionId: 'sub-new' });
+    // The copy exists before the original is canceled.
+    const importAt = calls.findIndex((c) => c.method === 'Email/import');
+    const cancelAt = calls.findIndex((c) => c.method === 'EmailSubmission/set' && c.args.update);
+    expect(importAt).toBeGreaterThan(-1);
+    expect(importAt).toBeLessThan(cancelAt);
+    expect(result).toMatchObject({ scheduled: true, emailId: 'copy-1', emailSubmissionId: 'sub-new' });
   });
 
   it('keeps the message when the release moves by seconds (Send now in the undo window)', async () => {
@@ -116,5 +149,67 @@ describe('rescheduleEmailSubmission re-stamps the held message', () => {
     expect(calls.some((c) => c.method === 'Email/import')).toBe(false);
     expect(calls.some((c) => c.method === 'Email/set' && c.args.destroy)).toBe(false);
     expect(result.emailId).toBe('email-1');
+  });
+
+  const tomorrow = () => new Date(TOMORROW).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const now = () => new Date(Date.now() + 1000).toISOString();
+
+  it('changes nothing when the cancel is refused, and takes its copy back out', async () => {
+    const { client, destroyed, creates, state } = scriptServer(tomorrow(), { cancelRefused: true });
+
+    await expect(client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now())).rejects.toThrow('cannotUnsend');
+
+    expect(state.undoStatus).toBe('pending');
+    expect(destroyed()).toEqual(['copy-1']);
+    expect(creates()).toEqual([]);
+  });
+
+  it('puts the original back and removes the copy when the server refuses the replacement', async () => {
+    const { client, destroyed, creates } = scriptServer(tomorrow(), { replacementRefused: true });
+
+    await expect(client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now())).rejects.toMatchObject({ name: 'RescheduleRestoredError' });
+
+    expect(creates()).toEqual(['copy-1', 'email-1']);
+    expect(destroyed()).toEqual(['copy-1']);
+  });
+
+  it('releases the original unchanged when the copy cannot be imported', async () => {
+    const { client, destroyed, creates } = scriptServer(tomorrow(), { importFails: true });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now());
+
+    expect(creates()).toEqual(['email-1']);
+    expect(destroyed()).toEqual([]);
+    expect(result).toMatchObject({ scheduled: true, emailId: 'email-1', emailSubmissionId: 'sub-new' });
+  });
+
+  it('still reports the release when the replaced original cannot be removed', async () => {
+    const { client, creates } = scriptServer(tomorrow(), { destroyFails: true });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now());
+
+    expect(creates()).toEqual(['copy-1']);
+    expect(result).toMatchObject({ scheduled: true, emailId: 'copy-1', emailSubmissionId: 'sub-new' });
+    expect(logged).toHaveBeenCalledWith('Failed to remove the message the re-stamped copy replaced:', expect.anything());
+  });
+
+  it('sends once on a double click of Send now: the second finds the original canceled and removes its copy', async () => {
+    const { client, destroyed, creates } = scriptServer(tomorrow());
+
+    const [first, second] = await Promise.allSettled([
+      client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now()),
+      client.rescheduleEmailSubmission('sub-old', 'email-1', 'identity-1', now()),
+    ]);
+
+    const outcomes = [first, second];
+    expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    const lost = outcomes.find((o) => o.status === 'rejected') as PromiseRejectedResult;
+    expect(lost.reason).toMatchObject({ name: 'NoLongerScheduledError' });
+    expect(creates()).toHaveLength(1);
+    const kept = creates()[0];
+    // The loser's copy goes, and the winner's replaced original.
+    expect(destroyed().sort()).toEqual(['copy-1', 'copy-2', 'email-1'].filter((id) => id !== kept).sort());
   });
 });

@@ -12337,15 +12337,37 @@ export class JMAPClient implements IJMAPClient {
       return { id, sendAt: result?.created?.replacement?.sendAt, deliveryStatus: statusReadBack.deliveryStatus };
     };
 
-    // Cancel first. Some servers allow only one active submission per Email
-    // and reject a second create for the same emailId, and servers that undo
+    // Cancel before the replacement submission is created. Some servers allow
+    // only one active submission per Email and reject a second create for the
+    // same emailId, and servers that undo
     // onSuccessUpdateEmail on cancel would pull the message back to Drafts if
     // the original were canceled after the replacement existed (#1308).
     // If this fails, nothing has changed and the original still goes out -
     // unless it went out already ("Send now" of a message due any moment).
+    //
+    // The held message is stamped with its release time (scheduledReleaseDate).
+    // Moved by more than a few seconds - "Send now" on a mail due tomorrow,
+    // a later time - it would go out with the old stamp, possibly dated in
+    // the future. An Email cannot change, so a re-stamped copy replaces it.
+    // The copy is made before the cancel: a tab closed in between leaves the
+    // original scheduled (and a spare copy in Drafts), never a message that
+    // was canceled and goes nowhere. Without a copy the message still goes,
+    // as it did before.
+    const restampedId = await this.restampForRelease(emailId, holdUntil, submissionAccountId, draftsMailbox?.id)
+      .catch((error) => {
+        console.error('Failed to re-stamp the rescheduled message with its new release time:', error);
+        return null;
+      });
+    const releaseEmailId = restampedId ?? emailId;
+    // The cancel is the lock: of two "Send now" at once, the second finds the
+    // original canceled and takes its own copy back out.
     try {
       await this.cancelEmailSubmission(submissionId, submissionAccountId);
     } catch (error) {
+      if (restampedId) {
+        await this.deleteEmail(restampedId, submissionAccountId)
+          .catch((cleanupError) => console.error('Failed to remove the re-stamped copy after a failed cancel:', cleanupError));
+      }
       const status = await this.getSubmissionStatus(submissionId, submissionAccountId).catch(() => undefined);
       if (status === 'final' || status === 'canceled') throw new NoLongerScheduledError(status === 'final');
       throw error;
@@ -12362,17 +12384,6 @@ export class JMAPClient implements IJMAPClient {
       return delivery.rejected;
     };
 
-    // The held message is stamped with its release time (scheduledReleaseDate).
-    // Moved by more than a few seconds - "Send now" on a mail due tomorrow,
-    // a later time - it would go out with the old stamp, possibly dated in
-    // the future. An Email cannot change, so a re-stamped copy replaces it.
-    // Without one the message still goes, as it did before.
-    const restampedId = await this.restampForRelease(emailId, holdUntil, submissionAccountId, draftsMailbox?.id)
-      .catch((error) => {
-        console.error('Failed to re-stamp the rescheduled message with its new release time:', error);
-        return null;
-      });
-    const releaseEmailId = restampedId ?? emailId;
 
     let replacement: Created;
     try {
