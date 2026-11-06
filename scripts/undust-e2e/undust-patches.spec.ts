@@ -267,6 +267,27 @@ test("the composer's signature can be selected and copied, and still unlocks on 
   await page.keyboard.press("Control+z");
   await expect(editor.locator("[data-signature-block-node]")).toHaveCount(1);
 
+  const dragAcross = async () => {
+    const b = (await island.locator("em").boundingBox())!;
+    await page.mouse.move(b.x + 1, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width - 1, b.y + b.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+  // A key after a selection in the signature is the editor's again: Enter
+  // opens a line after the block and what follows is typed there.
+  await dragAcross();
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("After the signature");
+  await expect(editor.locator("p", { hasText: "After the signature" })).toHaveCount(1);
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(1);
+  // Ctrl+A from there selects the whole body, visibly, and copies it all.
+  await dragAcross();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+c");
+  await expect.poll(async () => (await readClipboard(page)).text).toContain("After the signature");
+  expect((await readClipboard(page)).text).toContain("Bulwark Webmail Developer");
+
   // Ctrl+A / Ctrl+C of the body takes the signature along, text and HTML.
   await editor.locator("p").first().click();
   await page.keyboard.press("Control+a");
