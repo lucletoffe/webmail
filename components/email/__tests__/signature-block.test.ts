@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
 import { AllSelection, NodeSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,6 +8,7 @@ import {
   SignatureBlock,
   buildSignatureBlock,
   containsEmbeddedSignature,
+  containsOwnEmbeddedSignature,
   unlockSignatureBlock,
   SIGNATURE_BLOCK_MARKER,
   SIGNATURE_RANGE_MARKER,
@@ -67,6 +68,15 @@ describe('signature-block', () => {
 
     it('returns false for a body with no signature', () => {
       expect(containsEmbeddedSignature('<p>Hi</p><blockquote>quoted</blockquote>')).toBe(false);
+    });
+
+    it('containsOwnEmbeddedSignature leaves out the markers of a quoted mail (undust sig3)', () => {
+      const signed = bracketed('<b>Alice</b>');
+      expect(containsOwnEmbeddedSignature(signed)).toBe(true);
+      expect(containsOwnEmbeddedSignature(`<p>Agreed</p><blockquote>${signed}</blockquote>`)).toBe(false);
+      expect(containsOwnEmbeddedSignature(`<p>Agreed</p><div data-quoted-html="">${signed}</div>`)).toBe(false);
+      expect(containsOwnEmbeddedSignature(`${signed}<blockquote>${signed}</blockquote>`)).toBe(true);
+      expect(containsOwnEmbeddedSignature('<p>Hi</p>')).toBe(false);
     });
   });
 
@@ -385,10 +395,10 @@ describe('copying the signature (undust sig3)', () => {
         desc.removeEventListener(type, listener);
         return stopped;
       };
-      for (const type of ['mousedown', 'mouseup', 'touchstart', 'touchend', 'selectstart', 'copy', 'contextmenu', 'pointerdown']) {
+      for (const type of ['mousedown', 'mouseup', 'touchstart', 'touchend', 'selectstart', 'copy', 'contextmenu', 'pointerdown', 'focus', 'dragstart']) {
         expect(stoppedFromInside(type), type).toBe(true);
       }
-      for (const type of ['keydown', 'beforeinput', 'dragstart', 'drop']) {
+      for (const type of ['keydown', 'beforeinput', 'drop']) {
         expect(stoppedFromInside(type), type).toBe(false);
       }
       // An event of the surrounding document is ProseMirror's.
@@ -416,6 +426,27 @@ describe('copying the signature (undust sig3)', () => {
       editor.commands.deleteSelection();
       expect(serializeEditorContent(editor)).not.toContain(SIGNATURE_BLOCK_MARKER);
     } finally {
+      editor.destroy();
+    }
+  });
+
+  it('gives the focus back to the editor on a key, except Copy, and cancels a drag', () => {
+    const editor = makeEditor(bracketed(SIG));
+    document.body.appendChild(editor.view.dom);
+    try {
+      const desc = editor.view.dom.querySelector('.signature-block-island') as HTMLElement;
+      const inner = desc.shadowRoot!.firstElementChild as HTMLElement;
+      const focus = vi.spyOn(editor.view, 'focus');
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, composed: true }));
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true, bubbles: true, composed: true }));
+      expect(focus).not.toHaveBeenCalled();
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, composed: true }));
+      expect(focus).toHaveBeenCalledTimes(1);
+      const drag = new Event('dragstart', { bubbles: true, composed: true, cancelable: true });
+      inner.dispatchEvent(drag);
+      expect(drag.defaultPrevented).toBe(true);
+    } finally {
+      editor.view.dom.remove();
       editor.destroy();
     }
   });
