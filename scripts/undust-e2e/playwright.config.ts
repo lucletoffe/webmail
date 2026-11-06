@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // undust fork: one pass through each patch the fork carries on top of
-// upstream (composer signature, scheduled send, pending RSVP, custom keys,
+// upstream (composer signature and its copy, locked signature on external
+// drafts, scheduled send, pending RSVP, custom keys,
 // undust visio), against the mock JMAP server of a production build:
 //
 //   DEV_MOCK_JMAP=true npx next build --webpack

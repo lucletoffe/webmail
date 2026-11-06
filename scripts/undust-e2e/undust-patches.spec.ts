@@ -216,3 +216,132 @@ test("the event form reserves an undust visio room", async ({ page }) => {
   await generate.click();
   await expect(page.getByPlaceholder("https://meet.example.com/...")).toHaveValue("https://ops.undust.co/meet/e2e-room");
 });
+
+/** What the page's clipboard holds now, as text and as HTML. */
+async function readClipboard(page: Page): Promise<{ text: string; html: string }> {
+  return page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    let text = "";
+    let html = "";
+    for (const item of items) {
+      if (item.types.includes("text/plain")) text += await (await item.getType("text/plain")).text();
+      if (item.types.includes("text/html")) html += await (await item.getType("text/html")).text();
+    }
+    return { text, html };
+  });
+}
+
+test("the composer's signature can be selected and copied, and still unlocks on a double-click (sig3)", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const calls = recordJmap(page);
+  await signIn(page);
+  const editor = await openComposer(page, "bob@example.com", "e2e signature copy", "Hello Bob");
+  const island = editor.locator(".signature-block-island");
+  const line = island.locator("em", { hasText: "Bulwark Webmail Developer" });
+  await expect(line).toBeVisible();
+
+  // A drag across a line of the signature selects its text, it no longer
+  // takes the whole block, and Copy copies it.
+  const box = (await line.boundingBox())!;
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const selected = await island.evaluate((el) => {
+    const root = el.shadowRoot as ShadowRoot & { getSelection?: () => Selection | null };
+    return (root.getSelection?.() ?? document.getSelection())?.toString() ?? "";
+  });
+  expect(selected).toContain("Bulwark Webmail");
+  await page.keyboard.press("Control+c");
+  await expect.poll(async () => (await readClipboard(page)).text).toContain("Bulwark Webmail");
+  // Selecting is not an edit: the block is still there, locked, and the
+  // editor holds it selected as a whole.
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(1);
+  await expect(island).toHaveClass(/ProseMirror-selectednode/);
+  // Backspace there removes the whole signature, as it did on a
+  // click-selected block; Undo brings it back.
+  await page.keyboard.press("Backspace");
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);
+  await expect(editor.getByText("Hello Bob")).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(1);
+
+  // Ctrl+A / Ctrl+C of the body takes the signature along, text and HTML.
+  await editor.locator("p").first().click();
+  await page.keyboard.press("Control+a");
+  await page.keyboard.press("Control+c");
+  await expect.poll(async () => (await readClipboard(page)).text).toContain("Hello Bob");
+  const all = await readClipboard(page);
+  expect(all.text).toContain("Dev User");
+  expect(all.text).toContain("Bulwark Webmail Developer");
+  expect(all.html).toContain("<em>Bulwark Webmail Developer</em>");
+
+  // The double-click unlock (#862) still turns it into editable text.
+  await editor.locator("p").first().click();
+  await island.locator("em").dblclick();
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);
+  await expect(editor.getByText("Bulwark Webmail Developer")).toBeVisible();
+
+  await page.locator('[data-testid="composer-send"]:visible').first().click();
+  await expect.poll(() => { try { return createdHtml(calls, "e2e signature copy").html; } catch { return ""; } }).toContain("Hello Bob");
+  const { html } = createdHtml(calls, "e2e signature copy");
+  expect(countOf(html, "Bulwark Webmail Developer")).toBe(1);
+});
+
+test("a re-opened draft written elsewhere goes out with its author's signature only, under a locked one (sig3)", async ({ page }) => {
+  const LOCKED = "ACME e2e locked";
+  const HAND = "Signed by hand, e2e";
+  // The admin locks an organisation signature.
+  await page.route("**/api/admin/policy", async (route) => {
+    const response = await route.fetch();
+    const policy = await response.json().catch(() => ({})) as Record<string, Record<string, unknown> | undefined>;
+    policy.restrictions = { ...(policy.restrictions ?? {}), signature: { locked: true } };
+    policy.organisation = { ...(policy.organisation ?? {}), signature: { html: `<p>{name}<br>${LOCKED}</p>`, text: `{name}\n${LOCKED}`, fields: [] } };
+    await route.fulfill({ response, json: policy });
+  });
+  // The seeded draft "Standup notes" comes back as an agent drops one over
+  // JMAP: HTML, signed its own way, no signature markers.
+  await page.route("**/api/dev-jmap/api", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    for (const [name, result] of body.methodResponses ?? []) {
+      if (name !== "Email/get") continue;
+      for (const email of result.list ?? []) {
+        if (email.id !== "email-009") continue;
+        email.htmlBody = [{ partId: "h1", blobId: "blob-e2e-h1", size: 120, type: "text/html" }];
+        email.textBody = [{ partId: "t1", blobId: "blob-e2e-t1", size: 60, type: "text/plain" }];
+        email.bodyValues = {
+          ...(email.bodyValues ?? {}),
+          h1: { value: `<p>Standup: all good.</p><p>-- <br>Dev<br>${HAND}</p>` },
+          t1: { value: `Standup: all good.\n\n-- \nDev\n${HAND}` },
+        };
+      }
+    }
+    await route.fulfill({ response, json: body });
+  });
+  const calls = recordJmap(page);
+  await signIn(page);
+
+  // The lock is on: a new mail is signed with it.
+  await openComposer(page, "bob@example.com", "e2e locked new", "Hello Bob");
+  await page.locator('[data-testid="composer-send"]:visible').first().click();
+  await expect.poll(() => { try { return createdHtml(calls, "e2e locked new").html; } catch { return ""; } }).toContain("Hello Bob");
+  expect(countOf(createdHtml(calls, "e2e locked new").html, LOCKED)).toBe(1);
+
+  // The external draft: no second signature in the composer, none at send.
+  await page.locator('[data-testid="folder-row"][data-folder-role="drafts"]').first().click();
+  await page.locator('[data-tour="email-list"] [role="row"]', { hasText: "Standup notes" }).first().click();
+  await page.getByTestId("edit-draft").first().click();
+  const editor = page.locator(".ProseMirror").first();
+  await expect(editor.getByText(HAND)).toBeVisible();
+  await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);
+  await page.locator('[data-testid="composer-send"]:visible').first().click();
+  await expect.poll(() => { try { return createdHtml(calls, "Standup notes").html; } catch { return ""; } }).toContain(HAND);
+  const sent = createdHtml(calls, "Standup notes");
+  expect(countOf(sent.html, HAND)).toBe(1);
+  expect(countOf(sent.html, LOCKED)).toBe(0);
+  const values = (sent.draft.bodyValues ?? {}) as Record<string, { value: string }>;
+  const text = ((sent.draft.textBody as Array<{ partId: string }> | undefined) ?? []).map((part) => values[part.partId]?.value ?? "").join("");
+  expect(countOf(text, LOCKED)).toBe(0);
+});
