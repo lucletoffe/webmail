@@ -1,9 +1,10 @@
 "use client";
 
 import { Node as TiptapNode, mergeAttributes, type Editor } from "@tiptap/core";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { DOMParser as ProseMirrorDOMParser } from "@tiptap/pm/model";
 import { parseHtmlSafely, sanitizeComposerIslandHtml } from "@/lib/email-sanitization";
+import { htmlToPlainText } from "@/lib/html-to-text";
 
 // Marker attribute that identifies the signature wrapper in serialized HTML,
 // so parseHTML can recognise it on the way back in (initial content, drafts).
@@ -33,6 +34,19 @@ function forceLinksToNewTab(root: HTMLElement): void {
 }
 
 /**
+ * Events the browser keeps when they come from inside the signature island:
+ * the ones that select text and copy it (undust fork, sig3). Everything else
+ * - keys, input, drag and drop - stays ProseMirror's.
+ */
+const ISLAND_NATIVE_EVENTS = new Set([
+  "mousedown", "mouseup", "click", "dblclick", "contextmenu",
+  "pointerdown", "pointerup", "pointermove",
+  "touchstart", "touchmove", "touchend",
+  "selectstart", "copy", "cut",
+  "focus", "blur", "focusin", "focusout",
+]);
+
+/**
  * SignatureBlock — an atomic, NON-editable block node that carries the
  * *verbatim* HTML of the user's identity signature in its `html` attribute.
  *
@@ -44,8 +58,10 @@ function forceLinksToNewTab(root: HTMLElement): void {
  * and in the sent mail (emitted by serializeEditorContent in quoted-html.ts).
  *
  * Mirrors QuotedHtml, but the inner region is read-only: a signature is meant
- * to be inserted/removed as a unit, not edited inline. Select the node and
- * press Backspace/Delete to drop the whole signature.
+ * to be inserted/removed as a unit, not edited inline. Select the node (arrow
+ * keys, or Backspace after it) and press Backspace/Delete to drop the whole
+ * signature. Its text can be selected and copied like the reading view's
+ * (undust fork, sig3).
  *
  * Read-only is the default, not a wall (#822): double-click the block to
  * dissolve it into regular editable content via
@@ -93,10 +109,29 @@ export const SignatureBlock = TiptapNode.create({
     return [{ tag: `div[${SIGNATURE_BLOCK_MARKER}]` }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    // Only used for ProseMirror's internal/clipboard round-trip. The send /
-    // draft path uses serializeEditorContent() which inlines attrs.html.
-    return ["div", mergeAttributes(HTMLAttributes, { [SIGNATURE_BLOCK_MARKER]: "" })];
+  renderHTML({ node, HTMLAttributes }) {
+    // Used for ProseMirror's clipboard (and getHTML). The send / draft path
+    // uses serializeEditorContent() which inlines attrs.html itself.
+    //
+    // undust fork (sig3): the wrapper carries the signature's own HTML, so
+    // Ctrl+A / Ctrl+C of the body copies the signature too (an empty wrapper
+    // dropped it from the clipboard), and pasting it back into a composer
+    // parses into a signature block again. Built in an inert document: the
+    // signature's images must not load from here. attrs.html is sanitized on
+    // every way in (parseHTML, buildSignatureBlock's callers).
+    const inert = document.implementation.createHTMLDocument("");
+    const wrapper = inert.createElement("div");
+    for (const [name, value] of Object.entries(mergeAttributes(HTMLAttributes, { [SIGNATURE_BLOCK_MARKER]: "" }))) {
+      if (value !== null && value !== undefined && value !== false) wrapper.setAttribute(name, String(value));
+    }
+    wrapper.innerHTML = String(node.attrs.html || "");
+    return wrapper;
+  },
+
+  renderText({ node }) {
+    // The text ProseMirror's plain-text clipboard (and getText) gives the
+    // signature: its lines, not nothing (undust fork, sig3).
+    return htmlToPlainText(String(node.attrs.html || ""));
   },
 
   addNodeView() {
@@ -132,6 +167,24 @@ export const SignatureBlock = TiptapNode.create({
       const inner = document.createElement("div");
       // Read-only: a signature is inserted/removed as a unit, not edited inline.
       inner.contentEditable = "false";
+      // ...but its text can be selected and copied (undust fork, sig3): with
+      // the island non-editable inside an editable host, `user-select: auto`
+      // resolves differently across engines, so say it.
+      inner.style.cssText = "user-select:text;-webkit-user-select:text;outline:none;";
+      // A press inside the island takes the focus off the editor: while the
+      // editor has it, ProseMirror reads every selectionchange, sees the
+      // selection at the shadow host and puts its caret back, which wiped
+      // the text selection as it was being made (drag, long press). Focused,
+      // the island is the browser's; ProseMirror keeps the atom selected, so
+      // Backspace/Delete still remove the whole signature.
+      inner.tabIndex = -1;
+      inner.addEventListener("focus", () => {
+        const pos = typeof getPos === "function" ? getPos() : undefined;
+        if (pos == null || !editor.isEditable) return;
+        const { state } = editor.view;
+        if (state.selection instanceof NodeSelection && state.selection.from === pos) return;
+        editor.view.dispatch(state.tr.setSelection(NodeSelection.create(state.doc, pos)).setMeta("addToHistory", false));
+      });
       // Track what we were given, not what's in the DOM: forceLinksToNewTab
       // rewrites the markup, so inner.innerHTML no longer round-trips against
       // attrs.html and comparing the two would rewrite on every transaction.
@@ -144,9 +197,21 @@ export const SignatureBlock = TiptapNode.create({
         dom,
         // ProseMirror must not try to reconcile the foreign shadow content.
         ignoreMutation: () => true,
-        // Let ProseMirror handle all events so clicking selects the atom and
-        // Backspace/Delete removes the whole signature.
-        stopEvent: () => false,
+        // undust fork (sig3): pointer, touch and clipboard events from inside
+        // the island are the browser's, so a drag, a long press or a
+        // double-click selects the signature's text and Copy copies it
+        // (focus included: the island's focus is not the editor's). When
+        // ProseMirror took them, a click selected the whole atom and the text
+        // could never be selected (nor copied, on a phone). Events inside the
+        // shadow root are retargeted to `dom`. Keys go to ProseMirror (their
+        // target is the editor), so the arrows still select the atom and
+        // Backspace/Delete remove the whole signature; the double-click
+        // unlock above is a listener of its own.
+        stopEvent: (event) => {
+          if (!ISLAND_NATIVE_EVENTS.has(event.type)) return false;
+          const target = event.target as Node | null;
+          return !!target && dom.contains(target);
+        },
         update: (updatedNode) => {
           if (updatedNode.type.name !== "signatureBlock") return false;
           const nextHtml = updatedNode.attrs.html || "";
