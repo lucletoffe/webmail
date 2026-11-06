@@ -53,6 +53,16 @@ export interface OutgoingContext {
    * stop there.
    */
   forwardedSeparator?: string;
+  /**
+   * undust fork (sig3): the message is a re-opened HTML draft the composer
+   * takes for one written elsewhere: no data-signature-block marker outside
+   * its quotes when it opened, with automatic signature insertion on (see
+   * reopenedExternalDraft in email-composer.tsx). A reading of the body, not
+   * a proof. Our agents drop drafts, already signed their own way, into
+   * Drafts over JMAP; the composer leaves such a draft unsigned (sig2), and
+   * so does the org-signature finaliser, even with a locked signature.
+   */
+  reopenedExternalDraft?: boolean;
 }
 
 export interface OutgoingBodies {

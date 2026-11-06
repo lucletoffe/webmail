@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Editor } from '@tiptap/core';
+import { AllSelection, NodeSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import Paragraph from '@tiptap/extension-paragraph';
 
@@ -7,6 +8,7 @@ import {
   SignatureBlock,
   buildSignatureBlock,
   containsEmbeddedSignature,
+  containsOwnEmbeddedSignature,
   unlockSignatureBlock,
   SIGNATURE_BLOCK_MARKER,
   SIGNATURE_RANGE_MARKER,
@@ -66,6 +68,15 @@ describe('signature-block', () => {
 
     it('returns false for a body with no signature', () => {
       expect(containsEmbeddedSignature('<p>Hi</p><blockquote>quoted</blockquote>')).toBe(false);
+    });
+
+    it('containsOwnEmbeddedSignature leaves out the markers of a quoted mail (undust sig3)', () => {
+      const signed = bracketed('<b>Alice</b>');
+      expect(containsOwnEmbeddedSignature(signed)).toBe(true);
+      expect(containsOwnEmbeddedSignature(`<p>Agreed</p><blockquote>${signed}</blockquote>`)).toBe(false);
+      expect(containsOwnEmbeddedSignature(`<p>Agreed</p><div data-quoted-html="">${signed}</div>`)).toBe(false);
+      expect(containsOwnEmbeddedSignature(`${signed}<blockquote>${signed}</blockquote>`)).toBe(true);
+      expect(containsOwnEmbeddedSignature('<p>Hi</p>')).toBe(false);
     });
   });
 
@@ -304,6 +315,152 @@ Der Inhalt dieser E-Mail ist vertraulich.
       expect((out.match(/<br/g) || []).length).toBe(8);
       expect(out).toContain('font-size: 9pt');
       expect(out).toContain('Jane Doe');
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+// undust fork (sig3): the signature can be selected and copied in the
+// composer, by finger and by keyboard, like in the reading view.
+describe('copying the signature (undust sig3)', () => {
+  const SIG = '<p><b>Luc Létoffé</b><br>Fondateur<br>+33 6 12 34 56 78<br>'
+    + '<a href="mailto:luc@undust.co">luc@undust.co</a></p>';
+
+  it('puts the signature in the clipboard of a Ctrl+A / Ctrl+C, HTML and text', () => {
+    const editor = makeEditor(bracketed(SIG));
+    try {
+      // Ctrl+A: the editor's own selection (tiptap's text serializer reads it).
+      editor.commands.selectAll();
+      expect(editor.state.selection).toBeInstanceOf(AllSelection);
+      const { dom, text } = editor.view.serializeForClipboard(editor.state.selection.content());
+      expect(dom.innerHTML).toContain('Luc Létoffé');
+      expect(dom.innerHTML).toContain('+33 6 12 34 56 78');
+      expect(dom.innerHTML).toContain('href="mailto:luc@undust.co"');
+      expect(dom.querySelector(`[${SIGNATURE_BLOCK_MARKER}]`)).not.toBeNull();
+      expect(text).toContain('Hi');
+      expect(text).toContain('Luc Létoffé\nFondateur\n+33 6 12 34 56 78');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it('parses a pasted copy back into one signature block', () => {
+    const source = makeEditor(bracketed(SIG));
+    const target = makeEditor('<p>Draft</p>');
+    try {
+      source.commands.selectAll();
+      const { dom } = source.view.serializeForClipboard(source.state.selection.content());
+      target.commands.insertContent(dom.innerHTML);
+      const out = serializeEditorContent(target);
+      expect(out.split(SIGNATURE_BLOCK_MARKER).length - 1).toBe(1);
+      expect(out.split('Luc Létoffé').length - 1).toBe(1);
+    } finally {
+      source.destroy();
+      target.destroy();
+    }
+  });
+
+  it('leaves what is sent unchanged', () => {
+    const editor = makeEditor(bracketed(SIG));
+    try {
+      const out = serializeEditorContent(editor);
+      expect(out).toContain(buildSignatureBlock(SIG));
+      expect(out.split('Luc Létoffé').length - 1).toBe(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it('leaves selecting and copying inside the island to the browser, keys to ProseMirror', () => {
+    const editor = makeEditor(bracketed(SIG));
+    document.body.appendChild(editor.view.dom);
+    try {
+      const desc = editor.view.dom.querySelector('.signature-block-island') as HTMLElement;
+      const inner = desc.shadowRoot!.firstElementChild as HTMLElement;
+      expect(inner.style.userSelect).toBe('text');
+
+      const pos = findSignaturePos(editor);
+      // The node view ProseMirror holds for the atom.
+      const nodeView = (editor.view as unknown as { docView: { children: Array<{ dom: Node; stopEvent: (e: Event) => boolean }> } })
+        .docView.children.find((child) => child.dom === desc)!;
+      expect(nodeView).toBeTruthy();
+      expect(pos).toBeGreaterThanOrEqual(0);
+
+      const stoppedFromInside = (type: string, init: EventInit = {}) => {
+        let stopped: boolean | null = null;
+        const listener = (event: Event) => { stopped = nodeView.stopEvent(event); };
+        desc.addEventListener(type, listener);
+        inner.dispatchEvent(new Event(type, { bubbles: true, composed: true, ...init }));
+        desc.removeEventListener(type, listener);
+        return stopped;
+      };
+      for (const type of ['mousedown', 'mouseup', 'touchstart', 'touchend', 'selectstart', 'copy', 'contextmenu', 'pointerdown', 'focus', 'dragstart']) {
+        expect(stoppedFromInside(type), type).toBe(true);
+      }
+      for (const type of ['keydown', 'beforeinput', 'drop']) {
+        expect(stoppedFromInside(type), type).toBe(false);
+      }
+      // An event of the surrounding document is ProseMirror's.
+      const outside = new Event('mousedown', { bubbles: true });
+      Object.defineProperty(outside, 'target', { value: editor.view.dom });
+      expect(nodeView.stopEvent(outside)).toBe(false);
+    } finally {
+      editor.view.dom.remove();
+      editor.destroy();
+    }
+  });
+
+  it('selects the atom when the island takes the focus, so Backspace removes it whole', () => {
+    const editor = makeEditor(bracketed(SIG));
+    try {
+      const desc = editor.view.dom.querySelector('.signature-block-island') as HTMLElement;
+      const inner = desc.shadowRoot!.firstElementChild as HTMLElement;
+      // Focusable, so a press takes the focus off the editor and ProseMirror
+      // stops resetting the selection the browser makes in there.
+      expect(inner.tabIndex).toBe(-1);
+      inner.dispatchEvent(new FocusEvent('focus'));
+      const { selection } = editor.state;
+      expect(selection).toBeInstanceOf(NodeSelection);
+      expect(selection.from).toBe(findSignaturePos(editor));
+      editor.commands.deleteSelection();
+      expect(serializeEditorContent(editor)).not.toContain(SIGNATURE_BLOCK_MARKER);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it('gives the focus back to the editor on a key, except Copy, and cancels a drag', () => {
+    const editor = makeEditor(bracketed(SIG));
+    document.body.appendChild(editor.view.dom);
+    try {
+      const desc = editor.view.dom.querySelector('.signature-block-island') as HTMLElement;
+      const inner = desc.shadowRoot!.firstElementChild as HTMLElement;
+      const focus = vi.spyOn(editor.view, 'focus');
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, composed: true }));
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true, bubbles: true, composed: true }));
+      expect(focus).not.toHaveBeenCalled();
+      inner.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true, composed: true }));
+      expect(focus).toHaveBeenCalledTimes(1);
+      const drag = new Event('dragstart', { bubbles: true, composed: true, cancelable: true });
+      inner.dispatchEvent(drag);
+      expect(drag.defaultPrevented).toBe(true);
+    } finally {
+      editor.view.dom.remove();
+      editor.destroy();
+    }
+  });
+
+  it('still unlocks on a double-click (#862)', () => {
+    const editor = makeEditor(bracketed(SIG));
+    try {
+      const desc = editor.view.dom.querySelector('.signature-block-island') as HTMLElement;
+      const inner = desc.shadowRoot!.firstElementChild as HTMLElement;
+      inner.querySelector('b')!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true, cancelable: true }));
+      const out = serializeEditorContent(editor);
+      expect(out).not.toContain(SIGNATURE_BLOCK_MARKER);
+      expect(out).toContain('Luc Létoffé');
+      expect(containsEmbeddedSignature(out)).toBe(true);
     } finally {
       editor.destroy();
     }
