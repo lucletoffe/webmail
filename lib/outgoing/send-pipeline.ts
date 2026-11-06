@@ -53,6 +53,15 @@ export interface OutgoingContext {
    * stop there.
    */
   forwardedSeparator?: string;
+  /**
+   * undust fork (sig3): the message is a re-opened draft whose body carried
+   * no signature when it opened (no data-signature-block markers; in plain
+   * text, not the signature's text). Bulwark did not write that body - our
+   * agents drop drafts, already signed their own way, into Drafts over JMAP -
+   * so the composer leaves it unsigned (sig2), and so does the
+   * org-signature finaliser, even with a locked signature.
+   */
+  reopenedExternalDraft?: boolean;
 }
 
 export interface OutgoingBodies {

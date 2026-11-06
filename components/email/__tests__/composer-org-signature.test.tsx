@@ -371,18 +371,58 @@ describe('organisation signature in the composer', () => {
       expectOrgSignatureOnce(await send(onSend), 'Me');
     });
 
-    it('signs a re-opened draft once, also one that already carries it', async () => {
+    it('signs a re-opened draft the composer wrote once, also one that already carries it', async () => {
+      // A mail the composer signed, saved: its body carries the signature range.
       const first = vi.fn();
-      const { unmount } = render(<EmailComposer initialData={DRAFT} onSend={first} />);
+      const { unmount } = render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={first} />);
       expectOrgSignatureOnce(await send(first), 'Me');
       const resent = first.mock.calls[0][0] as { htmlBody: string };
       unmount();
 
-      // The body as the composer saved it, signature range included.
       const withSignature = resent.htmlBody.replace(/^<div>|<\/div>$/g, '');
       const second = vi.fn();
-      render(<EmailComposer initialData={{ ...DRAFT, body: withSignature }} onSend={second} />);
+      const { unmount: unmountSecond } = render(<EmailComposer initialData={{ ...DRAFT, body: withSignature }} onSend={second} />);
       expectOrgSignatureOnce(await send(second), 'Me');
+      unmountSecond();
+
+      // The user deleted the signature block itself: its marker paragraphs
+      // still say the composer wrote the draft, so the lock puts it back.
+      const deleted = withSignature.replace(/<div data-signature-block-node="?"?>[\s\S]*?<\/div>(?=<p data-signature-block="end")/, '');
+      expect(deleted).not.toContain('ACME Ltd');
+      const third = vi.fn();
+      render(<EmailComposer initialData={{ ...DRAFT, body: deleted }} onSend={third} />);
+      expectOrgSignatureOnce(await send(third), 'Me');
+    });
+
+    // undust fork (sig3): a draft dropped into Drafts by another client (our
+    // agents, over JMAP) has no signature markers. The composer leaves it
+    // unsigned (sig2) and the lock does not sign it at send time either.
+    it('sends a re-opened draft written elsewhere as its author ended it', async () => {
+      const unsigned = vi.fn();
+      const { unmount } = render(<EmailComposer initialData={DRAFT} onSend={unsigned} />);
+      const sentUnsigned = await send(unsigned);
+      expect(sentUnsigned.htmlBody).toContain('Thanks, looks good.');
+      expect(countOf(sentUnsigned.htmlBody!, 'ACME Ltd')).toBe(0);
+      expect(countOf(sentUnsigned.body, 'ACME Ltd')).toBe(0);
+      unmount();
+
+      const signedByHand = vi.fn();
+      const manual = '<p>Thanks, looks good.</p><p>-- <br>Me, by hand<br>ACME Ltd</p>';
+      render(<EmailComposer initialData={{ ...DRAFT, body: manual }} onSend={signedByHand} />);
+      const sent = await send(signedByHand);
+      expect(countOf(sent.htmlBody!, 'ACME Ltd')).toBe(1);
+      expect(countOf(sent.body, 'ACME Ltd')).toBe(1);
+      expect(sent.htmlBody).not.toContain('Phone: +49 30 1');
+    });
+
+    it('sends a plain-text draft written elsewhere as its author ended it', async () => {
+      const onSend = vi.fn();
+      const body = 'Thanks, looks good.\n\n-- \nMe, by hand';
+      render(<EmailComposer initialData={{ ...DRAFT, body, plainTextMode: true }} onSend={onSend} />);
+      const sent = await send(onSend);
+      expect(sent.htmlBody).toBeUndefined();
+      expect(sent.body).toContain('Me, by hand');
+      expect(countOf(sent.body, 'ACME Ltd')).toBe(0);
     });
 
     it('signs a plain-text mail and a plain-text reply once', async () => {

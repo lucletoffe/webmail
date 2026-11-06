@@ -944,6 +944,17 @@ export function EmailComposer({
   const [body, setBody] = useState(() =>
     initialData?.body != null ? withSignatureEmbedded(initialData.body) : getInitialBody()
   );
+  // undust fork (sig3): a re-opened draft that carried no signature when it
+  // opened came from elsewhere (see withSignatureEmbedded). Fixed at opening:
+  // the send path tells the org-signature finaliser, so a locked signature
+  // is not added to it either. Plain text has no markers: the signature's
+  // text stands in for them.
+  const [reopenedExternalDraft] = useState(() => {
+    if (!initialData?.draftId || initialData.body == null) return false;
+    return initialPlainTextMode
+      ? !plainTextBodyHasSignature(initialData.body, initialSignatureIdentity)
+      : !containsEmbeddedSignature(initialData.body);
+  });
   const [showCc, setShowCc] = useState(() => initialData?.showCc
     ?? (prefill?.cc ? prefill.cc.length > 0 : getInitialCc().length > 0));
   const [showBcc, setShowBcc] = useState(initialData?.showBcc ?? false);
@@ -3647,6 +3658,7 @@ export function EmailComposer({
       mode,
       plainText: plainTextMode,
       forwardedSeparator: tQuote('forwarded_separator'),
+      reopenedExternalDraft,
       sender: currentIdentity
         ? { name: currentIdentity.name, email: currentIdentity.email, accountId: composingAccountId }
         : undefined,

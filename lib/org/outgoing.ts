@@ -8,7 +8,9 @@
  * - org-signature: a locked (or hidden) organisation signature the user
  *   deleted or changed in the editor is appended again once, at the end of
  *   the message (below the quote, where a reply's signature goes by
- *   default). Each part is checked and fixed on its own.
+ *   default). Each part is checked and fixed on its own. A re-opened draft
+ *   that came unsigned from elsewhere (context.reopenedExternalDraft) is
+ *   left as its author ended it (undust fork, sig3).
  * - org-disclaimer (stage `last`): the admin's disclaimer below
  *   everything, quote and plugin footers included, before a plugin signs or
  *   encrypts: `<hr>` and the HTML in the HTML part, a blank line and the
@@ -71,6 +73,10 @@ const asSignature = (filled: FilledSignature) => ({ htmlSignature: filled.html, 
  * unless it is missing, and then adds it once to the part that lacks it.
  */
 export function orgSignatureFinalizer(bodies: OutgoingBodies, context: OutgoingContext): OutgoingBodies {
+  // undust fork (sig3): the composer left a draft written elsewhere without
+  // the signature on purpose (sig2) - it ends the way its author signed it,
+  // and adding the locked one sent two signatures.
+  if (context.reopenedExternalDraft) return bodies;
   const setup = setupFor(context);
   if (!setup.signature || !isSignatureEnforced(setup.restriction)) return bodies;
   const signature = setup.signature;

@@ -110,3 +110,33 @@ describe('disclaimer, HTML and text templates that differ', () => {
     expect(finalizeAll(bodies, CONTEXT)).toEqual(bodies);
   });
 });
+
+// undust fork (sig3): the composer leaves a re-opened draft written elsewhere
+// unsigned (sig2); the lock leaves it so too, so it never goes out with two
+// signatures. Disclaimers are not signatures: they still go.
+describe('a re-opened draft written elsewhere', () => {
+  const signature = { html: '<p>{name}<br>ACME</p>', text: '{name}\nACME', fields: [] };
+  const external = { ...CONTEXT, reopenedExternalDraft: true };
+
+  it('keeps the signature its author wrote, and no locked one is added', () => {
+    setOrganisation({ signature });
+    const bodies = { html: '<p>Hi</p><p>-- <br>Alice, by hand</p>', text: 'Hi\n\n-- \nAlice, by hand' };
+    expect(finalizeOutgoing(bodies, external)).toEqual(bodies);
+    expect(finalizeOutgoing({ text: bodies.text }, { ...external, plainText: true })).toEqual({ text: bodies.text });
+  });
+
+  it('is signed by the lock like any other mail when the flag is off', () => {
+    setOrganisation({ signature });
+    const out = finalizeOutgoing({ html: '<p>Hi</p>', text: 'Hi' }, CONTEXT);
+    expect(count(out.html, 'ACME')).toBe(1);
+    expect(count(out.text, 'ACME')).toBe(1);
+  });
+
+  it('still gets the disclaimer', () => {
+    setOrganisation({ signature, disclaimer: { html: '<p>Confidential</p>', text: 'Confidential' } });
+    const out = finalizeAll({ html: '<p>Hi</p>', text: 'Hi' }, external);
+    expect(count(out.html, 'ACME')).toBe(0);
+    expect(count(out.html, 'Confidential')).toBe(1);
+    expect(count(out.text, 'Confidential')).toBe(1);
+  });
+});
