@@ -54,12 +54,13 @@ export interface OutgoingContext {
    */
   forwardedSeparator?: string;
   /**
-   * undust fork (sig3): the message is a re-opened draft whose body carried
-   * no signature when it opened (no data-signature-block markers; in plain
-   * text, not the signature's text). Bulwark did not write that body - our
-   * agents drop drafts, already signed their own way, into Drafts over JMAP -
-   * so the composer leaves it unsigned (sig2), and so does the
-   * org-signature finaliser, even with a locked signature.
+   * undust fork (sig3): the message is a re-opened HTML draft the composer
+   * takes for one written elsewhere: no data-signature-block marker outside
+   * its quotes when it opened, with automatic signature insertion on (see
+   * reopenedExternalDraft in email-composer.tsx). A reading of the body, not
+   * a proof. Our agents drop drafts, already signed their own way, into
+   * Drafts over JMAP; the composer leaves such a draft unsigned (sig2), and
+   * so does the org-signature finaliser, even with a locked signature.
    */
   reopenedExternalDraft?: boolean;
 }

@@ -61,7 +61,7 @@ import { isEditableEventTarget } from "@/lib/keyboard";
 import { isSingleKeyShortcutOff } from "@/lib/single-key-shortcuts";
 import { markReplyQuoteHeader } from "@/components/email/reply-quote-collapse";
 import { buildQuotedHtmlBlock, serializeEditorContent } from "@/components/email/quoted-html";
-import { containsEmbeddedSignature } from "@/components/email/signature-block";
+import { containsEmbeddedSignature, containsOwnEmbeddedSignature } from "@/components/email/signature-block";
 import {
   buildEmbeddedSignatureHtml,
   htmlComposeBodyToPlainText,
@@ -944,16 +944,21 @@ export function EmailComposer({
   const [body, setBody] = useState(() =>
     initialData?.body != null ? withSignatureEmbedded(initialData.body) : getInitialBody()
   );
-  // undust fork (sig3): a re-opened draft that carried no signature when it
-  // opened came from elsewhere (see withSignatureEmbedded). Fixed at opening:
-  // the send path tells the org-signature finaliser, so a locked signature
-  // is not added to it either. Plain text has no markers: the signature's
-  // text stands in for them.
+  // undust fork (sig3): whether a re-opened draft is taken for one written
+  // elsewhere (see withSignatureEmbedded), so the org-signature finaliser
+  // does not add a locked signature to it either. Fixed at opening. It is a
+  // reading of the body, not a proof of who wrote it, so it is only made
+  // where the composer would have left its marks:
+  // - an HTML body: the composer brackets every signature it embeds with
+  //   data-signature-block markers, also once the user deleted the block.
+  //   Markers inside a quote are the quoted mail's, not this draft's;
+  // - automatic insertion on for new mails and replies: with it off, the
+  //   composer saves its drafts without a signature, and without markers.
+  // A plain-text draft carries no markers whoever wrote it: the lock applies.
   const [reopenedExternalDraft] = useState(() => {
     if (!initialData?.draftId || initialData.body == null) return false;
-    return initialPlainTextMode
-      ? !plainTextBodyHasSignature(initialData.body, initialSignatureIdentity)
-      : !containsEmbeddedSignature(initialData.body);
+    if (initialPlainTextMode || !signatureNewMailEnabled || !signatureReplyForwardEnabled) return false;
+    return !containsOwnEmbeddedSignature(initialData.body);
   });
   const [showCc, setShowCc] = useState(() => initialData?.showCc
     ?? (prefill?.cc ? prefill.cc.length > 0 : getInitialCc().length > 0));

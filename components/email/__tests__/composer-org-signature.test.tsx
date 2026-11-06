@@ -415,14 +415,42 @@ describe('organisation signature in the composer', () => {
       expect(sent.htmlBody).not.toContain('Phone: +49 30 1');
     });
 
-    it('sends a plain-text draft written elsewhere as its author ended it', async () => {
+    it('tells a draft written elsewhere by the markers outside its quotes', async () => {
+      // An agent's reply quoting a mail the composer sent: the quote keeps
+      // that mail's signature markers, the reply is still the agent's.
+      const signedMail = vi.fn();
+      const { unmount } = render(<EmailComposer prefill={{ to: ['bob@example.com'] }} onSend={signedMail} />);
+      const quoted = ((await send(signedMail)).htmlBody ?? '').replace(/^<div>|<\/div>$/g, '');
+      expect(quoted).toContain('data-signature-block');
+      unmount();
+
       const onSend = vi.fn();
-      const body = 'Thanks, looks good.\n\n-- \nMe, by hand';
-      render(<EmailComposer initialData={{ ...DRAFT, body, plainTextMode: true }} onSend={onSend} />);
+      const body = `<p>Agreed.</p><p>-- <br>Me, by hand</p><blockquote>${quoted}</blockquote>`;
+      render(<EmailComposer initialData={{ ...DRAFT, body }} onSend={onSend} />);
       const sent = await send(onSend);
-      expect(sent.htmlBody).toBeUndefined();
-      expect(sent.body).toContain('Me, by hand');
-      expect(countOf(sent.body, 'ACME Ltd')).toBe(0);
+      // The quoted mail's signature, and no locked one on top.
+      expect(countOf(sent.htmlBody!, 'ACME Ltd')).toBe(1);
+      expect(countOf(sent.htmlBody!, 'Me, by hand')).toBe(1);
+      expect(sent.htmlBody!.indexOf('ACME Ltd')).toBeGreaterThan(sent.htmlBody!.indexOf('<blockquote'));
+    });
+
+    it('still signs a re-opened draft where markers say nothing', async () => {
+      // Plain text carries no markers, whoever wrote it.
+      const plain = vi.fn();
+      const { unmount } = render(<EmailComposer initialData={{ ...DRAFT, body: 'Thanks, looks good.', plainTextMode: true }} onSend={plain} />);
+      expectOrgSignatureOnce(await send(plain), 'Me');
+      unmount();
+
+      // With automatic insertion off the composer saves its drafts unsigned
+      // and without markers: the lock signs them at send time.
+      useSettingsStore.setState({ signatureNewMailEnabled: false });
+      try {
+        const autoOff = vi.fn();
+        render(<EmailComposer initialData={DRAFT} onSend={autoOff} />);
+        expectOrgSignatureOnce(await send(autoOff), 'Me');
+      } finally {
+        useSettingsStore.setState({ signatureNewMailEnabled: true });
+      }
     });
 
     it('signs a plain-text mail and a plain-text reply once', async () => {
