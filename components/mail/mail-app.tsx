@@ -1434,10 +1434,18 @@ export function MailApp({ linkSegments: routeSegments }: MailAppProps = {}) {
     onShowHelp: keyboardHandlers.onShowHelp,
     ...(calendarTabInFront ? {} : { onCompose: keyboardHandlers.onCompose }),
   }), [keyboardHandlers, calendarTabInFront]);
+  // A new message answers to its custom key there too (undust fork, keys1).
+  // The other custom keys act on mail, so they stay with the mail tab: a
+  // custom key is always taken from the browser, and there it would do nothing.
+  const anyTabBindings = useMemo(
+    () => (anyTabHandlers.onCompose && shortcutBindings.compose ? { compose: shortcutBindings.compose } : undefined),
+    [anyTabHandlers.onCompose, shortcutBindings],
+  );
   useKeyboardShortcuts({
     enabled: isAuthenticated && !showComposer && !mailShortcutsApply,
     singleKeyShortcuts,
     emails: NO_EMAILS,
+    customBindings: anyTabBindings,
     handlers: anyTabHandlers,
   });
   // Ctrl+Z / z: undo the last mail actions, newest first.

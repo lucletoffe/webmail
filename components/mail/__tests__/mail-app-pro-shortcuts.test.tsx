@@ -16,7 +16,7 @@ import { useProTabStore, type ProTabKind } from '@/stores/pro-tab-store';
 // from there: e on the Calendar tab archived the mail selected in the hidden
 // list.
 
-type ShortcutOptions = { enabled?: boolean; handlers: Record<string, unknown> };
+type ShortcutOptions = { enabled?: boolean; handlers: Record<string, unknown>; customBindings?: Record<string, string> };
 const shortcuts = vi.hoisted(() => ({ calls: [] as ShortcutOptions[] }));
 vi.mock('@/hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: (options: ShortcutOptions) => { shortcuts.calls.push(options); },
@@ -71,7 +71,7 @@ beforeEach(() => {
     getClientForAccount: () => client as never,
     getAllConnectedClients: () => new Map([['login-a', client]]) as never,
   });
-  useSettingsStore.setState({ enableUnifiedMailbox: false } as never);
+  useSettingsStore.setState({ enableUnifiedMailbox: false, shortcutBindings: {} } as never);
   useEmailStore.setState({
     emails: [], selectedEmail: null, selectedMailbox: 'inbox', selectedKeyword: null, mailboxes: [inbox],
     viewingAccountId: null, accountMailboxes: {}, isUnifiedView: false, unifiedRole: null,
@@ -145,6 +145,22 @@ describe('mail shortcuts under the Pro shell', () => {
     } as never);
     renderPro(false);
     expect(activeShortcuts()[0].handlers.onCompose).toBeTypeOf('function');
+  });
+
+  // keys1: a custom key for a new message replaces c on every tab where c
+  // composes; the custom keys of the mail actions stay with the mail tab.
+  it('gives a new message its custom key while another tab is in front', () => {
+    useSettingsStore.setState({ shortcutBindings: { compose: 'y', archive: 'mod+e' } } as never);
+    withTabInFront('files');
+    renderPro(false);
+    expect(activeShortcuts()[0].customBindings).toEqual({ compose: 'y' });
+  });
+
+  it('leaves the custom key of a new message out on the Calendar tab, as it does c', () => {
+    useSettingsStore.setState({ shortcutBindings: { compose: 'y' } } as never);
+    withTabInFront('calendar');
+    renderPro(false);
+    expect(activeShortcuts()[0].customBindings).toBeUndefined();
   });
 
   it('has the mail shortcuts on while the mail tab is in front', () => {

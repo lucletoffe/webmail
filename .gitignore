@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# Playwright run state (scripts/undust-e2e)
+/test-results/
 
 # next.js
 /.next/

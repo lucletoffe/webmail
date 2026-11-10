@@ -1934,7 +1934,7 @@
       }
     },
     "keyboard_shortcuts": {
-      "title": "Raccourcis clavier",
+      "title": "Touches des actions sur les messages",
       "description": "Donnez vos propres touches aux actions sur les messages, par exemple Ctrl + E pour archiver. La touche choisie remplace celle d'origine.",
       "change": "Modifier",
       "reset": "Rétablir",
@@ -1964,7 +1964,7 @@
         "preview_older": "Plus ancien :"
       },
       "date_locale": {
-        "label": "Format de date",
+        "label": "Région du format de date",
         "description": "Comment sont ordonnées des dates (jour, mois, année)",
         "auto": "Automatic",
         "iso": "ISO 8601",
@@ -3181,7 +3181,7 @@
         "attachments": "Pièces jointes"
       },
       "plain_text_font_link": {
-        "label": "Police des messages en texte brut",
+        "label": "Police pour les messages en texte brut",
         "description": "Se règle avec les autres polices sur la page Accessibilité.",
         "button": "Accessibilité"
       }

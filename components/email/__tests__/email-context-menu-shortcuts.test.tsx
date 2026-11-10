@@ -53,7 +53,7 @@ function renderMenu(props: Partial<React.ComponentProps<typeof EmailContextMenu>
 const row = (name: string) => screen.getByText(name).closest('button') as HTMLElement;
 
 describe('message menu key hints', () => {
-  afterEach(() => useSettingsStore.setState({ singleKeyShortcuts: true }));
+  afterEach(() => useSettingsStore.setState({ singleKeyShortcuts: true, shortcutBindings: {} }));
 
   it('shows the keys the list runs each action with', () => {
     renderMenu();
@@ -79,6 +79,32 @@ describe('message menu key hints', () => {
     expect(within(screen.getByTestId('ctx-delete')).getByText('Del')).toBeInTheDocument();
     expect(within(screen.getByTestId('ctx-mark-read')).getByText('Shift + I')).toBeInTheDocument();
     expect(within(screen.getByTestId('ctx-spam')).getByText('!')).toBeInTheDocument();
+  });
+
+  // A custom key replaces the built-in one, which then does nothing (keys1).
+  it('shows a custom key instead of the built-in one', () => {
+    useSettingsStore.setState({ shortcutBindings: { reply: 'mod+e', 'mark-as-read': 'mod+alt+i', delete: 'shift+d' } });
+    renderMenu();
+    expect(within(row('reply')).getByText('Ctrl + E')).toBeInTheDocument();
+    expect(within(row('reply')).queryByText('R')).toBeNull();
+    expect(within(row('mark_read')).getByText('Ctrl + Alt + I')).toBeInTheDocument();
+    expect(within(screen.getByTestId('ctx-delete')).getByText('Shift + D')).toBeInTheDocument();
+    expect(within(row('forward')).getByText('F')).toBeInTheDocument();
+  });
+
+  it('leaves a custom single key out when single keys are off, and keeps a custom chord', () => {
+    useSettingsStore.setState({ singleKeyShortcuts: false, shortcutBindings: { 'toggle-star': 'y', delete: 'shift+d', reply: 'mod+e' } });
+    renderMenu();
+    expect(within(row('star')).queryByText('Y')).toBeNull();
+    expect(within(screen.getByTestId('ctx-delete')).queryByText('Shift + D')).toBeNull();
+    expect(within(row('reply')).getByText('Ctrl + E')).toBeInTheDocument();
+  });
+
+  it('follows the read state with custom keys too', () => {
+    const bindings = { 'mark-as-unread': 'mod+u', archive: 'mod+e' } as const;
+    expect(messageActionShortcut('read', { unread: false, singleKeys: true, bindings })).toBe('Ctrl + U');
+    expect(messageActionShortcut('read', { unread: true, singleKeys: true, bindings })).toBe('Shift + I');
+    expect(messageActionShortcut('archive', { singleKeys: true, bindings })).toBe('Ctrl + E');
   });
 
   it('matches the read state: U marks a read message unread', () => {

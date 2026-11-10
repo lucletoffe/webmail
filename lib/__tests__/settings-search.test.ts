@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import en from '@/locales/en/common.json';
+import fr from '@/locales/fr/common.json';
 import {
   type SettingsSearchTab,
   descriptionKeyFor,
@@ -162,12 +163,15 @@ describe('settings search: no two rows with the same name', () => {
   // Files still to decide). Empty this list once they're merged.
   const PENDING_RENAMES = new Set<string>([]);
 
-  it('names every indexed row and section differently, across all pages', () => {
+  // French too (undust fork): the language the fork is used in, and where
+  // "Raccourcis clavier" named two rows that English tells apart.
+  it.each([['en', en], ['fr', fr]] as const)('names every indexed row and section differently, across all pages (%s)', (_locale, messages) => {
     const seen = new Map<string, string>();
     const duplicates: string[] = [];
     for (const [tab, entries] of Object.entries(tabSearchEntries)) {
       for (const entry of entries) {
-        const text = (withAppName(getByPath(en, entry.label), 'Bulwark') as string).trim().toLowerCase();
+        const label = getByPath(messages, entry.label) ?? getByPath(en, entry.label);
+        const text = (withAppName(label, 'Bulwark') as string).trim().toLowerCase();
         if (PENDING_RENAMES.has(text)) continue;
         const where = `${tab}: ${entry.label}`;
         if (seen.has(text)) duplicates.push(`"${text}" at ${seen.get(text)} and ${where}`);

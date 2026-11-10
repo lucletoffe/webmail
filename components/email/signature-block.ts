@@ -342,7 +342,8 @@ export function unlockSignatureBlock(editor: Editor, pos: number): boolean {
 }
 
 // The quotes of a body (QuotedHtml islands, blockquotes), as
-// lib/org/body-match.ts reads them; quoted-html.ts imports this module.
+// lib/org/body-match.ts reads them. That module is upstream's and keeps its
+// selector private: a copy here leaves it untouched by the fork.
 const QUOTES = "[data-quoted-html], blockquote";
 
 /**

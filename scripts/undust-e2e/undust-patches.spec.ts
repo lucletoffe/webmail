@@ -360,9 +360,7 @@ test("a re-opened draft written elsewhere goes out with its author's signature o
   // The external draft: no second signature in the composer, none at send.
   await page.locator('[data-testid="folder-row"][data-folder-role="drafts"]').first().click();
   await page.locator('[data-tour="email-list"] [role="row"]', { hasText: "Standup notes" }).first().click();
-  // 1.21 opens a draft straight in the composer on click; older builds had an Edit draft button.
-  const editDraft = page.getByTestId("edit-draft");
-  if (await editDraft.count()) await editDraft.first().click();
+  // A click opens the draft straight in the composer.
   const editor = page.locator(".ProseMirror").first();
   await expect(editor.getByText(HAND)).toBeVisible();
   await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);

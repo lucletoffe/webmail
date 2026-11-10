@@ -3,6 +3,7 @@ import {
   comboFromEvent,
   formatCombo,
   isBindableCombo,
+  isSingleKeyCombo,
   sanitizeShortcutBindings,
   shortcutConflict,
 } from '../shortcut-bindings';
@@ -66,6 +67,16 @@ describe('isBindableCombo', () => {
     ['an uppercase key', 'E'],
   ])('refuses %s (%s)', (_name, combo) => {
     expect(isBindableCombo(combo)).toBe(false);
+  });
+});
+
+describe('isSingleKeyCombo', () => {
+  it.each(['y', 'shift+y', '!'])('counts %s as a single key', (combo) => {
+    expect(isSingleKeyCombo(combo)).toBe(true);
+  });
+
+  it.each(['mod+e', 'alt+e', 'mod+shift+e', 'delete', 'f2'])('does not count %s', (combo) => {
+    expect(isSingleKeyCombo(combo)).toBe(false);
   });
 });
 
