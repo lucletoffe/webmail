@@ -171,7 +171,7 @@ const ENTRIES: SettingSchemaEntry[] = [
   bool('showToolbarLabels', 'appearance', `${AP}toolbar_labels.label`),
   bool('colorfulSidebarIcons', 'appearance', `${AP}colorful_sidebar_icons.label`),
   bool('showFolderTotalCount', 'appearance', `${AP}show_folder_total_count.label`),
-  bool('hideAccountSwitcher', 'appearance', `${AP}hide_account_switcher.label`),
+  bool('sidebarAccountSwitcher', 'appearance', `${AP}sidebar_account_switcher.label`),
   bool('showRailAccountList', 'appearance', `${AP}show_rail_account_list.label`),
   bool('proInterface', 'appearance', `${AP}pro_interface.label`),
   bool('enableUnifiedMailbox', 'appearance', `${AP}unified_mailbox.label`),
@@ -215,8 +215,8 @@ const ENTRIES: SettingSchemaEntry[] = [
   bool('tintListRowsByTag', 'message_list', `${AP}tint_list_rows.label`),
   bool('showVerificationCodes', 'message_list', `${EB}show_verification_codes.label`),
   // Both make the server fetch the sender's domain: the assistant may only switch them off.
-  bool('senderFavicons', 'message_list', 'settings.advanced.sender_favicons.label', { thirdParty: true, only: false }),
-  bool('showAvatarsInJunk', 'message_list', 'settings.advanced.show_avatars_in_junk.label', { thirdParty: true, only: false }),
+  bool('senderFavicons', 'privacy', 'settings.advanced.sender_favicons.label', { thirdParty: true, only: false }),
+  bool('showAvatarsInJunk', 'privacy', 'settings.advanced.show_avatars_in_junk.label', { thirdParty: true, only: false }),
   entry('hoverActions', 'message_list', `${EB}hover_actions.label`, {
     type: 'list',
     options: HOVER_ACTION_IDS.map(([value, labelKey]) => ({
@@ -249,8 +249,6 @@ const ENTRIES: SettingSchemaEntry[] = [
   bool('returnToListAfterAction', 'reading', `${EB}return_to_list_after_action.label`),
   choice('messageSpacing', 'reading', `${EB}message_spacing.label`, opts(`${EB}message_spacing.`, ['auto', 'always', 'edge'])),
   bool('emailAlwaysLightMode', 'reading', `${EB}always_light_mode.label`),
-  choice('attachmentPosition', 'reading', `${EB}attachment_position.label`,
-    opts(`${EB}attachment_position.`, ['below-header', 'below-message'])),
   choice('mailAttachmentAction', 'reading', `${EB}attachment_click_action.label`,
     opts(`${EB}attachment_click_action.`, ['preview', 'download'])),
   bool('attachmentImagePreviewsEnabled', 'reading', `${EB}attachment_image_previews.label`),
@@ -272,7 +270,7 @@ const ENTRIES: SettingSchemaEntry[] = [
     opts(`${EB}mention_adds_recipient.`, ['to', 'cc', 'off'])),
   bool('rtlEditingSupport', 'composing', `${EB}rtl_editing.label`),
   bool('quickReplyEnabled', 'composing', `${EB}quick_reply.label`),
-  bool('autoSelectReplyIdentity', 'composing', `${EB}auto_select_reply_identity.label`),
+  bool('autoSelectReplyIdentity', 'composing', 'compose_words.reply_from_received.label'),
   // The page shows it only while the composer may rewrite From.
   choice('replyIdentityMatch', 'composing', `${EB}reply_identity_match.label`,
     opts(`${EB}reply_identity_match.`, ['exact', 'domain']), { gate: 'customFromEnabled' }),
@@ -281,12 +279,12 @@ const ENTRIES: SettingSchemaEntry[] = [
   bool('signatureNewMailEnabled', 'composing', `${EB}signature_new_mail.label`),
   bool('signatureReplyForwardEnabled', 'composing', `${EB}signature_reply_forward.label`),
   bool('signatureSeparatorEnabled', 'composing', `${EB}signature_separator.label`),
-  // 10/30/60 read "{seconds} seconds" (send_delay.seconds): formatted.
-  choice('sendDelaySeconds', 'composing', `${EB}send_delay.label`, [
+  // 5/10/30 read "{seconds} seconds" (send_delay.seconds): formatted.
+  choice('sendDelaySeconds', 'composing', 'compose_words.undo_send.label', [
     { value: 0, label: `${EB}send_delay.off` },
+    { value: 5, label: null },
     { value: 10, label: null },
     { value: 30, label: null },
-    { value: 60, label: null },
   ]),
   bool('sendConfirmation', 'accessibility', `${A}confirm_send.label`),
   bool('attachmentReminderEnabled', 'composing', `${EB}attachment_reminder.label`),
@@ -295,9 +293,9 @@ const ENTRIES: SettingSchemaEntry[] = [
     { type: 'words', max: 50, maxLength: 40, lowercase: true }),
   bool('emptySubjectWarningEnabled', 'composing', `${EB}empty_subject_warning.label`),
   bool('placeholderWarningEnabled', 'composing', `${EB}placeholder_warning.label`),
-  bool('requestReadReceiptDefault', 'composing', `${EB}request_read_receipt.label`),
+  bool('requestReadReceiptDefault', 'privacy', `${EB}request_read_receipt.label`),
   // No "always": that sends a receipt mail by itself.
-  choice('readReceiptResponse', 'composing', `${EB}read_receipt_response.label`,
+  choice('readReceiptResponse', 'privacy', `${EB}read_receipt_response.label`,
     opts(`${EB}read_receipt_response.`, ['ask', 'never'])),
 
   // --- Notifications ---
@@ -306,9 +304,11 @@ const ENTRIES: SettingSchemaEntry[] = [
   choice('notificationSoundChoice', 'notifications', `${NO}sound_selection.choose`, opts(`${NO}sounds.`, NOTIFICATION_SOUND_IDS)),
   bool('pushNotifyInboxOnly', 'notifications', `${NO}email.inbox_only`),
   bool('faviconUnreadBadge', 'notifications', `${AP}favicon_unread_badge.label`),
+  bool('unreadBadgeAllAccounts', 'notifications', 'account_unread.badge_all_accounts.label'),
   bool('calendarNotificationsEnabled', 'notifications', `${NO}calendar.enabled`),
   bool('calendarNotificationSound', 'notifications', `${NO}calendar.sound`),
-  bool('doNotDisturb', 'accessibility', `${A}do_not_disturb.label`),
+  // On Notifications since settings-p3-6, as "Pause notifications"; the key stays.
+  bool('doNotDisturb', 'notifications', 'ux_p3_words.pause_label'),
   bool('visualAlerts', 'accessibility', `${A}visual_alerts.label`),
   // Seconds read "{seconds} seconds": formatted. The admin minimum is checked at run time.
   choice('toastDuration', 'accessibility', `${A}toast_duration.label`,
@@ -356,7 +356,6 @@ const ENTRIES: SettingSchemaEntry[] = [
   choice('paragraphSpacing', 'accessibility', `${A}paragraph_spacing.label`, opts(`${A}spacing.`, allowed('paragraphSpacing'))),
   choice('readingWidth', 'accessibility', `${A}reading_width.label`, opts(`${A}reading_width.`, allowed('readingWidth'))),
   bool('readingMask', 'accessibility', `${A}reading_mask.label`),
-  bool('plainLanguage', 'accessibility', `${A}plain_language.label`),
   choice('contrast', 'accessibility', `${A}contrast.label`, [
     { value: 'system', label: `${A}system` },
     { value: 'more', label: `${A}contrast.more` },
@@ -418,8 +417,9 @@ export const DENIED_SETTINGS: readonly string[] = [
   'externalContentPolicy', 'trustedSenders', 'trustedSendersAddressBook',
   // Free text that ends up in file names or in every sent mail.
   'emailDownloadTemplate', 'attachmentDownloadTemplate', 'bundleDownloadTemplate', 'signatureDetails',
-  // Never read by the app (defaultReplyMode), or on the account page (the delimiter).
-  'defaultReplyMode', 'subAddressDelimiter',
+  // Never read by the app (defaultReplyMode, hideAccountSwitcher: the sidebar's
+  // switcher it hid is gone), or on the account page (the delimiter).
+  'defaultReplyMode', 'hideAccountSwitcher', 'subAddressDelimiter',
   // Sends push metadata to another server.
   'pushRelayUrl',
   // Turning proofreading on sends what the user writes to a checker plugin.
@@ -452,10 +452,12 @@ export const DENIED_SETTINGS: readonly string[] = [
  */
 export const NOT_YET_SETTINGS: readonly string[] = [
   'messageListOrder', 'filesSettings', 'activeThemeId', 'birthdayCalendarColor', 'vacationBlockCalendar',
-  'writingLanguage',
+  'writingLanguage', 'calendarNarrowWeekAllDays',
   // undust fork: custom keys (lib/shortcut-bindings); a key needs the
   // conflict checks of the recorder (shortcutConflict), not a value check.
   'shortcutBindings',
+  // A plugin's print style: offered only while that plugin runs.
+  'printTheme',
 ];
 
 /** Line breaks, tabs and other control characters. */

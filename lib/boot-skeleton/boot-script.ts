@@ -20,7 +20,7 @@
 import { locales } from '@/i18n/routing';
 import { DEFAULT_DENSITY, MOUNTAIN_VIEW_DENSITY } from '@/lib/density';
 import { IS_LITE, LITE_MOUNT_GLOBAL, LITE_PENDING_PATH_KEY } from '@/lib/lite';
-import { LEGACY_TAB_MAP, SETTINGS_TAB_IDS } from '@/lib/settings-tabs';
+import { LEGACY_TAB_MAP, MOVED_SECTIONS, SETTINGS_TAB_IDS } from '@/lib/settings-tabs';
 import { CALENDAR_VIEWS, CONNECTOR_SURFACES, PROTOCOL_SURFACES, PRO_SURFACES, SIGNED_IN_SURFACES } from './surfaces';
 import { BOOT_HINTS_KEY, THEME_CACHE_KEY } from './keys';
 
@@ -35,6 +35,8 @@ export interface BootLayoutConfig {
   density: Record<string, Record<string, string>>;
   mvDensity: Record<string, Record<string, string>>;
   legacyTabs: Record<string, string>;
+  /** `<page>/<section>` of a section that moved: the page that has it now. */
+  movedSections: Record<string, string>;
   tabs: string[];
   calendarViews: string[];
   connector: Record<string, string>;
@@ -54,6 +56,7 @@ export function bootConfig(): BootLayoutConfig {
     density: DEFAULT_DENSITY,
     mvDensity: MOUNTAIN_VIEW_DENSITY,
     legacyTabs: LEGACY_TAB_MAP,
+    movedSections: Object.fromEntries(Object.entries(MOVED_SECTIONS).map(([from, to]) => [from, to.tab])),
     tabs: [...SETTINGS_TAB_IDS],
     calendarViews: [...CALENDAR_VIEWS],
     connector: CONNECTOR_SURFACES,
@@ -174,9 +177,13 @@ export function applyBootLayout(root: HTMLElement, c: BootLayoutConfig): void {
   var mailLayout = s.mailLayout === 'focus' || s.mailLayout === 'horizontal' ? s.mailLayout : 'split';
   if (layout === 'mountain-view' || s.simpleMode === true) mailLayout = 'focus';
   mark('mail-layout', mailLayout);
+  // Compose at the head of the folder sidebar in place of the account
+  // switcher (sidebarAccountSwitcher off); otherwise it sits under it.
+  mark('sidebar-compose', s.sidebarAccountSwitcher === false ? 'on' : null);
 
   var desktop = false;
-  try { desktop = w.matchMedia('(min-width: 64rem)').matches; } catch { /* assume not */ }
+  // The desktop layout, compact included (PHONE_BELOW in hooks/use-media-query).
+  try { desktop = w.matchMedia('(min-width: 37.5rem)').matches; } catch { /* assume not */ }
   var proOn = s.proInterface === true && desktop && (surface === 'pro' || has(c.pro, surface));
   mark('pro', proOn ? 'on' : null);
 
@@ -263,6 +270,8 @@ export function applyBootLayout(root: HTMLElement, c: BootLayoutConfig): void {
       return has(c.tabs, id) ? id : null;
     };
     var linked = migrate(surface === 'settings' ? seg[1] || null : null) || migrate(readSession('settings-deep-link-tab'));
+    // A link to a section that moved opens the page that has it now.
+    if (linked && surface === 'settings' && seg[2] && c.movedSections[linked + '/' + seg[2]]) linked = c.movedSections[linked + '/' + seg[2]];
     if (linked && surface === 'settings') pane = 'detail';
     mark('settings-tab', linked || migrate(readLocal('settings-active-tab')) || 'appearance');
   } else mark('settings-tab', null);

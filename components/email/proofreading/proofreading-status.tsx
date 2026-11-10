@@ -21,6 +21,7 @@ import { formatShortcutCombo } from "@/lib/shortcut-keys";
 import type { Proofreading } from "./use-proofreading";
 import { IssueActions, KIND_DOT, issueListLabel } from "./issue-actions";
 import { issueNavigationKey } from "./text-check-extension";
+import { useComposerBarLabels } from "../composer-bar-labels";
 
 interface Props {
   proofreading: Proofreading;
@@ -37,6 +38,7 @@ export function ProofreadingStatus({ proofreading, plainTextMode }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const open = panel !== null;
+  const bar = useComposerBarLabels();
 
   // The count, read out when it settles; not "no issues" on opening a message.
   const lastCount = useRef<number | null>(null);
@@ -124,7 +126,11 @@ export function ProofreadingStatus({ proofreading, plainTextMode }: Props) {
         )}
       >
         {icon}
-        <span className="whitespace-nowrap">{label}</span>
+        {/* In a narrow composer the words run over Discard; the count still shows. */}
+        <span className={cn(bar.label, "whitespace-nowrap")}>{label}</span>
+        {status.on && !status.paused && !status.trouble && status.count > 0 && (
+          <span className={cn(bar.count, "tabular-nums")}>{status.count}</span>
+        )}
       </button>
       {open && (
         <div

@@ -145,7 +145,7 @@ test("a scheduled mail is stamped with its release time, and Send now re-checks 
   expect(Date.parse(copy[0].sentAt)).toBeLessThan(Date.parse(draft.sentAt as string) - 3600_000);
 });
 
-test("an invitation awaiting a reply is hatched in the calendar", async ({ page }) => {
+test("an invitation awaiting a reply is marked in the calendar (upstream 1.21 marker, replaces our rsvp1 hatch)", async ({ page }) => {
   // The mock lists the user as organizer; make them an attendee who has not replied.
   await page.route("**/api/dev-jmap/api", async (route) => {
     const response = await route.fetch();
@@ -169,10 +169,8 @@ test("an invitation awaiting a reply is hatched in the calendar", async ({ page 
   await signIn(page);
   await openApp(page, "calendar");
 
-  const pending = page.locator('[aria-label*="Awaiting reply"]').first();
+  const pending = page.locator('[data-reply-state="needs-action"]').first();
   await expect(pending).toBeVisible({ timeout: 20_000 });
-  const backgroundImage = await pending.evaluate((el) => (el as HTMLElement).style.backgroundImage || getComputedStyle(el).backgroundImage);
-  expect(backgroundImage).toContain("repeating-linear-gradient");
 });
 
 test("a custom key replaces the built-in one for a mail action", async ({ page }) => {

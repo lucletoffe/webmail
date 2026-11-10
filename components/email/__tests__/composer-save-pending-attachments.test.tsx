@@ -164,9 +164,9 @@ async function openComposer() {
     add: async (...files: File[]) => {
       fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files } }); await flush();
     },
+    // Closing saves the draft without asking (it asks only when that fails).
     chooseSave: async () => {
       fireEvent.click(screen.getByTestId('composer-close'));
-      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: /^Save$/ }));
       await flush();
     },
     reopen: async () => { act(() => reopen()); await flush(); },
@@ -229,8 +229,10 @@ describe('Save and close with attachment uploads', () => {
     await c.chooseSave(); await expectSaved(['A.txt']); await waitFor(() => expect(c.closed).toHaveBeenCalledOnce());
   });
   it('can discard during the wait without a later save or close follow-up', async () => {
-    const c = await openComposer(); await c.add(file()); await c.chooseSave(); c.closeAgain();
-    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: /^Discard$/ }));
+    const c = await openComposer(); await c.add(file()); await c.chooseSave();
+    // The bin asks nothing: the composer goes at once, with Undo on a toast.
+    fireEvent.click(screen.getAllByTestId('composer-discard')[0]);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     await complete(0); await new Promise(resolve => setTimeout(resolve, 200));
     expect(creations).toEqual([]); expect(c.closed).toHaveBeenCalledOnce();
   });

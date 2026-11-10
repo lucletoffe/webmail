@@ -7,12 +7,18 @@
 // (styles allowed, no scripts, forms or frames), shown in a frame that
 // may not run scripts, under the reader's strict CSP, so it loads nothing
 // from the network. Images have to come as data: URLs.
+//
+// A PDF the plugin made (`{ pdf }` in place of `{ html }`, Bulwark 1.21 and
+// later) opens in the app's file preview instead, which brings up its print
+// dialog (host-api-file-viewer.ts).
 
 import type { InstalledPlugin } from '../plugin-types';
 import { emailIframeCsp, escapeHtml, sanitizeEmailHtmlForIframe } from '../email-sanitization';
 import { readObject, readString, withinRate } from './host-api-input';
+import { showPdfToPrint } from './host-api-file-viewer';
 import { canPrintAnywhere, getStrictestDevices, watermarkAddress, watermarkText } from '../device-policy';
 import { watermarkForPrint } from '../watermark';
+import { desktopPrintPreviewAvailable, openPrintWindow, printPrintWindow } from '../desktop/print';
 
 const MAX_TITLE = 200;
 const MAX_HTML = 2 * 1024 * 1024;
@@ -42,15 +48,31 @@ export function printDocument(title: string, html: string, dir: string, watermar
  */
 export async function doUiPrint(plugin: InstalledPlugin, input: unknown): Promise<boolean> {
   const method = 'ui.print';
-  const page = readObject(input, method, 'page', ['title', 'html']);
+  const page = readObject(input, method, 'page', ['title', 'html', 'pdf']);
   const title = page.title === undefined ? plugin.name || plugin.id : readString(page.title, method, 'title', MAX_TITLE);
   // eslint-disable-next-line no-control-regex -- a title is one line
   if (/[\u0000-\u001f\u007f]/.test(title)) throw new Error(`${method}: title must be one line`);
-  const html = readString(page.html, method, 'html', MAX_HTML);
+  if ((page.html === undefined) === (page.pdf === undefined)) throw new Error(`${method}: page needs either html or pdf`);
+  const html = page.html === undefined ? null : readString(page.html, method, 'html', MAX_HTML);
   // Organisation > Devices > No printing, in any signed-in account.
   if (!canPrintAnywhere()) throw new Error(`${method}: printing is turned off by the organisation`);
   if (!withinRate(method, plugin.id, MAX_PRINTS_PER_MINUTE)) {
     throw new Error(`${method}: at most ${MAX_PRINTS_PER_MINUTE} times a minute`);
+  }
+  // A PDF prints from the file preview, through the browser's PDF viewer.
+  if (html === null) return showPdfToPrint(plugin, page, title);
+  const watermark = getStrictestDevices().watermark ? watermarkText(watermarkAddress(null)) : null;
+
+  // The desktop app's own print preview shows a hidden print window. The document
+  // carries the reader's strict CSP, so nothing in it runs or loads there either.
+  if (desktopPrintPreviewAvailable()) {
+    const win = openPrintWindow();
+    if (!win) throw new Error(`${method}: the page could not be prepared`);
+    win.opener = null;
+    win.document.write(printDocument(title, html, document.documentElement.dir, watermark));
+    win.document.close();
+    void printPrintWindow(win, title);
+    return true;
   }
 
   const frame = document.createElement('iframe');
@@ -62,7 +84,6 @@ export async function doUiPrint(plugin: InstalledPlugin, input: unknown): Promis
   // Off screen but laid out: some browsers print an empty page from a
   // frame with display: none.
   frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;visibility:hidden;';
-  const watermark = getStrictestDevices().watermark ? watermarkText(watermarkAddress(null)) : null;
   frame.srcdoc = printDocument(title, html, document.documentElement.dir, watermark);
 
   await new Promise<void>((resolve, reject) => {

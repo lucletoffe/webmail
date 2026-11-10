@@ -20,6 +20,7 @@
 // { view, context }), and so does api.ui.openPanel there.
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { formatShortcutCombo } from '@/lib/shortcut-keys';
 import { useTranslations } from 'next-intl';
 import { PanelRightClose, PanelRightOpen } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -72,13 +73,13 @@ export function PluginPanelToggle({ open, onClick, className, buttonRef, shortcu
       size="icon"
       onClick={onClick}
       className={cn('h-8 w-8 shrink-0', className)}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      title={shortcut ? `${label} (${formatShortcutCombo(shortcut)})` : label}
       aria-label={label}
       aria-pressed={open}
       aria-keyshortcuts={shortcut ?? undefined}
       data-plugin-panel-toggle=""
     >
-      {open ? <PanelRightClose className="w-4 h-4 text-muted-foreground" /> : <PanelRightOpen className="w-4 h-4 text-muted-foreground" />}
+      {open ? <PanelRightClose className="w-4 h-4 text-muted-foreground rtl:-scale-x-100" /> : <PanelRightOpen className="w-4 h-4 text-muted-foreground rtl:-scale-x-100" />}
     </Button>
   );
 }
@@ -348,6 +349,7 @@ export function useAppSidePanel({ view, context, dock = true, hidden = false, on
         aria-label={panelLabelOf(shownIds, t('plugin_panel'))}
         data-app-side-panel={overlay ? 'overlay' : 'docked'}
         data-app-side-panel-view={view}
+        data-window-end-column=""
         className={cn(
           'flex flex-col h-full border-s border-border bg-background overflow-hidden shrink-0',
           overlay && 'absolute inset-y-0 end-0 z-30 shadow-xl',

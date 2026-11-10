@@ -15,7 +15,9 @@ import { DEFAULT_ORGANISATION_POLICY } from '@/lib/admin/organisation-policy';
 const media = vi.hoisted(() => ({ mobile: false, desktop: true }));
 vi.mock('@/hooks/use-media-query', () => ({
   useIsMobile: () => media.mobile,
-  useIsDesktop: () => media.desktop,
+  useIsDesktop: () => !media.mobile,
+  // `desktop` is the full desktop: below it the sidebar opens over the page.
+  useIsFullDesktop: () => media.desktop,
   useIsTablet: () => !media.mobile && !media.desktop,
   useMediaQuery: () => false,
 }));
@@ -537,6 +539,8 @@ describe('CalendarApp dragging', () => {
       expect(found).toBeTruthy();
       return found!;
     });
+    // The toast keeps clear of the event it is about (pim-p3-17).
+    await waitFor(() => expect(document.querySelector(`[data-event-id="${makeEvent().id}"]`)).toHaveAttribute('data-toast-avoid', 'bottom'));
     moved.action!.onClick();
     await waitFor(() => expect(store.updateEvent).toHaveBeenCalledTimes(2));
     expect(store.updateEvent.mock.calls[1][2]).toMatchObject({ start: '2026-10-12T10:00:00', duration: 'PT1H' });
@@ -593,6 +597,22 @@ describe('CalendarApp task feedback', () => {
   });
 });
 
+describe('CalendarApp quick editor', () => {
+  // Usability report 2026-11-04: Save stayed off until a title was typed.
+  // Google Calendar saves it without one and shows "(No title)" (pim-p3-12:
+  // an empty title, not the words, goes to the server).
+  it('saves an event without a title, shown as "(No title)"', async () => {
+    renderApp();
+    fireEvent.click(slots()[3]);
+    const quick = await screen.findByRole('dialog', { name: 'quick_create.aria_label' }, { timeout: 2000 });
+    const save = within(quick).getByRole('button', { name: 'form.save' });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() => expect(store.createEvent).toHaveBeenCalledTimes(1));
+    expect(store.createEvent.mock.calls[0][1]).toMatchObject({ title: '', showWithoutTime: false });
+  });
+});
+
 describe('CalendarApp creating in the month view', () => {
   it('opens the quick editor for an all-day event on a single click', async () => {
     setUp([], 'month');
@@ -607,6 +627,70 @@ describe('CalendarApp creating in the month view', () => {
     expect(store.createEvent.mock.calls[0][1]).toMatchObject({
       title: 'Holiday', start: '2026-10-15T00:00:00', duration: 'P1D', showWithoutTime: true,
     });
+  });
+
+  // Usability report 2026-11-04: a drag over the month's days did nothing.
+  it('opens the quick editor for the days a drag picked and saves them as one all-day event', async () => {
+    setUp([], 'month');
+    renderApp();
+    // Thursday 15 to Tuesday 20 October, across two week rows.
+    const thursday = monthCell(/October 15, 2026/)!;
+    const tuesday = monthCell(/October 20, 2026/)!;
+    thursday.closest('[data-week]')!.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 700 }) as DOMRect;
+    tuesday.closest('[data-week]')!.getBoundingClientRect = () => ({ top: 100, bottom: 200, left: 0, right: 700 }) as DOMRect;
+    thursday.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 300, right: 400 }) as DOMRect;
+    tuesday.getBoundingClientRect = () => ({ top: 100, bottom: 200, left: 100, right: 200 }) as DOMRect;
+    const mouse = { pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0 };
+    fireEvent.pointerDown(thursday, { ...mouse, clientX: 350, clientY: 80 });
+    fireEvent.pointerMove(thursday, { ...mouse, clientX: 150, clientY: 180 });
+    fireEvent.pointerUp(thursday, { ...mouse, clientX: 150, clientY: 180 });
+
+    const quick = await screen.findByRole('dialog', { name: 'quick_create.aria_label' });
+    expect(within(quick).getByText('events.all_day')).toBeInTheDocument();
+    expect(within(quick).getByText(/Oct 15 2026.* – .*Oct 20 2026/)).toBeInTheDocument();
+    // No title needed: it saves without one.
+    const save = within(quick).getByRole('button', { name: 'form.save' });
+    expect(save).toBeEnabled();
+    fireEvent.click(save);
+    await waitFor(() => expect(store.createEvent).toHaveBeenCalledTimes(1));
+    expect(store.createEvent.mock.calls[0][1]).toMatchObject({
+      title: '', start: '2026-10-15T00:00:00', duration: 'P6D', showWithoutTime: true, calendarIds: { cal: true },
+    });
+  });
+
+  it('opens the full editor on the same days from "More options"', async () => {
+    setUp([], 'month');
+    renderApp();
+    const thursday = monthCell(/October 15, 2026/)!;
+    const friday = monthCell(/October 16, 2026/)!;
+    thursday.closest('[data-week]')!.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 700 }) as DOMRect;
+    thursday.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 300, right: 400 }) as DOMRect;
+    friday.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 400, right: 500 }) as DOMRect;
+    const mouse = { pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0 };
+    fireEvent.pointerDown(thursday, { ...mouse, clientX: 350, clientY: 80 });
+    fireEvent.pointerMove(thursday, { ...mouse, clientX: 450, clientY: 80 });
+    fireEvent.pointerUp(thursday, { ...mouse, clientX: 450, clientY: 80 });
+    const quick = await screen.findByRole('dialog', { name: 'quick_create.aria_label' });
+    fireEvent.click(within(quick).getByRole('button', { name: 'quick_create.more_options' }));
+    const dates = await waitFor(() => {
+      const found = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="date"]')).map((input) => input.value);
+      expect(found.length).toBeGreaterThan(1);
+      return found;
+    });
+    expect(dates.slice(0, 2)).toEqual(['2026-10-15', '2026-10-16']);
+  });
+
+  it('offers no new event in the month view without a calendar that can take one', () => {
+    setUp([], 'month');
+    useCalendarStore.setState({
+      calendars: [{ ...calendars[0], myRights: { ...RIGHTS, mayWriteAll: false, mayWriteOwn: false } }],
+    } as never);
+    renderApp();
+    const day = monthCell(/October 15, 2026/)!;
+    fireEvent.click(day);
+    fireEvent.keyDown(day.querySelector('[data-day-button]')!, { key: 'ArrowRight', shiftKey: true });
+    expect(screen.queryByRole('dialog', { name: 'quick_create.aria_label' })).toBeNull();
+    expect(day.closest('[role="grid"]')!.getAttribute('aria-multiselectable')).toBeNull();
   });
 
   it('opens the day on a phone tap instead', () => {
@@ -777,7 +861,7 @@ describe('CalendarApp view menu', () => {
 
 describe('CalendarApp long names', () => {
   it('shows the full name of a cut-off calendar on hover', () => {
-    const long = { ...calendars[0], name: 'Stalwart Calendar (usera@internal.bulwarkmail.org)' };
+    const long = { ...calendars[0], name: 'Quarterly planning with the regional sales team (usera@internal.bulwarkmail.org)' };
     useCalendarStore.setState({ calendars: [long] } as never);
     renderApp();
     expect(screen.getByTestId('calendar-item').querySelector('[title]')).toHaveAttribute('title', long.name);
@@ -862,5 +946,60 @@ describe('CalendarApp company calendars on a phone', () => {
     } finally {
       usePolicyStore.setState({ policy });
     }
+  });
+});
+
+// Below the full desktop the sidebar is the same drawer as Mail's folders
+// (usability test 2026-11-04): from the window's edge, the page dimmed,
+// Escape closes it, and the focus goes in and back to the menu button.
+describe('CalendarApp sidebar drawer', () => {
+  beforeEach(() => {
+    media.desktop = false;
+  });
+
+  const drawer = () => screen.getByTestId('calendar-sidebar-drawer');
+  const menu = () => screen.getByRole('button', { name: 'nav_open_menu' });
+
+  it("opens from the window's edge, over the app rail and under the top bar", () => {
+    renderApp();
+    const classes = drawer().className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['fixed', 'start-0', 'top-[var(--drawer-top)]', 'bottom-0']));
+    expect(classes).not.toContain('absolute');
+    // Where the window's controls are over the page, app/globals.css places it by this.
+    expect(drawer()).toHaveAttribute('data-window-drawer');
+  });
+
+  it("is out of reach while closed, so Tab doesn't walk into the hidden calendars", () => {
+    renderApp();
+    expect(drawer()).toHaveAttribute('inert');
+    fireEvent.click(menu());
+    expect(drawer()).not.toHaveAttribute('inert');
+  });
+
+  it('takes the focus in, keeps Tab there and gives it back to the menu button on Escape', () => {
+    renderApp();
+    menu().focus();
+    fireEvent.click(menu());
+    expect(drawer().contains(document.activeElement)).toBe(true);
+    const stops = Array.from(drawer().querySelectorAll<HTMLElement>('button:not(:disabled)'));
+    stops.at(-1)!.focus();
+    fireEvent.keyDown(stops.at(-1)!, { key: 'Tab' });
+    expect(document.activeElement).toBe(stops[0]);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(drawer()).toHaveAttribute('inert');
+    expect(document.activeElement).toBe(menu());
+  });
+
+  it('closes on a click on the dimmed window and gives the focus back to the menu button', () => {
+    renderApp();
+    menu().focus();
+    fireEvent.click(menu());
+    const scrim = screen.getByTestId('drawer-scrim');
+    expect(scrim.className.split(/\s+/)).toEqual(expect.arrayContaining(['fixed', 'inset-0']));
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.click(scrim);
+    expect(drawer()).toHaveAttribute('inert');
+    expect(document.activeElement).toBe(menu());
   });
 });

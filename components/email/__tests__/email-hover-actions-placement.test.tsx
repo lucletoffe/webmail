@@ -8,6 +8,7 @@ vi.mock('@/components/plugins/plugin-actions', () => ({
   PluginActions: () => null,
   usePluginActions: () => [],
   useMessageActionTarget: () => ({ accountKind: 'personal', keywords: [] }),
+  useRowActionTarget: (target: unknown) => target,
 }));
 
 // Gmail keeps a row's actions on its first line when attachment chips make the
@@ -33,7 +34,10 @@ describe('row quick action placement', () => {
 
   it('spans the whole row otherwise', () => {
     const el = toolbar();
-    expect(el.className).toContain('bottom-0');
+    // Down to the row's outline, not over it (mail-p3-14).
+    expect(el.style.bottom).toBe('var(--focus-ring-width, 2px)');
+    expect(el.style.top).toBe('var(--focus-ring-width, 2px)');
+    expect(el.getAttribute('style')).toMatch(/inset-inline-end: var\(--focus-ring-width, 2px\)/);
     expect(el.className).not.toContain('h-10');
   });
 });

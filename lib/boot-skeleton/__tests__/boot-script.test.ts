@@ -22,7 +22,7 @@ const signedIn = () =>
 
 function desktop(matches: boolean) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: matches && query.includes('64rem'),
+    matches: matches && query.includes('37.5rem'),
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -141,6 +141,17 @@ describe('boot script: layout settings', () => {
     boot('/en/mail');
     expect(attr('density')).toBe('regular');
     expect(attr('preview')).toBeNull();
+  });
+
+  it('marks Compose at the head of the sidebar only when the account switcher is turned off', () => {
+    boot('/en/mail');
+    expect(attr('sidebar-compose')).toBeNull();
+    settings({ sidebarAccountSwitcher: false });
+    boot('/en/mail');
+    expect(attr('sidebar-compose')).toBe('on');
+    settings({ sidebarAccountSwitcher: true });
+    boot('/en/mail');
+    expect(attr('sidebar-compose')).toBeNull();
   });
 
   it('falls back to regular for an unknown density', () => {
@@ -355,6 +366,20 @@ describe('boot script: settings', () => {
     expect(attr('pane')).toBe('detail');
     boot('/en/settings/filters/rules');
     expect(attr('settings-tab')).toBe('filters');
+  });
+
+  // Settings reorg 2026-11-05: an old link to a section that moved marks the page that has it now.
+  it('opens the page a moved section is on now', () => {
+    boot('/en/settings/general/desktop-updates');
+    expect(attr('settings-tab')).toBe('about');
+    boot('/en/settings/general/app-lock');
+    expect(attr('settings-tab')).toBe('privacy');
+    boot('/en/settings/backup/debug');
+    expect(attr('settings-tab')).toBe('troubleshooting');
+    boot('/en/settings/debug');
+    expect(attr('settings-tab')).toBe('troubleshooting');
+    boot('/en/settings/general/language');
+    expect(attr('settings-tab')).toBe('general');
   });
 
   it('falls back to the stored tab for an unknown or missing URL tab', () => {

@@ -14,6 +14,13 @@
 // (dialog-anchor.ts), with a one-line header naming the plugin. `fill: true`
 // gives either form a fixed height the plugin's frame fills (a chat), so an
 // anchored, filled dialog is a tall popover beside the control.
+//
+// In the desktop app a confirm or alert is a window of its own instead
+// (lib/desktop/dialog-window.ts), with the same parts: the title, the
+// "From the plugin" line, the ⋮ menu and the buttons. A prompt is the page's
+// own card in a window of its own (dialog-surface.tsx). Custom dialogs stay
+// over the page: the plugin's frame talks to the page's window, and in
+// another window its messages would go to that window instead.
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
@@ -25,8 +32,12 @@ import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { toast } from '@/stores/toast-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ContextMenu, ContextMenuItem } from '@/components/ui/context-menu';
+import { useContextMenu } from '@/hooks/use-context-menu';
 import { iconForName, Loader2, MoreVertical, Power, Puzzle, X } from '@/components/icons';
 import { cn } from '@/lib/utils';
+import { askInWindow, dialogWindowsAvailable } from '@/lib/desktop/dialog-window';
+import { DialogSurfacePortal, useDialogSurface } from '@/components/ui/dialog-surface';
 import { PluginIframeSlot } from './plugin-iframe-slot';
 import type { SlotName } from '@/lib/plugin-types';
 
@@ -65,10 +76,75 @@ export function PluginDialogHost(): React.JSX.Element | null {
 
   return (
     <>
-      {base && <PluginDialogView key={base.id} current={base} layer={top ? 'below' : 'only'} />}
-      {top && <PluginDialogView key={top.id} current={top} layer="above" />}
+      {base && (inWindow(base)
+        ? <PluginDialogWindow key={base.id} current={base} layer={top ? 'below' : 'only'} />
+        : <PluginDialogView key={base.id} current={base} layer={top ? 'below' : 'only'} />)}
+      {top && (inWindow(top)
+        ? <PluginDialogWindow key={top.id} current={top} layer="above" />
+        : <PluginDialogView key={top.id} current={top} layer="above" />)}
     </>
   );
+}
+
+/** A confirm or alert, in the desktop app: a window of its own. */
+function inWindow(request: DialogRequest): boolean {
+  return (request.kind === 'confirm' || request.kind === 'alert') && dialogWindowsAvailable();
+}
+
+const TURN_OFF = 'turn-off';
+
+/**
+ * A plugin's confirm or alert in a window of the app's own. The host names the plugin
+ * in the window's own line, which the plugin's text can't change, and the ⋮ menu
+ * still turns it off. If the shell refuses, the dialog is drawn in the page.
+ */
+function PluginDialogWindow({ current, layer }: { current: DialogRequest; layer: 'only' | 'below' | 'above' }): React.JSX.Element | null {
+  const t = useTranslations('plugins.dialog');
+  const pluginName = usePluginStore((s) => s.plugins.find((p) => p.id === current.pluginId)?.name);
+  const disablePlugin = usePluginStore((s) => s.disablePlugin);
+  const [refused, setRefused] = useState(false);
+  const name = pluginName ?? current.pluginId;
+
+  useEffect(() => {
+    if (refused) return;
+    const confirm = current.kind === 'confirm';
+    const okLabel = current.confirmLabel ?? (confirm ? t('confirm') : t('ok'));
+    const buttons = confirm
+      ? [{ label: current.cancelLabel ?? t('cancel'), variant: 'secondary' as const }, { label: okLabel, variant: current.danger ? 'destructive' as const : 'primary' as const }]
+      : [{ label: okLabel, variant: 'primary' as const }];
+    const yes = buttons.length - 1;
+    const asked = askInWindow({
+      title: current.title || name,
+      message: current.message,
+      boldMarks: true,
+      source: t('from_plugin', { name }),
+      buttons,
+      // As in the page: a destructive confirm only says yes from its own button.
+      defaultIndex: confirm && current.danger ? 0 : yes,
+      menu: { label: t('plugin_menu', { name }), items: [{ id: TURN_OFF, label: t('turn_off', { name }), destructive: true }] },
+    });
+    if (!asked) return;
+    let live = true;
+    void asked.answer.then((answer) => {
+      if (!live) return;
+      live = false;
+      if (answer === 'failed') {
+        setRefused(true);
+      } else if (answer && 'menu' in answer && answer.menu === TURN_OFF) {
+        cancelForPlugin(current.pluginId);
+        disablePlugin(current.pluginId);
+      } else {
+        resolveDialog(current.id, Boolean(answer && 'button' in answer && answer.button === yes));
+      }
+    });
+    return () => {
+      if (!live) return;
+      live = false;
+      asked.cancel();
+    };
+  }, [current, name, refused, t, disablePlugin]);
+
+  return refused ? <PluginDialogView current={current} layer={layer} /> : null;
 }
 
 const DIALOG_BUTTON_VARIANT = { primary: 'default', secondary: 'outline', ghost: 'ghost', destructive: 'destructive' } as const;
@@ -155,25 +231,36 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
     disablePlugin(id);
   };
 
+  // A prompt in the desktop app: a window of its own.
+  const surface = useDialogSurface(current?.kind === 'prompt' && layer !== 'below', { title: current?.title ?? '', onClose: () => cancel() });
+  const surfaceDoc = surface.mode === 'window' ? surface.surface.doc : null;
+
   useEffect(() => {
     if (!current || layer === 'below') return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
+        // This closes the dialog and nothing else: an event popover behind it
+        // listens for Escape on the window.
+        e.stopPropagation();
         cancel();
       } else if (e.key === 'Enter' && (current?.kind === 'confirm' || current?.kind === 'alert')) {
         // For prompts, Enter is handled by the form (so it respects required
         // validation and works from within an input); confirm/alert accept.
         // Custom dialogs resolve only via their own onResult callback or the
         // host's X/Escape - an Enter press has no defined meaning for them.
+        // On a button Enter is that button's: Cancel must not answer yes. And
+        // a destructive confirm only says yes from its own button.
+        if ((e.target as Element | null)?.closest?.('button') || current.danger) return;
         e.preventDefault();
         resolveThis(true);
       }
     }
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
+    const doc = surfaceDoc ?? document;
+    doc.addEventListener('keydown', onKey, true);
+    return () => doc.removeEventListener('keydown', onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, canSubmit, values]);
+  }, [current, canSubmit, values, surfaceDoc]);
 
   // Tab stays in the dialog and the focus goes back to what opened it. The
   // first field of a prompt takes the focus, a confirm's safe button (Cancel
@@ -182,7 +269,7 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useFocusTrap({
-    isActive: !!current && layer !== 'below',
+    isActive: !!current && layer !== 'below' && surface.mode !== 'pending',
     restoreFocus: true,
     initialFocus: () => {
       if (current?.kind === 'prompt') return panelRef.current?.querySelector<HTMLElement>('input');
@@ -195,7 +282,8 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
   const anchor = current?.kind === 'custom' ? current.anchor : undefined;
   const place = usePopoverPlace(anchor, panelRef);
 
-  if (!current) return null;
+  if (!current || surface.mode === 'pending') return null;
+  const inWindow = surface.mode === 'window';
 
   const name = pluginName ?? current.pluginId;
   const confirmLabel = current.confirmLabel ?? (current.kind === 'alert' ? t('ok') : current.kind === 'prompt' ? t('submit') : t('confirm'));
@@ -206,6 +294,9 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
   // keyboard takes its share), centred or as a popover alike.
   const fillHeight = Math.min(640, Math.round(viewportHeight * 0.9) - 16);
 
+  // Plugins choose the title, however long: it scrolls within its own part of
+  // the dialog, so it can't push the line below and the buttons out of it.
+  const titleClass = 'max-h-[30vh] overflow-y-auto text-lg font-semibold text-foreground [overflow-wrap:anywhere]';
   // Who is asking, under the title: plugins choose the title and message, so
   // the host names the plugin in a place the plugin can't change.
   const attribution = (
@@ -292,16 +383,19 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
     );
   }
 
-  return (
+  const tree = (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
       aria-hidden={layer === 'below' ? true : undefined}
-      className={layer === 'above'
-        ? 'fixed inset-0 z-[100001] flex items-center justify-center bg-black/30 p-4'
-        : 'fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-[1px] p-4 animate-in fade-in duration-150'}
-      onMouseDown={(e) => {
+      // In its own window there is no backdrop: the window behind can't be used meanwhile.
+      className={inWindow
+        ? 'flex max-h-full w-full items-center justify-center'
+        : layer === 'above'
+          ? 'fixed inset-0 z-[100001] flex items-center justify-center bg-black/30 p-4'
+          : 'fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 backdrop-blur-[1px] p-4 animate-in fade-in duration-150'}
+      onMouseDown={inWindow ? undefined : (e) => {
         if (e.target === e.currentTarget) cancel();
       }}
     >
@@ -317,7 +411,7 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
           <>
             <div className="flex items-start gap-1 px-6 py-4 border-b border-border">
               <div className="min-w-0 flex-1 pe-2">
-                <h2 id={titleId} className="text-lg font-semibold text-foreground [overflow-wrap:anywhere]">{current.title}</h2>
+                <h2 id={titleId} className={titleClass}>{current.title}</h2>
                 {attribution}
               </div>
               <PluginDialogMenu name={name} onTurnOff={turnOff} />
@@ -338,17 +432,20 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
           </>
         ) : (
           <>
-            <div className="flex items-start gap-1 px-6 pt-6">
+            <div className="flex shrink-0 items-start gap-1 px-6 pt-6" data-dialog-drag="">
               <div className="min-w-0 flex-1 pe-2">
-                <h2 id={titleId} className="text-lg font-semibold text-foreground [overflow-wrap:anywhere]">{current.title}</h2>
+                <h2 id={titleId} className={titleClass}>{current.title}</h2>
                 {attribution}
               </div>
               <PluginDialogMenu name={name} onTurnOff={turnOff} />
             </div>
-            <div className="px-6 pt-3 pb-6">
-              {message}
-              {isPrompt ? (
-                <form onSubmit={(e) => { e.preventDefault(); submitPrompt(); }}>
+            {/* A long message scrolls here, under the title and over the buttons.
+                The panel itself clips: the focus on a button would scroll the
+                title away for good. A stop for Tab, so the arrow keys can scroll it. */}
+            {isPrompt ? (
+              <form onSubmit={(e) => { e.preventDefault(); submitPrompt(); }} className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-3" tabIndex={message ? 0 : undefined}>
+                  {message}
                   <div className="mb-6 flex flex-col gap-4">
                     {fields.map((f) => (
                       <label key={f.name} className="block">
@@ -369,13 +466,16 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
                       <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-foreground">{t('password_note', { name })}</p>
                     )}
                   </div>
-                  <div className="flex items-center justify-end gap-3">
-                    <Button type="button" variant="outline" onClick={cancel}>{cancelLabel}</Button>
-                    <Button type="submit" disabled={!canSubmit}>{confirmLabel}</Button>
-                  </div>
-                </form>
-              ) : (
-                <div className={cn('flex items-center justify-end gap-3', !current.message && 'mt-3')}>
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-3 px-6 pb-6">
+                  <Button type="button" variant="outline" onClick={cancel}>{cancelLabel}</Button>
+                  <Button type="submit" disabled={!canSubmit}>{confirmLabel}</Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-3" tabIndex={message ? 0 : undefined}>{message}</div>
+                <div className={cn('flex shrink-0 items-center justify-end gap-3 px-6 pb-6', !current.message && 'mt-3')}>
                   {current.kind === 'confirm' && (
                     <Button ref={cancelButtonRef} type="button" variant="outline" onClick={cancel}>{cancelLabel}</Button>
                   )}
@@ -388,13 +488,14 @@ function PluginDialogView({ current, layer }: { current: DialogRequest; layer: '
                     {confirmLabel}
                   </Button>
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </>
         )}
       </div>
     </div>
   );
+  return surface.mode === 'window' ? <DialogSurfacePortal surface={surface.surface}>{tree}</DialogSurfacePortal> : tree;
 }
 
 /**
@@ -452,21 +553,13 @@ function FooterIcon({ name }: { name?: string }) {
 /** The "⋯" menu in a plugin dialog's header: the way out of a plugin that keeps asking. */
 function PluginDialogMenu({ name, onTurnOff, compact }: { name: string; onTurnOff: () => void; compact?: boolean }) {
   const t = useTranslations('plugins.dialog');
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown, true);
-    return () => document.removeEventListener('mousedown', onDown, true);
-  }, [open]);
+  const menu = useContextMenu<null>();
+  const open = menu.contextMenu.isOpen;
   return (
-    <div ref={ref} className="relative flex-shrink-0">
+    <div className="relative flex-shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => (open ? menu.closeContextMenu() : menu.openContextMenuFrom(e.currentTarget, null, 'end'))}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('plugin_menu', { name })}
@@ -475,19 +568,14 @@ function PluginDialogMenu({ name, onTurnOff, compact }: { name: string; onTurnOf
       >
         <MoreVertical className={compact ? 'w-4 h-4' : 'w-5 h-5'} />
       </button>
-      {open && (
-        <div role="menu" className="absolute end-0 top-full z-10 mt-1 min-w-[200px] rounded-md border border-border bg-background py-1 shadow-lg">
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => { setOpen(false); onTurnOff(); }}
-            className="w-full px-3 py-1.5 text-sm text-start flex items-center gap-2 transition-colors duration-150 text-destructive hover:bg-destructive/10 focus:outline-none focus:bg-destructive/10"
-          >
-            <Power className="w-4 h-4 flex-shrink-0" />
-            <span className="flex-1">{t('turn_off', { name })}</span>
-          </button>
-        </div>
-      )}
+      <ContextMenu ref={menu.menuRef} isOpen={open} position={menu.contextMenu.position} onClose={menu.closeContextMenu} label={t('plugin_menu', { name })}>
+        <ContextMenuItem
+          icon={Power}
+          label={t('turn_off', { name })}
+          destructive
+          onClick={() => { menu.closeContextMenu(); onTurnOff(); }}
+        />
+      </ContextMenu>
     </div>
   );
 }

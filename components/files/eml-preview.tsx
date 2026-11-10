@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Paperclip, Download } from "@/components/icons";
 import { saveBlobAs } from "@/lib/download-guard";
 import { emailIframeCsp, sanitizeEmailBodyForIframe } from "@/lib/email-sanitization";
 import { turnOffLinks } from "@/lib/phishing-links";
-import { getEffectiveTimeZone } from "@/lib/timezone";
+import { formatDateTime } from "@/lib/utils";
 import { stripBidiControls } from "@/lib/bidi";
 import { isFilePreviewable } from "@/lib/file-preview";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useRemoteContentHeldBackAnywhere } from "@/hooks/use-third-party-mode";
+import { ROW_ITEM_ATTR, ROW_MORE_ATTR, useFirstRowLimit } from "@/hooks/use-first-row-limit";
 
 // A parsed message/rfc822 (.eml), as produced by postal-mime. Only the fields
 // this preview renders are typed.
@@ -66,6 +68,7 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
   const remoteBlockedByOrg = useRemoteContentHeldBackAnywhere();
   const blockRemote = useSettingsStore((state) => state.externalContentPolicy) !== "allow" || remoteBlockedByOrg;
   const tFiles = useTranslations("files");
+  const timeFormat = useSettingsStore((state) => state.timeFormat);
 
   // dir="auto" on a wrapper we control lets the first strong character pick
   // the direction, matching the main viewer.
@@ -74,12 +77,24 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
       ? turnOffLinks(sanitizeEmailBodyForIframe(message.html, blockRemote).html, { title: tPhishing("link_off"), note: tPhishing("link_off_note") })
       : sanitizeEmailBodyForIframe(message.html, blockRemote).html}</div>`
     : message.text
-      ? `<pre dir="auto" style="white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,monospace;margin:0;padding:8px">${escapeHtml(message.text)}</pre>`
+      ? `<div dir="auto" style="white-space:pre-wrap;word-break:break-word;margin:0;padding:8px">${escapeHtml(message.text)}</div>`
       : "";
+  // The reader's font (.email-content), for a plain-text body and as the
+  // default under an HTML one.
+  const bodyStyle = `<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:0.9375rem;line-height:1.6;color:#1a1a1a}</style>`;
   // The strict CSP is the network backstop for whatever the DOM walk misses.
   const bodyDoc = body
-    ? `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${emailIframeCsp(blockRemote)}"><meta name="referrer" content="no-referrer"></head><body>${body}</body></html>`
+    ? `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${emailIframeCsp(blockRemote)}"><meta name="referrer" content="no-referrer">${bodyStyle}</head><body>${body}</body></html>`
     : "";
+
+  // Every part is listed: this preview can't show cid: images in the body.
+  const attachments = message.attachments ?? [];
+  const [expanded, setExpanded] = useState(false);
+  const row = useFirstRowLimit(attachments.length, !expanded);
+  const limit = expanded ? null : row.limit;
+  const shown = limit === null ? attachments : attachments.slice(0, limit);
+  const hidden = limit === null ? [] : attachments.slice(limit);
+  const rowItem = { [ROW_ITEM_ATTR]: "" };
 
   const downloadAttachment = (att: EmlAttachment) => {
     if (!att.content) return;
@@ -102,27 +117,21 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
           <div><span className="font-medium text-foreground">{t("to")}: </span><bdi>{message.to.map(formatAddress).join(", ")}</bdi></div>
         )}
         {message.date && (
-          <div><span className="font-medium text-foreground">{t("date")}: </span>{new Date(message.date).toLocaleString(undefined, { timeZone: getEffectiveTimeZone() })}</div>
+          <div><span className="font-medium text-foreground">{t("date")}: </span>{formatDateTime(message.date, timeFormat, { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</div>
         )}
       </div>
-      {bodyDoc && (
-        <iframe
-          title={message.subject || "email"}
-          sandbox=""
-          srcDoc={bodyDoc}
-          className="w-full min-h-[55vh] mt-3 rounded bg-white"
-        />
-      )}
-      {message.attachments && message.attachments.length > 0 && (
-        <div className="mt-4 border-t border-border pt-3">
+      {/* The message's own attachments, right under its header and above
+          the body, on one line; the rest behind "Show N more". */}
+      {attachments.length > 0 && (
+        <div className="border-b border-border py-3" data-eml-attachments="">
           <div className="text-xs font-medium text-muted-foreground mb-2">{t("attachments")}</div>
-          <div className="flex flex-wrap gap-2">
-            {message.attachments.map((att, i) => {
+          <div ref={row.ref} className="flex flex-wrap items-center gap-2">
+            {shown.map((att, i) => {
               const name = att.filename ? stripBidiControls(att.filename) : "attachment";
               const opens = !!onOpenAttachment && !!att.content && isFilePreviewable(att.filename, att.mimeType);
               if (!opens && downloadsOff) {
                 return (
-                  <span key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-muted text-muted-foreground">
+                  <span key={i} {...rowItem} className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm bg-muted text-muted-foreground">
                     <Paperclip className="w-3 h-3 flex-shrink-0" />
                     <span className="max-w-[200px] truncate">{name}</span>
                   </span>
@@ -132,6 +141,7 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
                 return (
                   <button
                     key={i}
+                    {...rowItem}
                     type="button"
                     onClick={() => downloadAttachment(att)}
                     title={t("download")}
@@ -144,7 +154,7 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
                 );
               }
               return (
-                <div key={i} className="flex items-center rounded-md text-sm bg-muted text-foreground">
+                <div key={i} {...rowItem} className="flex items-center rounded-md text-sm bg-muted text-foreground">
                   <button
                     type="button"
                     onClick={() => onOpenAttachment(att)}
@@ -168,8 +178,35 @@ export function EmlPreview({ message, onOpenAttachment, linksOff, downloadsOff =
                 </div>
               );
             })}
+            {hidden.length > 0 && (
+              <button
+                type="button"
+                {...{ [ROW_MORE_ATTR]: "" }}
+                onClick={() => setExpanded(true)}
+                className="px-3 py-1.5 rounded-md text-sm text-primary hover:bg-muted"
+              >
+                {t("attachments_show_more", { count: hidden.length })}
+              </button>
+            )}
+            {expanded && (
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="px-3 py-1.5 rounded-md text-sm text-primary hover:bg-muted"
+              >
+                {t("attachments_show_fewer")}
+              </button>
+            )}
           </div>
         </div>
+      )}
+      {bodyDoc && (
+        <iframe
+          title={message.subject || "email"}
+          sandbox=""
+          srcDoc={bodyDoc}
+          className="w-full min-h-[55vh] mt-3 rounded bg-white"
+        />
       )}
     </div>
   );

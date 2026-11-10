@@ -29,8 +29,9 @@ describe('signed-in pages for a signed-out visitor', () => {
     expect(login).not.toBeNull();
     // Hidden unless the page is marked signed out.
     expect(login!.parentElement!.className.split(' ')).toEqual(expect.arrayContaining(['hidden', 'boot-out:block']));
-    // The card itself: logo, fields, button.
-    expect(login!.querySelectorAll('.h-11').length).toBeGreaterThanOrEqual(3);
+    // The card itself, in the login page's frame: two fields and the button.
+    expect(login!.querySelector('.login-frame .login-card')).not.toBeNull();
+    expect(login!.querySelectorAll('.login-card .h-10').length).toBeGreaterThanOrEqual(3);
     // And the accessibility button the login page will have in its corner.
     expect(login!.querySelector('.fixed.bottom-4.end-4')).not.toBeNull();
     // And the app's own frame goes away then.
@@ -51,7 +52,7 @@ describe('admin skeleton', () => {
   it('draws the page list with its real names and the open page current', () => {
     const container = dom(renderToString(<AdminSkeleton page="branding" label="Loading" />));
     const text = container.textContent ?? '';
-    for (const name of ['Overview', 'Server', 'Branding', 'Organisation', 'Extensions', 'System', 'Audit log']) {
+    for (const name of ['Overview', 'Server', 'Branding', 'Users', 'Features and settings', 'Extensions', 'System', 'Audit log']) {
       expect(text).toContain(name);
     }
     const current = [...container.querySelectorAll('.bg-accent')].map((el) => el.textContent);
@@ -61,7 +62,7 @@ describe('admin skeleton', () => {
   it('shows the phone list at /admin and the page below it', () => {
     const index = dom(renderToString(<AdminSkeleton page={null} />));
     const detail = dom(renderToString(<AdminSkeleton page="logs" />));
-    const phone = (c: HTMLElement) => c.querySelector('.lg\\:hidden')!;
+    const phone = (c: HTMLElement) => c.querySelector('.desk\\:hidden')!;
     // Index: the list (with its chevrons) is shown, the page column hidden.
     expect(phone(index).querySelector('.p-4')!.className).toContain('hidden');
     expect(phone(detail).querySelector('.p-4')!.className).not.toContain('hidden');

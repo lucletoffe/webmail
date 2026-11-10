@@ -4,6 +4,10 @@ import { execSync } from "child_process";
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { pruneTraces } from "./scripts/standalone-guard.mjs";
+import { desktopBuildFlag } from "./scripts/desktop-build-flag.mjs";
+import { LITE_INTL_ASSETS_OFF, LITE_INTL_ASSETS_REQUEST } from "./scripts/lite-intl-assets.mjs";
+import { CompileHintsPlugin } from "./scripts/compile-hints.mjs";
 
 // Prefer an explicit build arg (passed in by CI / Docker, where .git is
 // excluded from the build context) and fall back to `git rev-parse` for
@@ -34,9 +38,13 @@ try {
 // anyone which commit runs. The config is read again by every process the
 // build starts; the first one sets the variable and the others inherit it,
 // so all of them use the same id.
+// BULWARK_BUILD_SEED gives builds of one release on several platforms the
+// same id (#1531): they run the same code, and a load balancer may send a
+// tab's check to either.
+const buildSeed = process.env.BULWARK_BUILD_SEED?.trim();
 if (!process.env.BULWARK_BUILD_ID) {
   process.env.BULWARK_BUILD_ID = createHash("sha256")
-    .update(`${gitCommitHash}:${appVersion}:${Date.now()}:${Math.random()}`)
+    .update(buildSeed ? `seed:${buildSeed}` : `${gitCommitHash}:${appVersion}:${Date.now()}:${Math.random()}`)
     .digest("base64url")
     .slice(0, 16);
 }
@@ -102,6 +110,13 @@ const nextConfig: NextConfig = {
   typescript: {
     tsconfigPath: "tsconfig.build.json",
   },
+  // next-intl's plugin adds a webpack hook, and with one Next runs the client,
+  // server and edge compilers in its main process on one heap, which outgrew
+  // Node's default limit of about 2.2 GB (#1510). In workers each compiler has
+  // its own heap, freed when it finishes. Turbopack builds don't read this.
+  experimental: {
+    webpackBuildWorker: true,
+  },
   // No proxyClientMaxBodySize: Next copies every body proxy.ts runs for up to
   // that size before routing, so it stays at the 10 MB default. The routes
   // that take bigger uploads (WOPI saves, WebDAV, /api/plugin-proxy) are left
@@ -139,6 +154,11 @@ const nextConfig: NextConfig = {
                 { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
               ],
             },
+            {
+              // The local store's database engine, in a folder named after its version.
+              source: "/sqlite3mc/:path*",
+              headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+            },
             // The upload routes proxy.ts's matcher leaves out, with the
             // headers it sets on every other API response.
             ...["/api/webdav", "/api/plugin-proxy", "/api/wopi/files/:fileId/contents"].map((source) => ({
@@ -154,10 +174,9 @@ const nextConfig: NextConfig = {
   // Sibling repos checked out under ./repos/ are unrelated source trees that
   // Turbopack's NFT can otherwise rope into the trace when dynamic fs calls
   // confuse it. Keeps the build from ballooning memory tracing dead code.
-  // The trace follows fs reads, and the runtime reads its state directories,
-  // so a build from a checkout that has been run would copy the admin
-  // password hash, the plugin signing key, the audit log and .env secrets
-  // into .next/standalone - and from there into the image.
+  // These excludes are not what keeps private state out of the build: they
+  // miss several traces. runAfterProductionCompile below and the final check
+  // in scripts/standalone-guard.mjs do that.
   // Only "./repos" goes under "*": that key also feeds the next-server trace,
   // where Next matches each glob anywhere in the path, so "./data/**/*" would
   // drop node_modules/next/dist/lib/metadata/* and the server would not start.
@@ -166,6 +185,31 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "*": ["./repos/**/*"],
     "!(next-server)": ["./data/**/*", "./local-data/**/*", "./.env*"],
+  },
+  ...(isLite
+    ? {}
+    : {
+        compiler: {
+          runAfterProductionCompile: async ({ distDir, projectDir }) => {
+            pruneTraces({ distDir, projectDir });
+          },
+        },
+      }),
+  // Only Lite draws a page before it has a catalog: everywhere else
+  // IntlProvider's Lite-only English and skeletons (half a megabyte of
+  // script) are swapped for an empty module. And the scripts a page starts
+  // with tell Chrome to compile them while they download (scripts/compile-hints.mjs).
+  // Webpack builds only (the Docker image, the desktop app); a Turbopack
+  // build keeps the Lite assets and has no hints, which costs size and start
+  // time, not behaviour.
+  webpack: (config, { webpack, isServer, dev }) => {
+    if (!isLite) {
+      config.plugins.push(new webpack.NormalModuleReplacementPlugin(LITE_INTL_ASSETS_REQUEST, (resource: { request: string }) => {
+        resource.request = LITE_INTL_ASSETS_OFF;
+      }));
+    }
+    if (!isServer && !dev) config.plugins.push(new CompileHintsPlugin(webpack));
+    return config;
   },
   turbopack: {
     root: process.env.NEXT_TURBOPACK_ROOT || import.meta.dirname,
@@ -179,6 +223,9 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BASE_PATH: basePath,
     NEXT_PUBLIC_DEV_MOCK_JMAP: process.env.DEV_MOCK_JMAP ?? "",
     NEXT_PUBLIC_BULWARK_LITE: isLite ? "1" : "",
+    // Always a literal, so setting the variable when starting a server build
+    // does nothing (lib/desktop/flag.ts).
+    NEXT_PUBLIC_BULWARK_DESKTOP: desktopBuildFlag(),
   },
 };
 

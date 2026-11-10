@@ -15,15 +15,16 @@ import { cn } from "@/lib/utils";
 import type { CalendarEvent, Calendar, CalendarParticipant } from "@/lib/jmap/types";
 import { parseDuration, getEventColor } from "./event-card";
 import { getEventDisplayEndDate, getEventEndDate, getEventStartDate } from "@/lib/calendar-utils";
+import { eventZonedTimes, zonedTimesText } from "@/lib/event-time-zone";
 import { buildRecurrenceSummary } from "./recurrence-editor";
 import { formatEventAlertsLabel } from "./alert-list-editor";
 import {
   getUserParticipantId,
   getParticipantList,
-  isPendingForUser,
 } from "@/lib/calendar-participants";
 import { canUserRsvp, getEventEditability, type EditabilityContext } from "@/lib/calendar-editability";
 import { useFormatEventDate } from "@/hooks/use-format-event-date";
+import { useCalendarLocale } from "@/hooks/use-calendar-locale";
 import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
 import { findMeetingLink, locationAction, mapsUrl, primaryLocationName } from "@/lib/event-links";
 import { descriptionAsText } from "@/lib/calendar-description";
@@ -37,6 +38,7 @@ import { isEditableEventTarget } from "@/lib/keyboard";
 import { isSingleKeyShortcutOff } from "@/lib/single-key-shortcuts";
 import { useCvdColor } from "@/hooks/use-cvd-color";
 import { gateLinkClick } from "@/lib/plugin-hook-result";
+import { useCollectionNames } from "@/hooks/use-collection-names";
 
 interface EventDetailPopoverProps {
   event: CalendarEvent;
@@ -112,12 +114,20 @@ function computePosition(
   };
 }
 
-function formatDurationDisplay(minutes: number): string {
-  if (minutes < 60) return `${minutes}min`;
+/** "1 hr 30 min", "1 Std. 30 Min.": the language's own short units (pim-p2-19). */
+export function formatDurationDisplay(minutes: number, locale: string): string {
+  const unit = (value: number, name: "hour" | "minute") => {
+    try {
+      return new Intl.NumberFormat(locale, { style: "unit", unit: name, unitDisplay: "short" }).format(value);
+    } catch {
+      return `${value}${name === "hour" ? "h" : "min"}`;
+    }
+  };
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (m === 0) return `${h}h`;
-  return `${h}h${m}min`;
+  if (h === 0) return unit(m, "minute");
+  if (m === 0) return unit(h, "hour");
+  return `${unit(h, "hour")} ${unit(m, "minute")}`;
 }
 
 function getRecurrenceLabel(event: CalendarEvent, t: ReturnType<typeof useTranslations>, locale: string): string | null {
@@ -145,9 +155,11 @@ export function EventDetailPopover({
   isMobile,
   pinned = false,
 }: EventDetailPopoverProps) {
+  const shownName = useCollectionNames();
   const t = useTranslations("calendar");
   const paint = useCvdColor();
   const tCommon = useTranslations("common");
+  const tEvent = useTranslations("ux_pim_event");
   const locale = useLocale();
   const popoverRef = useRef<HTMLDivElement>(null);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
@@ -167,6 +179,11 @@ export function EventDetailPopover({
   const endDate = getEventEndDate(event);
   const displayEndDate = getEventDisplayEndDate(event);
   const isMultiDay = !isSameDay(startDate, displayEndDate);
+  // An event on another zone's clock shows its own times too (pim-2).
+  const zoned = eventZonedTimes(event, startDate, endDate);
+  const zonedText = zoned
+    ? zonedTimesText(zoned, startDate, endDate, timeFormat === "12h" ? "h:mm a" : "HH:mm", locale)
+    : null;
 
   const locationName = useMemo(() => primaryLocationName(event) ?? null, [event]);
   // Re-computes the location link once the config is known (#903).
@@ -241,15 +258,6 @@ export function EventDetailPopover({
   );
 
   const answerView = useAnswerView(event, calendar, currentUserEmails, canRsvp && !!userParticipantId);
-
-  // Mirror of the hatched block in the calendar views: the detail popover
-  // calls out "awaiting your reply" above the RSVP buttons so the user sees
-  // what the stripes already told them (ordre Luc 16/10/2026, LPBvKUOr §3).
-  const isPending = useMemo(
-    () => isPendingForUser(event, currentUserEmails),
-    [event, currentUserEmails]
-  );
-  const showPendingNotice = isPending && answerView.targets.some((target) => target.kind === "self");
 
   const formatTime = useCallback(
     (d: Date) => format(d, timeFormat === "12h" ? "h:mm a" : "HH:mm"),
@@ -373,6 +381,7 @@ export function EventDetailPopover({
   const hasParticipants = participants.length > 0;
 
   const formatEventDate = useFormatEventDate();
+  const { formatDateRangeLabel } = useCalendarLocale();
 
   const popover = (
     <div
@@ -484,11 +493,9 @@ export function EventDetailPopover({
             {isMultiDay ? (
               event.showWithoutTime ? (
                 <>
+                  {/* One range as the language writes it (pim-13). */}
                   <div className="font-medium text-foreground">
-                    {formatEventDate(startDate)} –
-                  </div>
-                  <div className="font-medium text-foreground">
-                    {formatEventDate(displayEndDate)}
+                    {formatDateRangeLabel(startDate, displayEndDate, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
                   </div>
                   <div className="text-muted-foreground">{t("events.all_day")}</div>
                 </>
@@ -507,8 +514,13 @@ export function EventDetailPopover({
                     </span>
                   </div>
                   <div className="text-muted-foreground text-xs">
-                    ({formatDurationDisplay(durationMinutes)})
+                    ({formatDurationDisplay(durationMinutes, locale)})
                   </div>
+                  {zoned && zonedText && (
+                    <div className="text-muted-foreground text-xs" data-testid="event-zone-times">
+                      {tEvent("zone_only", { times: zonedText.times, zone: zoned.zone })}
+                    </div>
+                  )}
                 </>
               )
             ) : (
@@ -518,10 +530,14 @@ export function EventDetailPopover({
                 </span>
                 {event.showWithoutTime ? (
                   <span className="text-muted-foreground ms-1.5">{t("events.all_day")}</span>
+                ) : zoned && zonedText ? (
+                  <div className="text-muted-foreground" data-testid="event-zone-times">
+                    {tEvent("zone_times", { times: zonedText.times, zone: zoned.zone, local: zonedText.local })}
+                  </div>
                 ) : (
                   <div className="text-muted-foreground">
                     <bdi dir="ltr">{formatTime(startDate)} – {formatTime(endDate)}</bdi>
-                    <span className="ms-1.5 text-xs">({formatDurationDisplay(durationMinutes)})</span>
+                    <span className="ms-1.5 text-xs">({formatDurationDisplay(durationMinutes, locale)})</span>
                   </div>
                 )}
               </>
@@ -637,7 +653,7 @@ export function EventDetailPopover({
         {calendar && (
           <div className="flex items-start gap-2.5">
             <CalendarIcon className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <span dir="auto" className="text-sm text-foreground truncate" title={calendar.name}>{calendar.name}</span>
+            <span dir="auto" className="text-sm text-foreground truncate" title={shownName.calendar(calendar)}>{shownName.calendar(calendar)}</span>
           </div>
         )}
 
@@ -703,24 +719,12 @@ export function EventDetailPopover({
         </div>
       )}
 
-      {/* RSVP bars: the user's own, and "Answer for <owner>" in a calendar shared with them.
-          Above them, the "awaiting your reply" cue mirrors the hatched block
-          in the calendar views. */}
-      {onRsvp && showPendingNotice && (
-        <p className="px-4 pt-3 border-t border-border text-xs font-medium text-warning flex items-center gap-1.5" data-testid="pending-notice">
-          <span
-            aria-hidden="true"
-            className="inline-block w-3 h-3 rounded-xs border border-warning"
-            style={{ backgroundImage: `repeating-linear-gradient(45deg, currentColor 0 1px, transparent 1px 3px)` }}
-          />
-          {t("participants.pending_badge")}
-        </p>
-      )}
+      {/* RSVP bars: the user's own, and "Answer for <owner>" in a calendar shared with them. */}
       {onRsvp && (
         <AnswerBars
           view={answerView}
           size="xs"
-          className={cn("px-4 py-3 empty:hidden", !showPendingNotice && "border-t border-border")}
+          className="px-4 py-3 border-t border-border empty:hidden"
           onRespond={(target, status) => onRsvp(status, target)}
         />
       )}

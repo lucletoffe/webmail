@@ -101,6 +101,8 @@ export const HOOK_CATALOG = {
   onBeforeComposeOpenToForward: H('mail-compose', 'transform', 'email:send', 'Email (the original)', 'before a forward is filled in'),
   onBeforeComposeOpenToForwardAsAttachment: H('mail-compose', 'transform', 'email:send', 'Email (the original)', 'before a forward-as-attachment is filled in'),
   onMailtoIntercept: H('mail-compose', 'intercept', 'email:read', 'MailtoContext', 'when a mailto: link is opened; return false to stop the composer'),
+  // Its own parameters only, from a link anyone can write: the composer id is what makes it useful.
+  onComposeFromLink: { ...H('mail-compose', 'observer', 'compose:read', 'ComposeLinkContext', 'when the composer opened from a mailto: or Bulwark link carrying parameters for this plugin (x-<plugin id>-<name>=<value>); only this plugin hears it, with the prefix gone (Bulwark 1.21 and later)'), alsoPermission: 'compose:write' },
 
   // ─── Mail: sending ─────────────────────────────────────────
   onBeforeEmailSend: H('mail-send', 'intercept', 'email:send', 'OutgoingEmail', 'when Send is pressed; a handler that fails or times out stops the send'),
@@ -142,7 +144,7 @@ export const HOOK_CATALOG = {
   // ─── Mail: search ──────────────────────────────────────────
   onSearch: H('mail-search', 'transform', 'email:read', '{ query, filters: SearchFilters }', 'before a search runs; may change the query and filters'),
   onSearchResults: H('mail-search', 'transform', 'email:read', 'string[], { query, filters, emailIds }', 'after search results arrived; return ids of further messages to add to them (at most 100)'),
-  onProvideSearchResults: H('mail-search', 'transform', 'email:read', 'ExternalSearchResult[], { query, filters }', 'to add results from elsewhere to a search; drawn above its message list; an entry naming a message (email) opens it on a click, any other click comes back as onAction with surface "search-results" and the entry\'s key'),
+  onProvideSearchResults: H('mail-search', 'transform', 'email:read', 'ExternalSearchResult[], { query, filters }', 'to add results from elsewhere to a search; drawn above its message list (title and snippet, or one line of score, title, from and date when the user chooses); an entry naming a message (email) opens it on a click, any other click comes back as onAction with surface "search-results" and the entry\'s key'),
 
   // ─── Mail: attachments ─────────────────────────────────────
   onBeforeAttachmentUpload: H('mail-attachments', 'intercept', 'email:read', 'AttachmentInfo', 'before a file is attached in the composer'),
@@ -162,8 +164,12 @@ export const HOOK_CATALOG = {
   onCalendarEventFormSave: H('calendar', 'transform', 'calendar:write', 'CalendarEventFormSavePatch, CalendarEventFormView', 'while the event form is saved'),
   onCheckEventConflicts: H('calendar', 'transform', 'calendar:read', 'ConflictWarning[], { event }', 'while start or end change in the event form'),
   onBeforeEventCreate: H('calendar', 'intercept', 'calendar:write', 'CalendarEventView', 'before an event is created'),
+  onCreatingEvent: H('calendar', 'transform', 'calendar:write', '{localEvent: CalendarEvent, serverEvent: CalendarEvent}', 'when an event is created'),
   onAfterEventCreate: H('calendar', 'observer', 'calendar:read', 'CalendarEventView', 'after an event was created'),
   onBeforeEventUpdate: H('calendar', 'intercept', 'calendar:write', '{ eventId, patch }', 'before an event is changed'),
+  onUpdatingEvent: H('calendar', 'transform', 'calendar:write', '{localUpdates : Partial<CalendarEvent>, serverUpdates: Partial<CalendarEvent>, eventId: string}', 'when an event is updated'),
+  onBeforeFetchEvents: H('calendar', 'transform', 'calendar:write', '{ start, end }', 'before events are fetched from the server; may change the range'),
+  onFetchingEvents: H('calendar', 'transform', 'calendar:write', 'CalendarEvent[]', 'after events are fetched from the server; may add or remove events'),
   onAfterEventUpdate: H('calendar', 'observer', 'calendar:read', 'CalendarEventView', 'after an event was changed'),
   onBeforeEventDelete: H('calendar', 'intercept', 'calendar:write', '{ eventId, title }', 'before an event is deleted'),
   onAfterEventDelete: H('calendar', 'observer', 'calendar:read', '{ eventId, title }', 'after an event was deleted'),

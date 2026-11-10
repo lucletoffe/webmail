@@ -66,6 +66,11 @@ const CASES: Case[] = [
 ];
 
 async function seedStorage(context: BrowserContext, items: Seed) {
+  // A browser that keeps a sign-in carries the marker the page script sets
+  // (lib/signed-out-start.ts); without it the root sends a first visit to /login.
+  if (items["auth-storage"] || items["account-registry"]) {
+    await context.addCookies([{ name: "bulwark_local", value: "1", url: String(test.info().project.use.baseURL) }]);
+  }
   await context.addInitScript((seed) => {
     if (sessionStorage.getItem("__boot_guard_seeded")) return;
     localStorage.clear();
@@ -113,6 +118,19 @@ test.describe("server HTML without JavaScript", () => {
       expect(screen.text, "visible text").not.toMatch(/loading|opening/i);
       for (const [name, value] of Object.entries(c.attrs ?? {})) expect(screen.attrs[name], name).toBe(value);
       await context.close();
+    });
+  }
+
+  // React moves a big finished Suspense boundary out of the shell, into a hidden
+  // <div> a script reveals later: a frame or up to 300 ms with no skeleton at all.
+  // The cases above only see that when the reveal loses the race with the load
+  // event, so this reads the bytes.
+  for (const path of ["/en", "/en/mail/folder/inbox", "/en/calendar/week/2026-11-04", "/en/contacts", "/en/files/Documents", "/en/settings", "/en/pro", "/en/login"]) {
+    test(`${path}: the skeleton is in the page, not in a segment a script reveals`, async ({ request }) => {
+      const html = await (await request.get(path)).text();
+      const skeleton = html.indexOf("data-boot-skeleton=");
+      expect(skeleton, "a skeleton in the HTML").toBeGreaterThan(-1);
+      expect(html.slice(0, skeleton), "a hidden segment before the skeleton").not.toMatch(/<div hidden id="S:/);
     });
   }
 
@@ -170,6 +188,99 @@ async function waitLoaded(page: Page) {
   }, null, { timeout: 60_000, polling: 100 }).catch(() => {});
   await page.waitForTimeout(1500);
 }
+
+// A failed hydration throws the skeleton away and draws the page again, which is what
+// the skeleton is there to avoid. The login page's own boundary hydrates after the app
+// around it, so a few loads, as it depends on what got there first.
+test("the login page hydrates what the server sent", async ({ browser }) => {
+  const errors: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const note = (text: string) => { if (/hydrat|#418|#423|#425/i.test(text)) errors.push(text.slice(0, 200)); };
+    page.on("pageerror", (e) => note(e.message));
+    page.on("console", (m) => { if (m.type() === "error") note(m.text()); });
+    await page.goto("/en/login");
+    await page.getByRole("button", { name: /^sign in$/i }).first().waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(500);
+    await context.close();
+  }
+  expect(errors).toEqual([]);
+});
+
+// The sign-in page and the mail view get only the first screen's part of the
+// catalog (i18n/first-screen.ts); the rest comes after the first paint. With the
+// rest held back, nothing they draw may be missing from that part.
+test("the first screen's catalog has every key the sign-in page and the mail view draw", async ({ browser }) => {
+  const misses = (p: Page) => p.evaluate(() => (window as unknown as { __bulwarkCatalogMisses?: string[] }).__bulwarkCatalogMisses ?? []);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await context.newPage();
+  await signIn(page);
+  // A message from the mock mailbox, to open by its link.
+  await page.locator('[data-tour="email-list"] [role="row"]').first().click();
+  await page.waitForURL(/\/mail\/(message|thread)\//, { timeout: 30_000 });
+  const messagePath = new URL(page.url()).pathname;
+  await context.addInitScript(() => { (window as unknown as { __holdCatalogRest: boolean }).__holdCatalogRest = true; });
+  for (const path of ["/en", "/en/mail/folder/inbox"]) {
+    await page.goto(path);
+    await page.locator('[data-tour="email-list"] [data-index]').first().waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(2000);
+    expect(await misses(page), path).toEqual([]);
+  }
+  // A message opened from a link draws the reader on its first screen: no label of it may come late.
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto(messagePath);
+    await page.locator('[data-tour="email-viewer"]').first().waitFor({ timeout: 60_000 });
+    await page.waitForTimeout(2000);
+    expect(await misses(page), `${messagePath} @${viewport.width}`).toEqual([]);
+  }
+  await context.close();
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    const signedOut = await browser.newContext({ viewport });
+    await signedOut.addInitScript(() => { (window as unknown as { __holdCatalogRest: boolean }).__holdCatalogRest = true; });
+    const login = await signedOut.newPage();
+    for (const path of ["/en", "/en/login"]) {
+      await login.goto(path);
+      await login.getByRole("button", { name: /^sign in$/i }).first().waitFor({ timeout: 60_000 });
+      await login.waitForTimeout(1500);
+      expect(await misses(login), `${path} @${viewport.width}`).toEqual([]);
+    }
+    await signedOut.close();
+  }
+});
+
+// The sign-in page's notices are on its first screen too: why the session ended,
+// a wipe of this device, mail the outbox lost. They draw from the first screen's
+// part of the catalog on the first render, with the rest of it held back.
+test("the sign-in page draws its notices from the first screen's catalog", async ({ browser }) => {
+  const reasons = [
+    { kind: "idle", minutes: 15, draftsUnsaved: true },
+    { kind: "max", hours: 8, draftsUnsaved: true },
+  ];
+  for (const reason of reasons) {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await context.addInitScript((r) => {
+      (window as unknown as { __holdCatalogRest: boolean }).__holdCatalogRest = true;
+      if (sessionStorage.getItem("__notices_seeded")) return;
+      sessionStorage.setItem("__notices_seeded", "1");
+      sessionStorage.setItem("session_end_reason", JSON.stringify(r));
+      sessionStorage.setItem("bulwark-offline-lost", JSON.stringify(["", "Quarterly report"]));
+      localStorage.setItem("bulwark-wipe-note", JSON.stringify({ unsent: 2 }));
+    }, reason);
+    const page = await context.newPage();
+    await page.goto("/en/login");
+    await page.getByRole("button", { name: /^sign in$/i }).first().waitFor({ timeout: 60_000 });
+    for (const id of ["session-expired-reason", "session-drafts-not-saved", "session-outbox-lost", "device-wipe-note"]) {
+      const text = (await page.getByTestId(id).first().innerText()).trim();
+      expect(text, `${reason.kind}: ${id}`).not.toBe("");
+    }
+    expect(await page.getByTestId("session-outbox-lost").innerText()).toContain("Quarterly report");
+    const misses = await page.evaluate(() => (window as unknown as { __bulwarkCatalogMisses?: string[] }).__bulwarkCatalogMisses ?? []);
+    expect(misses, reason.kind).toEqual([]);
+    await context.close();
+  }
+});
 
 test("layout shift from navigation to the loaded page stays at or under 0.01", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });

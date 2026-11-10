@@ -58,7 +58,7 @@ beforeEach(() => {
   clearAllHooks();
   clearRowBadgeCache();
   resetRowBadgeRefresh();
-  useUIStore.setState({ isMobile: false, isTablet: false, isDesktop: true });
+  useUIStore.setState({ isMobile: false, isCompact: false, isDesktop: true });
   useSettingsStore.setState({
     emailKeywords: [...DEFAULT_KEYWORDS],
     showPreview: false,
@@ -105,6 +105,19 @@ describe('plugin badges in message-list rows', () => {
     expect(normalizeBadges([{ key: 'bad', label: 'Bad', icon: 'x"><script>' }])[0]).not.toHaveProperty('icon');
   });
 
+  it('draws an icon-only badge, read out by its title', async () => {
+    renderHooks.onEmailListItemRender.register('test', async () => [
+      { key: 'fu-done', label: '', icon: 'flag-check', title: 'Follow-up done' },
+    ]);
+
+    const { container } = render(row([makeEmail()]));
+
+    const badge = await screen.findByRole('img', { name: 'Follow-up done' });
+    expect(badge).toHaveAttribute('data-plugin-row-badge', 'fu-done');
+    expect(badge).toHaveTextContent('');
+    expect(container.querySelector('[data-plugin-row-badge="fu-done"] svg')).not.toBeNull();
+  });
+
   it('asks the plugin again when it requests a refresh, at most once a second', async () => {
     let label = 'Open';
     const handler = vi.fn(async () => [{ key: 'task', label }]);
@@ -120,7 +133,7 @@ describe('plugin badges in message-list rows', () => {
   });
 
   it('shows badges on a conversation row and on the phone layout', async () => {
-    useUIStore.setState({ isMobile: true, isTablet: false, isDesktop: false });
+    useUIStore.setState({ isMobile: true, isCompact: false, isDesktop: false });
     renderHooks.onEmailListItemRender.register('test', async () => [{ key: 'k', label: 'Phone badge' }]);
 
     render(row([
@@ -198,5 +211,14 @@ describe('normalizeBadges', () => {
       { key: 'd', label: 'D' },
     ]);
     expect(normalizeBadges(undefined)).toEqual([]);
+  });
+
+  it('keeps a badge without a label only with an icon and a key', () => {
+    expect(normalizeBadges([
+      { key: 'i', label: '', icon: 'check', title: 'Done' },
+      { key: 'n', label: '' },
+      { label: '', icon: 'check' },
+      { key: 'x', label: '', icon: 'x"><script>' },
+    ])).toEqual([{ key: 'i', label: '', icon: 'check', title: 'Done' }]);
   });
 });

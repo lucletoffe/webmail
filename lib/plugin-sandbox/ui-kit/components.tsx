@@ -103,11 +103,15 @@ export const Button = React.forwardRef<HTMLButtonElement, KitButtonProps>(functi
   );
 });
 
-/** A text link styled like the app's inline links ("Add condition"). */
+/**
+ * A text link styled like the app's inline links ("Add condition"). A long one
+ * wraps like a paragraph: lines start at the icon's side (a button centres its
+ * text otherwise), with the icon beside the first line.
+ */
 export function LinkButton({ icon, children, className, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: string }) {
   return (
-    <button type="button" className={cn('bk inline-flex items-center gap-1 text-sm text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none', className)} {...rest}>
-      {icon && <Icon name={icon} size="sm" />}
+    <button type="button" className={cn('bk inline-flex items-start gap-1 text-start text-sm text-primary hover:underline disabled:opacity-50 disabled:pointer-events-none', className)} {...rest}>
+      {icon && <Icon name={icon} size="sm" className="mt-[0.1875rem]" />}
       {children}
     </button>
   );
@@ -665,7 +669,7 @@ export interface KitCheckboxProps {
   id?: string;
 }
 
-/** The composer's check items and the Files app's select box: a drawn box, not the browser's. */
+/** The Files app's select box: a drawn box, not the browser's. */
 export function Checkbox({ checked, onChange, label, hint, disabled = false, id, ariaLabel }: KitCheckboxProps) {
   const autoId = React.useId();
   const boxId = id ?? autoId;
@@ -1188,7 +1192,7 @@ export function InfoBar({ tone = 'neutral', icon, eyebrow, title, children, comp
       <div className="bk flex flex-wrap items-center gap-x-3 gap-y-1.5 px-6 py-1.5 border-b border-border bg-muted/30 text-sm">
         {icon && <span className={cn('w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0', INFO_TONE[tone])}><Icon name={icon} size="sm" /></span>}
         {eyebrow && <span className="text-[0.6875rem] font-semibold text-muted-foreground">{eyebrow}</span>}
-        {title && <span className="min-w-0 flex-1 text-foreground break-words">{title}</span>}
+        {title && <span className="min-w-0 flex-1 text-foreground [overflow-wrap:anywhere]">{title}</span>}
         {children}
       </div>
     );
@@ -1206,7 +1210,7 @@ export function InfoBar({ tone = 'neutral', icon, eyebrow, title, children, comp
             {(eyebrow || title) && (
               <div>
                 {eyebrow && <div className="text-[0.6875rem] font-semibold text-muted-foreground">{eyebrow}</div>}
-                {title && <div className="text-sm font-medium text-foreground break-words">{title}</div>}
+                {title && <div className="text-sm font-medium text-foreground [overflow-wrap:anywhere]">{title}</div>}
               </div>
             )}
             {children}

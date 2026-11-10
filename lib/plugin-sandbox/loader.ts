@@ -28,17 +28,20 @@ import { mayOfferSlot, mayReceiveHookCall, mayRegisterHook, pluginHasPermission,
 import { clearPluginActions, setActionDispatcher } from './actions';
 import { clearPluginCheckers, setCheckerDispatcher } from './checkers';
 import { clearDayLabels } from './day-labels';
+import { clearPrintThemes } from './print-themes';
 import { clearPluginListFilters } from './list-filters';
 import { clearPluginPages } from './pages';
 import { clearSectionTitle } from './section-titles';
 import { clearSidePanel } from './side-panels';
+import { closePluginFilesOf } from './file-viewer';
 import { cancelPluginProxyRequests } from './proxy-client';
 import { cancelConnectFor } from './connect-dialog';
 import { isHookHandedOver } from './host-features';
-import { hookArgsFor } from './hook-payload';
+import { hookArgsFor, hookResultFor } from './hook-payload';
 import { rememberDeclaredHooks } from '../plugin-send-guards';
 import type { SlotName } from '../plugin-types';
 import { PLUGIN_REFUSED_ERROR, pluginAllowed } from '../outgoing-hosts';
+import { PLUGIN_POLICY_REFUSED_ERROR, pluginMayRunByDesktopPolicy } from '../desktop/policy';
 
 // ─── Hook-bus lookup (one flat map for name → bus) ────────────
 
@@ -197,10 +200,12 @@ function permittedOffers(plugin: InstalledPlugin, slots: InitDoneInfo['slots'], 
 // slower machines, while still catching truly stuck plugins.
 const INIT_TIMEOUT_MS = 30_000;
 
+class InitTimeoutError extends Error {}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${ms}ms`));
+      reject(new InitTimeoutError(`${label} timed out after ${ms}ms`));
     }, ms);
     promise.then(
       (v) => { clearTimeout(timer); resolve(v); },
@@ -210,6 +215,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 }
 
 const loading = new Map<string, Promise<void>>();
+/** Turned off while starting: a start that timed out doesn't try again. */
+const startsCancelled = new Set<string>();
 
 /**
  * Start a plugin. Calling it again for a plugin that is running or still
@@ -221,14 +228,35 @@ export function loadSandboxedPlugin(plugin: InstalledPlugin): Promise<void> {
   // Before the registry: a plugin offering remembered slots is registered
   // while it is still starting.
   const pending = loading.get(plugin.id);
-  if (pending) return pending;
+  if (pending) {
+    startsCancelled.delete(plugin.id);
+    return pending;
+  }
   if (getActive(plugin.id)) return Promise.resolve();
-  const run = startSandboxedPlugin(plugin).finally(() => loading.delete(plugin.id));
+  const run = startSandboxedPlugin(plugin).finally(() => {
+    loading.delete(plugin.id);
+    startsCancelled.delete(plugin.id);
+  });
   loading.set(plugin.id, run);
   return run;
 }
 
-async function startSandboxedPlugin(plugin: InstalledPlugin): Promise<void> {
+/**
+ * Turned off during a start with no remembered slots: unload found nothing
+ * registered, so the frame is still up and the status still unset.
+ */
+function stopCancelledStart(pluginId: string, background: { destroy(): void } | null): void {
+  try { background?.destroy(); } catch { /* ignore */ }
+  storeAccessor?.setPluginStatus(pluginId, 'disabled');
+}
+
+async function startSandboxedPlugin(plugin: InstalledPlugin, retried = false): Promise<void> {
+  // The device's OS policy. On an instance this is the only gate there is: the
+  // instance's server knows nothing of this device's policy.
+  if (!pluginMayRunByDesktopPolicy(plugin)) {
+    storeAccessor?.setPluginStatus(plugin.id, 'error', PLUGIN_POLICY_REFUSED_ERROR);
+    return;
+  }
   // A plugin that declares network access doesn't start while third-party
   // traffic is off; the rest run (#903).
   if (!pluginAllowed(plugin)) {
@@ -270,6 +298,10 @@ async function startSandboxedPlugin(plugin: InstalledPlugin): Promise<void> {
       INIT_TIMEOUT_MS,
       `[plugin-sandbox] "${plugin.id}" init`,
     );
+    if (startsCancelled.has(plugin.id)) {
+      stopCancelledStart(plugin.id, bg);
+      return;
+    }
 
     // Wire hook proxies: every hookName the plugin registered gets a HookBus
     // entry whose handler dispatches into the sandbox. `shortcut:<id>` hooks
@@ -306,7 +338,8 @@ async function startSandboxedPlugin(plugin: InstalledPlugin): Promise<void> {
       const proxy = (...args: unknown[]) => (
         isHookHandedOver(pluginId, hookName) || !mayReceiveHookCall(plugin, hookName, args)
           ? undefined
-          : bg.invokeHook(hookName, hookArgsFor(plugin, hookName, args))
+          : Promise.resolve(bg.invokeHook(hookName, hookArgsFor(plugin, hookName, args)))
+            .then((result) => hookResultFor(plugin, hookName, args, result))
       );
       hookDisposables.push(bus.register(plugin.id, proxy as (...a: unknown[]) => unknown));
       if (hookName === 'onEmailOpen') openHandler = proxy;
@@ -350,8 +383,21 @@ async function startSandboxedPlugin(plugin: InstalledPlugin): Promise<void> {
   } catch (err) {
     // Turned off while it was starting: unload has set the status.
     if (background?.closed && getActive(plugin.id)?.background !== background) return;
+    if (startsCancelled.has(plugin.id)) {
+      stopCancelledStart(plugin.id, background);
+      return;
+    }
     // Offered from the last start: take the slots back down.
     if (background && getActive(plugin.id)?.background === background) deregisterActive(plugin.id);
+    // A busy machine can take longer than the limit to boot a frame, and the
+    // plugin then stayed off until the next page load: its pages and buttons
+    // missing. One more go; plugins start in parallel, so a plugin that
+    // really hangs holds up nobody else.
+    if (err instanceof InitTimeoutError && !retried && !startsCancelled.has(plugin.id)) {
+      console.warn(`[plugin-sandbox] "${plugin.id}" took too long to start, trying once more`);
+      try { background?.destroy(); } catch { /* ignore */ }
+      return startSandboxedPlugin(plugin, true);
+    }
     const msg = (err as Error).message ?? String(err);
     storeAccessor?.setPluginStatus(plugin.id, 'error', msg);
     console.error(`[plugin-sandbox] Failed to load "${plugin.id}":`, err);
@@ -414,6 +460,7 @@ setCheckerDispatcher({
 // ─── Unload ───────────────────────────────────────────────────
 
 export function unloadSandboxedPlugin(pluginId: string): void {
+  if (loading.has(pluginId)) startsCancelled.add(pluginId);
   const entry = deregisterActive(pluginId);
   if (!entry) return;
   for (const d of entry.hookDisposables) {
@@ -429,9 +476,11 @@ export function unloadSandboxedPlugin(pluginId: string): void {
   clearPluginCheckers(pluginId);
   clearPluginListFilters(pluginId);
   clearDayLabels(pluginId);
+  clearPrintThemes(pluginId);
   clearPluginPages(pluginId);
   clearSectionTitle(pluginId);
   clearSidePanel(pluginId);
+  closePluginFilesOf(pluginId);
   cancelPluginProxyRequests(pluginId);
   cancelConnectFor(pluginId);
   try { entry.background.destroy(); } catch { /* ignore */ }

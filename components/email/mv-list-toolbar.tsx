@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Archive,
   CheckSquare,
-  Folder,
   FolderInput,
   FolderX,
   Loader2,
   Mail,
   MailOpen,
   MoreVertical,
-  Search,
   ShieldAlert,
   ShieldCheck,
   Square,
@@ -19,7 +17,9 @@ import {
   Trash2,
   RefreshCw,
   Fish,
+  Plus,
 } from "@/components/icons";
+import { spamApplicableIn } from "@/lib/spam-applicable";
 import { usePhishingReport } from "@/hooks/use-phishing-report";
 import { useTranslations } from "next-intl";
 import { useAuthStore } from "@/stores/auth-store";
@@ -31,14 +31,15 @@ import { markSelectionReadWithUndo, runBatchEmailAction, setSelectionTagWithUndo
 import { toast } from "@/stores/toast-store";
 import { useConfirmDialog } from "@/hooks/use-confirm-dialog";
 import { useContextMenu } from "@/hooks/use-context-menu";
-import { ContextMenu, ContextMenuItem, ContextMenuSeparator, ContextMenuHeader, CONTEXT_MENU_ITEM_CLASS } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuItem, ContextMenuSeparator, ContextMenuHeader } from "@/components/ui/context-menu";
 import { useArchiveActionEnabled } from "@/lib/archive-gate";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TagPicker } from "@/components/email/tag-picker";
-import { localizeMailboxName } from "@/lib/mailbox-label";
-import { buildMoveTargets, resolveMoveOwnerAccountId } from "@/lib/move-targets";
+import { resolveMoveOwnerAccountId } from "@/lib/move-targets";
+import { MoveFolderList, moveMenuIsEmpty, useMoveMenu } from "@/components/email/move-target-list";
+import { useChooseMoveFolder } from "@/components/email/move-to-dialog";
 import { getEmailTagIds } from "@/lib/thread-utils";
-import { cn, type MailboxNode } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { PluginActions } from "@/components/plugins/plugin-actions";
 import { useUnreadFirstSection } from "@/hooks/use-unread-first-section";
 import { useTimeoutWhileMounted } from "@/hooks/use-timeout-while-mounted";
@@ -116,6 +117,7 @@ export function MvListToolbar({
   const tBatch = useTranslations("email_list.batch_actions");
   const archiveActionEnabled = useArchiveActionEnabled();
   const tFolder = useTranslations("mailbox_context_menu");
+  const tP2 = useTranslations("mail_p2_folders");
   const tMenu = useTranslations("context_menu");
   const tSidebar = useTranslations("sidebar");
   const tCommon = useTranslations("common");
@@ -124,6 +126,8 @@ export function MvListToolbar({
   const tSpam = useTranslations("email_viewer.spam");
   const undo = undoLabels(tNotifications);
   const tRemove = useTranslations("email_list.confirm_remove");
+  const tP3 = useTranslations("mail_p3_actions");
+  const tActions = useTranslations("reader_actions");
 
   const client = useAuthStore((s) => s.client);
   const {
@@ -170,8 +174,6 @@ export function MvListToolbar({
   const moveOpen = moveMenu.contextMenu.isOpen;
   const closeMove = moveMenu.closeContextMenu;
   // Gmail's "Move to" menu opens on a search field that narrows the folders.
-  const [moveQuery, setMoveQuery] = useState("");
-  useEffect(() => { if (!moveOpen) setMoveQuery(""); }, [moveOpen]);
   const tagMenu = useContextMenu<null>();
   const tagOpen = tagMenu.contextMenu.isOpen;
   const closeTag = tagMenu.closeContextMenu;
@@ -203,7 +205,7 @@ export function MvListToolbar({
   const isInJunk = currentRole === "junk";
   const isInTrash = currentRole === "trash";
   // Marking your own drafts or sent mail as spam is meaningless.
-  const spamApplicable = !["sent", "drafts", "scheduled"].includes(currentRole ?? "");
+  const spamApplicable = spamApplicableIn(currentRole);
   // Report phishing for the selection, one report per message (enterprise pack).
   const selectionForPhishing = useEmailStore(useShallow((state) => resolveSelectedEmails(state)));
   const phishing = usePhishingReport(selectionForPhishing, currentRole);
@@ -259,11 +261,12 @@ export function MvListToolbar({
       const permanent = bulkDeleteIsPermanent(target);
       if (shouldConfirmBulkDelete(target)) {
         const confirmed = await confirmDialog({
-          title: permanent ? t("permanent_delete_confirm_batch_title") : tBatch("delete_confirm_title"),
+          // One wording for a delete for good (mail-p3-5).
+          title: permanent ? tP3("delete_forever_batch_title", { count: selectionCount }) : tBatch("delete_confirm_title"),
           message: permanent
-            ? t("permanent_delete_confirm_batch_message", { count: selectionCount })
+            ? tP3("delete_forever_batch_message", { count: selectionCount })
             : tBatch("delete_confirm_message", { count: selectionCount }),
-          confirmText: permanent ? t("permanent_delete") : tBatch("delete"),
+          confirmText: permanent ? tActions("delete_forever") : tBatch("delete"),
           variant: "destructive",
         });
         if (!confirmed) return;
@@ -288,58 +291,12 @@ export function MvListToolbar({
 
   // The same targets the row's own context menu offers, with the account of
   // the selection leading (#1149).
-  const { tree: moveTree, targetIds: moveTargetIds } = buildMoveTargets(mailboxes, {
+  const moveModel = useMoveMenu(mailboxes, {
     currentMailboxId: selectedMailbox,
     ownerAccountId: resolveMoveOwnerAccountId(selectedEmails[0], mailboxes, selectedMailbox),
     emails: selectedEmails,
   });
-
-  const renderMoveNodes = (nodes: MailboxNode[], depth = 0): React.ReactNode =>
-    nodes.map((node) => {
-      const label = localizeMailboxName(node.role, node.name, (key) => tSidebar(`mailboxes.${key}`));
-      const isTarget = moveTargetIds.has(node.id);
-      return (
-        <div key={node.id}>
-          {isTarget ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => handleMove(node.id)}
-              style={{ paddingInlineStart: `${12 + depth * 16}px` }}
-              className={CONTEXT_MENU_ITEM_CLASS}
-            >
-              <Folder className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">{label}</span>
-            </button>
-          ) : (
-            <div
-              style={{ paddingInlineStart: `${12 + depth * 16}px` }}
-              className="flex items-center gap-2 pe-3 py-1.5 text-sm text-muted-foreground"
-            >
-              <Folder className="w-4 h-4 flex-shrink-0" />
-              <span className="truncate">{label}</span>
-            </div>
-          )}
-          {node.children.length > 0 && renderMoveNodes(node.children, depth + 1)}
-        </div>
-      );
-    });
-
-  // While a search narrows the move menu it is a flat list of the matches.
-  const moveMatches = (() => {
-    const q = moveQuery.trim().toLowerCase();
-    if (!q) return null;
-    const out: MailboxNode[] = [];
-    const walk = (nodes: MailboxNode[]) => {
-      for (const node of nodes) {
-        const label = localizeMailboxName(node.role, node.name, (key) => tSidebar(`mailboxes.${key}`));
-        if (moveTargetIds.has(node.id) && label.toLowerCase().includes(q)) out.push({ ...node, children: [] });
-        walk(node.children);
-      }
-    };
-    walk(moveTree);
-    return out;
-  })();
+  const chooseMoveFolder = useChooseMoveFolder();
 
   // What the tag picker shows: a tag every selected message carries is
   // checked, one only some of them carry is drawn as partial.
@@ -478,7 +435,7 @@ export function MvListToolbar({
                 <ContextMenuSeparator />
                 <ContextMenuItem
                   icon={FolderX}
-                  label={tFolder("empty_folder")}
+                  label={isInTrash ? tP2("empty_trash") : tP2("empty_spam")}
                   destructive
                   onClick={() => {
                     closeMenu();
@@ -560,7 +517,7 @@ export function MvListToolbar({
             disabled={isProcessing}
           />
           <div className="w-px h-6 bg-border mx-1 shrink-0" />
-          {moveTree.length > 0 && (
+          {!moveMenuIsEmpty(moveModel) && (
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -581,22 +538,19 @@ export function MvListToolbar({
               <ContextMenu ref={moveMenu.menuRef} isOpen={moveOpen} position={moveMenu.contextMenu.position} onClose={closeMove}>
                 <div className="min-w-64" data-mv-move-menu="">
                   <ContextMenuHeader>{tMenu("move_to")}</ContextMenuHeader>
-                  <label className="mx-3 my-1 flex items-center gap-2 border-b border-border">
-                    <input
-                      value={moveQuery}
-                      onChange={(e) => setMoveQuery(e.target.value)}
-                      className="h-8 min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
-                      aria-label={tMenu("move_to")}
-                    />
-                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  </label>
-                  <div className="max-h-72 overflow-y-auto">
-                    {moveMatches ? renderMoveNodes(moveMatches) : renderMoveNodes(moveTree)}
-                  </div>
+                  <MoveFolderList
+                    model={moveModel}
+                    alwaysFilter
+                    onPick={handleMove}
+                    onChooseFolder={chooseMoveFolder
+                      ? () => { closeMove(); chooseMoveFolder({ emails: selectedEmails, onMove: handleMove }); }
+                      : undefined}
+                  />
                   {onCreateFolder && (
                     <>
                       <ContextMenuSeparator />
                       <ContextMenuItem
+                        icon={Plus}
                         label={tSidebar("create_label")}
                         onClick={() => { closeMove(); onCreateFolder(); }}
                       />
