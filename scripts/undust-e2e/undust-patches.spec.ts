@@ -148,8 +148,17 @@ test("a scheduled mail is stamped with its release time, and Send now re-checks 
 test("an invitation awaiting a reply is marked in the calendar (upstream 1.21 marker, replaces our rsvp1 hatch)", async ({ page }) => {
   // The mock lists the user as organizer; make them an attendee who has not replied.
   await page.route("**/api/dev-jmap/api", async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
+    // 1.21 fires more requests around a page change: a response disposed
+    // by a navigation is not this test's business.
+    let response;
+    let body;
+    try {
+      response = await route.fetch();
+      body = await response.json();
+    } catch {
+      await route.fallback().catch(() => undefined);
+      return;
+    }
     for (const [name, result] of body.methodResponses ?? []) {
       if (name !== "CalendarEvent/get") continue;
       for (const event of result.list ?? []) {
@@ -351,7 +360,9 @@ test("a re-opened draft written elsewhere goes out with its author's signature o
   // The external draft: no second signature in the composer, none at send.
   await page.locator('[data-testid="folder-row"][data-folder-role="drafts"]').first().click();
   await page.locator('[data-tour="email-list"] [role="row"]', { hasText: "Standup notes" }).first().click();
-  await page.getByTestId("edit-draft").first().click();
+  // 1.21 opens a draft straight in the composer on click; older builds had an Edit draft button.
+  const editDraft = page.getByTestId("edit-draft");
+  if (await editDraft.count()) await editDraft.first().click();
   const editor = page.locator(".ProseMirror").first();
   await expect(editor.getByText(HAND)).toBeVisible();
   await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);

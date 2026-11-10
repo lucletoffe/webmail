@@ -1937,7 +1937,7 @@
       }
     },
     "keyboard_shortcuts": {
-      "title": "Keyboard shortcuts",
+      "title": "Mail action keys",
       "description": "Give the mail actions your own keys, such as Ctrl + E to archive. A key you choose replaces the built-in one.",
       "change": "Change",
       "reset": "Reset",

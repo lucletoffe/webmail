@@ -3497,6 +3497,17 @@
         "description": "Η φωνή που διαβάζει τα μηνύματα δυνατά. Η λίστα εμφανίζει τις φωνές που έχει το πρόγραμμα περιήγησής σας για τη γλώσσα διεπαφής.",
         "default": "Προεπιλογή προγράμματος περιήγησης"
       }
+    },
+    "keyboard_shortcuts": {
+      "title": "Keyboard shortcuts",
+      "description": "Give the mail actions your own keys, such as Ctrl + E to archive. A key you choose replaces the built-in one.",
+      "change": "Change",
+      "reset": "Reset",
+      "reset_all": "Reset all shortcuts",
+      "recording": "Press the new key… (Esc to cancel)",
+      "invalid": "{key} can't be used: the app or the browser keeps it.",
+      "taken": "{key} is already used by “{action}”.",
+      "fixed_keys": "Moving through the list (j, k, arrows, Enter, Esc, g sequences), x, ? and Ctrl/⌘ + A keep their keys."
     }
   },
   "uxs_structure": {
@@ -4795,7 +4806,14 @@
       "calendar_select": "Ημερολόγιο",
       "save": "Αποθήκευση",
       "cancel": "Ακύρωση",
-      "color": "Χρώμα"
+      "color": "Χρώμα",
+      "undust_meet_generate": "Generate an undust visio link",
+      "undust_meet_generating": "Generating…",
+      "undust_meet_prompt": "Add an undust visio link to this event?",
+      "undust_meet_prompt_yes": "Yes",
+      "undust_meet_prompt_no": "No",
+      "undust_meet_error": "Could not generate the visio link (code {code}).",
+      "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:"
     },
     "participants": {
       "availability": {
