@@ -34,6 +34,16 @@ import {
   isValidSubAddressDelimiter,
 } from '@/lib/sub-addressing';
 import { sanitizeShortcutBindings, type ShortcutBindings } from '@/lib/shortcut-bindings';
+import {
+  SETTINGS_STAMPS_FIELD,
+  emptyLocalStamps,
+  localChangeWins,
+  parseLocalStamps,
+  readStamps,
+  type LocalSettingStamps,
+} from '@/lib/settings-sync-stamps';
+import { getDesktopBridge } from '@/lib/desktop/bridge';
+import { forgetSignedOutChoices, signedOutChoices } from '@/lib/signed-out-choices';
 
 // Use console directly to avoid circular dependency with lib/debug.ts
 // (debug.ts imports useSettingsStore for debugMode check)
@@ -54,9 +64,12 @@ let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let pendingSync: SettingsSyncJob | null = null;
 let isLoadingFromServer = false;
 // Set by loadFromServer when this browser holds templates (or deletions) the
-// server blob lacks; enableSync then pushes once instead of waiting for the
-// next unrelated settings change.
-let pushTemplatesAfterLoad = false;
+// server blob lacks, or setting changes the server never got; enableSync then
+// pushes once instead of waiting for the next unrelated settings change.
+let pushAfterLoad = false;
+// Writes the user didn't make (an admin policy's defaults, a server copy
+// being applied): they get no change stamp.
+let unstampedWrites = 0;
 // Wired up in the window-only init block below; null during SSR.
 let requestSync: (() => void) | null = null;
 // Account whose settings could not be loaded while this browser still held
@@ -107,12 +120,108 @@ function writeSettingsOwner(accountId: string | null): void {
   }
 }
 
+// When each setting changed here, and which changes the server hasn't taken
+// yet (lib/settings-sync-stamps). Kept next to settings-storage, so a change
+// whose push a reload, a closed window or a lost connection cut off is kept
+// on the next load instead of being overwritten by the older server copy.
+// Read fresh each time: tabs of one browser share it, like settings-storage.
+const SETTINGS_STAMPS_KEY = 'settings-sync-stamps';
+
+function getLocalStamps(): LocalSettingStamps {
+  try {
+    if (typeof window === 'undefined') return emptyLocalStamps();
+    return parseLocalStamps(window.localStorage.getItem(SETTINGS_STAMPS_KEY));
+  } catch {
+    return emptyLocalStamps();
+  }
+}
+
+function saveLocalStamps(local: LocalSettingStamps): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(SETTINGS_STAMPS_KEY, JSON.stringify(local));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function markLocalChange(keys: string[]): void {
+  const local = getLocalStamps();
+  const now = Date.now();
+  for (const key of keys) {
+    local.stamps[key] = now;
+    local.dirty[key] = now;
+  }
+  saveLocalStamps(local);
+}
+
+function hasUnsyncedChanges(): boolean {
+  return Object.keys(getLocalStamps().dirty).length > 0;
+}
+
+/** The server took a push: its changes are no longer only here. */
+function acknowledgeChanges(sent: Record<string, number>): void {
+  const local = getLocalStamps();
+  let changed = false;
+  for (const [key, at] of Object.entries(sent)) {
+    if (local.dirty[key] === at) {
+      delete local.dirty[key];
+      changed = true;
+    }
+  }
+  if (changed) saveLocalStamps(local);
+}
+
+function clearLocalStamps(): void {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.removeItem(SETTINGS_STAMPS_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 const SYNC_DEBOUNCE_MS = 2000;
+// Browsers refuse a keepalive request body over 64 KiB.
+const KEEPALIVE_MAX_BYTES = 60 * 1024;
 
 interface SettingsSyncJob {
   username: string;
   serverUrl: string;
   settings: Record<string, unknown>;
+  /** The unsynced changes this push carries, to clear once the server has them. */
+  dirty: Record<string, number>;
+}
+
+// In the desktop app a closing window or quitting app waits for the pending
+// push, through the shell's lifecycle bridge; only while one is pending, so
+// a window with nothing to send closes at once.
+let stopDesktopFlush: (() => void) | null = null;
+
+function syncDesktopFlush(): void {
+  if (!pendingSync) {
+    stopDesktopFlush?.();
+    stopDesktopFlush = null;
+    return;
+  }
+  if (stopDesktopFlush) return;
+  const lifecycle = getDesktopBridge()?.lifecycle;
+  if (lifecycle) {
+    stopDesktopFlush = lifecycle.onFlushRequest(async () => {
+      await useSettingsStore.getState().flushSync();
+      return {};
+    });
+  }
+}
+
+/** Takes the pending push off the debounce timer. */
+function takePendingSync(): SettingsSyncJob | null {
+  if (syncTimeout) {
+    clearTimeout(syncTimeout);
+    syncTimeout = null;
+  }
+  const job = pendingSync;
+  pendingSync = null;
+  syncDesktopFlush();
+  return job;
 }
 
 // --- Template sync bridge ---------------------------------------------------
@@ -206,13 +315,28 @@ export function registerCalendarSubscriptionSyncBridge(
   subscribe(() => onCalendarSubscriptionStoreChange?.());
 }
 
-async function syncSettingsJob(job: SettingsSyncJob, retries = 1): Promise<void> {
+/**
+ * Pushes one snapshot. `keepalive` lets it finish after the page is gone
+ * (when it is small enough). A push that can't reach the server leaves its
+ * changes marked unsynced: they go out when the connection is back, and the
+ * next load keeps them.
+ */
+async function syncSettingsJob(job: SettingsSyncJob, retries = 1, opts?: { keepalive?: boolean }): Promise<void> {
   syncLog('Syncing settings to server for', job.username);
-  const res = await apiFetch('/api/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(job),
-  });
+  const body = JSON.stringify({ username: job.username, serverUrl: job.serverUrl, settings: job.settings });
+  const keepalive = opts?.keepalive === true && new TextEncoder().encode(body).length <= KEEPALIVE_MAX_BYTES;
+  let res: Response;
+  try {
+    res = await apiFetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      ...(keepalive ? { keepalive: true } : {}),
+    });
+  } catch (error) {
+    syncWarn('Settings sync could not reach the server; the changes stay marked to send:', error);
+    return;
+  }
   if (res.status === 404) {
     syncWarn('Settings sync endpoint returned 404, disabling sync');
     syncEnabled = false;
@@ -228,6 +352,7 @@ async function syncSettingsJob(job: SettingsSyncJob, retries = 1): Promise<void>
     const body = await res.json().catch(() => ({}));
     syncError('Settings sync failed:', body.error || `status ${res.status}`);
   } else {
+    acknowledgeChanges(job.dirty);
     syncLog('Settings synced to server successfully');
     void settingsHooks.onSettingsSync.emit({ direction: 'pushed' });
   }
@@ -317,8 +442,6 @@ export type FirstDayOfWeek = 0 | 1 | 6; // 0 = Sunday, 1 = Monday, 6 = Saturday
 export type TimeZoneSetting = 'auto' | (string & {});
 export type ExternalContentPolicy = 'ask' | 'block' | 'allow';
 export type MailAttachmentAction = 'preview' | 'download';
-/** 'below-header': a bar of tiles under the header. 'below-message': preview cards after the body. */
-export type AttachmentPosition = 'below-header' | 'below-message';
 export type ToolbarPosition = 'top' | 'below-subject';
 export type ArchiveMode = 'single' | 'year' | 'month';
 export type MailLayout = 'split' | 'focus' | 'horizontal';
@@ -360,7 +483,18 @@ export type CalendarHoverPreview = 'off' | 'instant' | 'delay-500ms' | 'delay-1s
  */
 export type MonthTimedEventStyle = 'bar' | 'text' | 'dot';
 export const MONTH_TIMED_EVENT_STYLES: readonly MonthTimedEventStyle[] = ['bar', 'text', 'dot'];
-export type SendDelaySeconds = 0 | 10 | 30 | 60;
+export type SendDelaySeconds = 0 | 5 | 10 | 30 | 60;
+/**
+ * The undo send windows a setting may hold. The page offers Off, 5, 10 and
+ * 30 seconds; 60 was offered before and stays valid for those who chose it.
+ */
+export const SEND_DELAY_SECONDS: readonly SendDelaySeconds[] = [0, 5, 10, 30, 60];
+const isSendDelaySeconds = (value: unknown): value is SendDelaySeconds =>
+  SEND_DELAY_SECONDS.includes(value as SendDelaySeconds);
+/** The choices the settings pages offer: 60 only to someone who has it. */
+export function undoSendOptions(current: SendDelaySeconds): SendDelaySeconds[] {
+  return SEND_DELAY_SECONDS.filter((seconds) => seconds !== 60 || current === 60);
+}
 export type ProtocolOpenMode = 'active-session' | 'new-tab';
 
 /**
@@ -370,6 +504,12 @@ export type ProtocolOpenMode = 'active-session' | 'new-tab';
  * import.
  */
 const DEVICE_LOCAL_SETTING_KEYS = new Set<string>(['proInterface']);
+
+/**
+ * Maps keyed by account id. Every account's server copy carries one, and a
+ * server load takes only the loading account's entry.
+ */
+const PER_ACCOUNT_MAP_KEYS = new Set<string>(['preferredIdentityIds', 'allMailFolderIds', 'hiddenSharedMailAccounts']);
 
 /** A map of plugin id → boolean, whatever came in (sync, import, storage). */
 function booleanRecord(value: unknown): Record<string, boolean> {
@@ -597,8 +737,8 @@ interface SettingsState extends AccessibilitySettings {
   externalContentPolicy: ExternalContentPolicy;
   messageSpacing: MessageSpacing; // Gutter around the message body in the reader
   plainTextFont: PlainTextFont; // Font for text/plain email bodies in the reader
+  printTheme: string; // A plugin print style ('<pluginId>/<id>') or 'standard' (Settings > Appearance > Printing)
   mailAttachmentAction: MailAttachmentAction;
-  attachmentPosition: AttachmentPosition;
   emailAlwaysLightMode: boolean; // Always render email content in light mode
   archiveMode: ArchiveMode; // How to organize archived emails: single folder, by year, or by year+month
   hoverActions: HoverAction[]; // Quick actions shown on hover in mail list
@@ -641,10 +781,9 @@ interface SettingsState extends AccessibilitySettings {
   sessionTimeout: number; // minutes (0 = never)
   trustedSenders: string[]; // Email addresses that can load external content
   // Store trusted senders in a dedicated JMAP address book so they sync across
-  // devices. `null` means "not yet decided": resolved on first connect to
-  // `true` when the server supports contacts, otherwise left off. Once the user
-  // toggles it, it holds a concrete boolean and is never auto-changed again.
-  trustedSendersAddressBook: boolean | null;
+  // devices. On by default; a server without address books keeps the list on
+  // the device (contact store: trustedSendersBookUnavailable).
+  trustedSendersAddressBook: boolean;
 
   // Filters
   expandedFilterView: boolean;
@@ -665,6 +804,11 @@ interface SettingsState extends AccessibilitySettings {
   calendarDayEndHour: number;
   /** Leave the days missing from calendarWorkingDays out of the week view (#1164). */
   calendarHideNonWorkingDays: boolean;
+  /**
+   * Week view in a pane under 1000px wide shows all its days; else three
+   * at a time, as Google Calendar does (pim-p3-13).
+   */
+  calendarNarrowWeekAllDays: boolean;
   /** Weekdays as `Date.getDay` numbers (0 = Sunday). */
   calendarWorkingDays: number[];
   /** An out-of-office reply with dates puts a busy event in the calendar (lib/vacation-calendar.ts). */
@@ -722,6 +866,9 @@ interface SettingsState extends AccessibilitySettings {
   toolbarPosition: ToolbarPosition;
   showToolbarLabels: boolean;
   hideAccountSwitcher: boolean;
+  // The account switcher at the head of the folder sidebar, with the round
+  // Compose button over the list. Off puts Compose at the sidebar's head.
+  sidebarAccountSwitcher: boolean;
   showRailAccountList: boolean;
   proInterface: boolean;
   // Settings marked `advanced` (power-user and integrator rows) stay hidden
@@ -764,6 +911,7 @@ interface SettingsState extends AccessibilitySettings {
   senderFavicons: boolean;
   showAvatarsInJunk: boolean; // Show profile images/favicons in the junk folder
   faviconUnreadBadge: boolean; // Badge the browser-tab icon with the inbox unread count
+  unreadBadgeAllAccounts: boolean; // That badge (and the desktop tray) counts every signed-in account's inbox, not only the open one
 
   // Sidebar
   colorfulSidebarIcons: boolean; // Tint folder icons by role (inbox blue, junk red, etc.)
@@ -954,8 +1102,8 @@ const DEFAULT_SETTINGS = {
   externalContentPolicy: 'ask' as ExternalContentPolicy,
   messageSpacing: 'auto' as MessageSpacing,
   plainTextFont: 'sans' as PlainTextFont,
+  printTheme: 'standard',
   mailAttachmentAction: 'preview' as MailAttachmentAction,
-  attachmentPosition: 'below-header' as AttachmentPosition,
   emailAlwaysLightMode: false,
   archiveMode: 'single' as ArchiveMode,
   hoverActions: ['delete', 'star', 'markRead', 'archive'] as HoverAction[],
@@ -977,7 +1125,8 @@ const DEFAULT_SETTINGS = {
   writingLanguage: 'auto',
   rtlEditingSupport: false,
   subAddressDelimiter: DEFAULT_SUB_ADDRESS_DELIMITER,
-  sendDelaySeconds: 0 as SendDelaySeconds,
+  // Undo send is on out of the box, as in other mail apps (v13).
+  sendDelaySeconds: 5 as SendDelaySeconds,
   signaturePosition: 'below_quote' as SignaturePosition,
   // On, as before the toggles existed: saved settings and server copies
   // from older builds lack these keys and fall back to this default.
@@ -991,7 +1140,7 @@ const DEFAULT_SETTINGS = {
   // Privacy & Security
   sessionTimeout: 0, // Never
   trustedSenders: [] as string[],
-  trustedSendersAddressBook: null as boolean | null,
+  trustedSendersAddressBook: true,
 
   // Filters
   expandedFilterView: false,
@@ -1007,13 +1156,17 @@ const DEFAULT_SETTINGS = {
   calendarDayStartHour: 8,
   calendarDayEndHour: 20,
   calendarHideNonWorkingDays: false,
+  calendarNarrowWeekAllDays: false,
   calendarWorkingDays: [1, 2, 3, 4, 5] as number[],
   vacationBlockCalendar: true,
   vacationCalendarBlocks: {} as Record<string, { start: string; end: string }>,
   hiddenCompanyCalendars: [] as string[],
 
   // Calendar Tasks
-  enableCalendarTasks: false,
+  // On: tasks show where the server has calendars (pim-8). Both Stalwarts
+  // keep tasks as CalendarEvent objects of @type Task, with no capability
+  // of their own to check.
+  enableCalendarTasks: true,
   showTasksOnCalendar: true,
 
   // Contact Birthday Calendar
@@ -1050,6 +1203,7 @@ const DEFAULT_SETTINGS = {
   toolbarPosition: 'top' as ToolbarPosition,
   showToolbarLabels: true,
   hideAccountSwitcher: false,
+  sidebarAccountSwitcher: true,
   showRailAccountList: false,
   proInterface: false,
   showAdvancedSettings: false,
@@ -1072,6 +1226,7 @@ const DEFAULT_SETTINGS = {
   senderFavicons: true,
   showAvatarsInJunk: false,
   faviconUnreadBadge: true,
+  unreadBadgeAllAccounts: true,
 
   // Sidebar
   colorfulSidebarIcons: true,
@@ -1171,12 +1326,27 @@ const hasOwn = (obj: object, key: string) => Object.prototype.hasOwnProperty.cal
 const builtInDefault = (key: string) => (DEFAULT_SETTINGS as Record<string, unknown>)[key];
 
 /**
- * Settings an admin policy may set (#1248): plain values (boolean, number,
- * string). Lists and maps (tags, folder icons, per-account maps) stay the
+ * The list settings a policy may set too (#1564), with the entries each may
+ * hold. Other lists and maps (tags, folder icons, per-account maps) stay the
  * user's own.
+ */
+const POLICY_LIST_SETTINGS: Record<string, readonly string[]> = {
+  hoverActions: ALL_HOVER_ACTIONS.map((action) => action.id),
+};
+
+/** Equal values, lists compared entry by entry. */
+function sameSettingValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((entry, i) => entry === b[i]);
+}
+
+/**
+ * Settings an admin policy may set (#1248): plain values (boolean, number,
+ * string), and the lists in POLICY_LIST_SETTINGS.
  */
 function isPolicySettingKey(key: string): boolean {
   if (key === 'explicitSettings' || !hasOwn(DEFAULT_SETTINGS, key)) return false;
+  if (hasOwn(POLICY_LIST_SETTINGS, key)) return true;
   const type = typeof builtInDefault(key);
   return type === 'boolean' || type === 'number' || type === 'string';
 }
@@ -1187,9 +1357,15 @@ function isPolicySettingKey(key: string): boolean {
  * the restriction's allowed values and bounds.
  */
 function isAllowedPolicyValue(key: string, value: unknown, restriction?: SettingRestriction): boolean {
-  if (!isPolicySettingKey(key) || typeof value !== typeof builtInDefault(key)) return false;
+  if (!isPolicySettingKey(key)) return false;
+  if (hasOwn(POLICY_LIST_SETTINGS, key)) {
+    // Known entries only, each once; an empty list is a choice too.
+    const known = POLICY_LIST_SETTINGS[key];
+    return Array.isArray(value) && value.every((entry) => known.includes(entry)) && new Set(value).size === value.length;
+  }
+  if (typeof value !== typeof builtInDefault(key)) return false;
   if (typeof value === 'number' && !Number.isFinite(value)) return false;
-  if (key === 'sendDelaySeconds' && ![0, 10, 30, 60].includes(value as number)) return false;
+  if (key === 'sendDelaySeconds' && !isSendDelaySeconds(value)) return false;
   if (key === 'subAddressDelimiter' && !isValidSubAddressDelimiter(value as string)) return false;
   if (key === 'messageListOrderScope' && value !== 'inbox' && value !== 'all') return false;
   if (key === 'searchDefaultScope' && !isSearchDefaultScope(value)) return false;
@@ -1231,8 +1407,20 @@ function withLegacyPolicyKeys<T>(record: Record<string, T>): Record<string, T> {
  */
 export function legacyExplicitSettings(source: Record<string, unknown>): string[] {
   return Object.keys(source).filter(
-    (key) => isPolicySettingKey(key) && source[key] !== builtInDefault(key),
+    (key) => isPolicySettingKey(key) && !sameSettingValue(source[key], builtInDefault(key)),
   );
+}
+
+const warnedDefaults = new Set<string>();
+
+/**
+ * Say once per key why a policy default had no effect (#1564): policy.json
+ * is written by hand, and a skipped key otherwise just looks ignored.
+ */
+function warnSkippedDefault(key: string): void {
+  if (warnedDefaults.has(key)) return;
+  warnedDefaults.add(key);
+  console.warn(`[policy] defaults.${key} skipped: not a setting a policy may set, or a value it can't take`);
 }
 
 /**
@@ -1251,8 +1439,12 @@ export function adminPolicyPatch(
   const restrictionFor = (key: string) => (hasOwn(restrictions, key) ? restrictions[key] : undefined);
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(defaults)) {
-    if (explicit.has(key) || !isAllowedPolicyValue(key, value, restrictionFor(key))) continue;
-    if (state[key] !== value) patch[key] = value;
+    if (explicit.has(key)) continue;
+    if (!isAllowedPolicyValue(key, value, restrictionFor(key))) {
+      warnSkippedDefault(key);
+      continue;
+    }
+    if (!sameSettingValue(state[key], value)) patch[key] = value;
   }
   for (const [key, restriction] of Object.entries(restrictions)) {
     if (!isPlainRecord(restriction) || restriction.locked !== true) continue;
@@ -1261,7 +1453,7 @@ export function adminPolicyPatch(
     // Text size, contrast, motion and the other reading aids can't be
     // locked: a lock on one of them works as a default the user may change.
     if (UNLOCKABLE_SETTING_KEYS.has(key) && explicit.has(key)) continue;
-    if (state[key] !== value) patch[key] = value;
+    if (!sameSettingValue(state[key], value)) patch[key] = value;
     else delete patch[key];
   }
   return patch;
@@ -1296,7 +1488,7 @@ export function adminPolicyReleasePatch(
   const patch: Record<string, unknown> = {};
   for (const [key, value] of before) {
     if (after.has(key) || explicit.has(key) || !isPolicySettingKey(key)) continue;
-    if (state[key] === value && value !== builtInDefault(key)) patch[key] = builtInDefault(key);
+    if (sameSettingValue(state[key], value) && !sameSettingValue(value, builtInDefault(key))) patch[key] = builtInDefault(key);
   }
   return patch;
 }
@@ -1313,6 +1505,10 @@ export const useSettingsStore = create<SettingsState>()(
         const defaults: Record<string, unknown> = { ...DEFAULT_SETTINGS };
         for (const key of DEVICE_LOCAL_SETTING_KEYS) delete defaults[key];
         if (opts?.keepCrossAccountViews) for (const key of CROSS_ACCOUNT_VIEW_KEYS) delete defaults[key];
+        // What the visitor set on the sign-in page stays, and counts as a
+        // change made here, newer than the server copy (lib/signed-out-choices.ts).
+        const keptChoices = signedOutChoices();
+        for (const key of keptChoices) delete defaults[key];
         // Settings left as they are keep their "chosen by the user" mark.
         defaults.explicitSettings = get().explicitSettings.filter((key) => !hasOwn(defaults, key));
         const wasLoading = isLoadingFromServer;
@@ -1325,6 +1521,9 @@ export const useSettingsStore = create<SettingsState>()(
         } finally {
           isLoadingFromServer = wasLoading;
         }
+        // The change times were this state's; the next one starts without any.
+        clearLocalStamps();
+        if (keptChoices.length > 0) markLocalChange(keptChoices);
         applyVisualSettings();
       };
 
@@ -1342,7 +1541,12 @@ export const useSettingsStore = create<SettingsState>()(
           usePolicyStore.getState().policy,
         );
         if (Object.keys(patch).length === 0) return false;
-        set(patch as Partial<SettingsState>);
+        unstampedWrites++;
+        try {
+          set(patch as Partial<SettingsState>);
+        } finally {
+          unstampedWrites--;
+        }
         return true;
       };
 
@@ -1408,8 +1612,8 @@ export const useSettingsStore = create<SettingsState>()(
           externalContentPolicy: state.externalContentPolicy,
           messageSpacing: state.messageSpacing,
           plainTextFont: state.plainTextFont,
+          printTheme: state.printTheme,
           mailAttachmentAction: state.mailAttachmentAction,
-          attachmentPosition: state.attachmentPosition,
           archiveMode: state.archiveMode,
           hoverActions: state.hoverActions,
           hoverActionsMode: state.hoverActionsMode,
@@ -1469,12 +1673,14 @@ export const useSettingsStore = create<SettingsState>()(
           calendarDayStartHour: state.calendarDayStartHour,
           calendarDayEndHour: state.calendarDayEndHour,
           calendarHideNonWorkingDays: state.calendarHideNonWorkingDays,
+          calendarNarrowWeekAllDays: state.calendarNarrowWeekAllDays,
           calendarWorkingDays: state.calendarWorkingDays,
           vacationBlockCalendar: state.vacationBlockCalendar,
           vacationCalendarBlocks: state.vacationCalendarBlocks,
           hiddenCompanyCalendars: state.hiddenCompanyCalendars,
           toolbarPosition: state.toolbarPosition,
           hideAccountSwitcher: state.hideAccountSwitcher,
+          sidebarAccountSwitcher: state.sidebarAccountSwitcher,
           showRailAccountList: state.showRailAccountList,
           showAdvancedSettings: state.showAdvancedSettings,
           // proInterface is intentionally omitted - it's a per-device choice
@@ -1490,6 +1696,7 @@ export const useSettingsStore = create<SettingsState>()(
           senderFavicons: state.senderFavicons,
           showAvatarsInJunk: state.showAvatarsInJunk,
           faviconUnreadBadge: state.faviconUnreadBadge,
+          unreadBadgeAllAccounts: state.unreadBadgeAllAccounts,
           colorfulSidebarIcons: state.colorfulSidebarIcons,
           tintListRowsByTag: state.tintListRowsByTag,
           tintListRowsByAccount: state.tintListRowsByAccount,
@@ -1520,6 +1727,9 @@ export const useSettingsStore = create<SettingsState>()(
           debugCategories: state.debugCategories,
           settingsSyncDisabled: state.settingsSyncDisabled,
           explicitSettings: state.explicitSettings,
+          // When each setting last changed, so the server keeps whichever
+          // device changed it last (lib/settings-sync-stamps).
+          ...(opts?.forSync ? { [SETTINGS_STAMPS_FIELD]: { ...getLocalStamps().stamps } } : {}),
           emailAlwaysLightMode: state.emailAlwaysLightMode,
           showToolbarLabels: state.showToolbarLabels,
           ...Object.fromEntries(ACCESSIBILITY_KEYS.map((key) => [key, state[key]])),
@@ -1580,12 +1790,22 @@ export const useSettingsStore = create<SettingsState>()(
         const released = previous
           ? adminPolicyReleasePatch(get() as unknown as Record<string, unknown>, previous, usePolicyStore.getState().policy)
           : {};
-        if (Object.keys(released).length > 0) set(released as Partial<SettingsState>);
+        if (Object.keys(released).length > 0) {
+          unstampedWrites++;
+          try {
+            set(released as Partial<SettingsState>);
+          } finally {
+            unstampedWrites--;
+          }
+        }
         if (applyAdminPolicyPatch() || Object.keys(released).length > 0) applyVisualSettings();
       },
 
       resetToDefaults: () => {
-        set(DEFAULT_SETTINGS);
+        // The choice to keep settings in sync stays: the confirm says other
+        // devices change only when sync is on (settings-p2-18), and a reset
+        // turning sync back on would push these defaults to all of them.
+        set({ ...DEFAULT_SETTINGS, settingsSyncDisabled: get().settingsSyncDisabled });
         // The defaults of this instance are the operator's, then the build's.
         applyAdminPolicyPatch();
         applyVisualSettings();
@@ -1621,6 +1841,9 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       importSettings: (json: string, opts?: { serverAccountId?: string; keepCrossAccountViews?: boolean; subscriptionOwner?: string }) => {
+        // A server copy is not a change made here: it gets no change stamp.
+        const fromServer = Boolean(opts?.serverAccountId);
+        if (fromServer) unstampedWrites++;
         try {
           const settings = JSON.parse(json);
 
@@ -1635,7 +1858,24 @@ export const useSettingsStore = create<SettingsState>()(
           migrateAnimationsSetting(settings);
           migrateNotificationSoundDefault(settings);
           migrateTintListRowsDefault(settings);
-          migrateAttachmentPosition(settings);
+          migrateCalendarTasksDefault(settings);
+          migrateUndoSendDefault(settings);
+          migrateTrustedSendersBookDefault(settings);
+          dropAttachmentPosition(settings);
+
+          // A server copy doesn't replace a setting changed here after that
+          // copy was written, whose push never got through (a reload inside
+          // the debounce, a closed window, no connection). A later change on
+          // another device still wins for that setting.
+          const serverStamps = fromServer ? readStamps(settings[SETTINGS_STAMPS_FIELD]) : null;
+          const local = serverStamps ? getLocalStamps() : null;
+          const keepsLocal = (key: string) => serverStamps !== null && local !== null && localChangeWins(local, serverStamps, key);
+          const takeOverStamp = (key: string) => {
+            if (!serverStamps || !local) return;
+            if (serverStamps[key]) local.stamps[key] = serverStamps[key];
+            else delete local.stamps[key];
+            delete local.dirty[key];
+          };
 
           // Apply settings, noting which keys were taken over for the
           // onSettingsImport hook.
@@ -1650,10 +1890,14 @@ export const useSettingsStore = create<SettingsState>()(
               if (key === 'explicitSettings') {
                 return;
               }
+              const perAccountMap = Boolean(opts?.serverAccountId) && PER_ACCOUNT_MAP_KEYS.has(key);
+              if (keepsLocal(key) && !perAccountMap) {
+                return;
+              }
               if (key === 'subAddressDelimiter' && !isValidSubAddressDelimiter(settings[key])) {
                 return;
               }
-              if (key === 'sendDelaySeconds' && ![0, 10, 30, 60].includes(settings[key])) {
+              if (key === 'sendDelaySeconds' && !isSendDelaySeconds(settings[key])) {
                 put(key, { sendDelaySeconds: 0 });
                 return;
               }
@@ -1737,14 +1981,19 @@ export const useSettingsStore = create<SettingsState>()(
               // the map and the composer picks another account's default sender
               // (login-order dependent). File imports (no serverAccountId)
               // still replace wholesale.
-              if (opts?.serverAccountId && (key === 'preferredIdentityIds' || key === 'allMailFolderIds' || key === 'hiddenSharedMailAccounts')) {
+              if (perAccountMap && opts?.serverAccountId) {
                 const existing = (get() as unknown as Record<string, unknown>)[key];
                 const merged: Record<string, unknown> = isPlainRecord(existing) ? { ...existing } : {};
                 const incoming = settings[key] as Record<string, unknown>;
-                if (Object.prototype.hasOwnProperty.call(incoming, opts.serverAccountId)) {
+                // A map changed here that the server never got keeps this
+                // device's entry, and only fills one it lacks.
+                const localWins = keepsLocal(key);
+                if (Object.prototype.hasOwnProperty.call(incoming, opts.serverAccountId) &&
+                    !(localWins && Object.prototype.hasOwnProperty.call(merged, opts.serverAccountId))) {
                   merged[opts.serverAccountId] = incoming[opts.serverAccountId];
                 }
-                put(key, { [key]: merged });
+                if (localWins) set({ [key]: merged } as Partial<SettingsState>);
+                else put(key, { [key]: merged });
                 return;
               }
               put(key, { [key]: settings[key] });
@@ -1756,6 +2005,7 @@ export const useSettingsStore = create<SettingsState>()(
           // device knew. A blob from before explicitSettings existed counts a
           // value that differs from the build default as chosen.
           const takenOver = new Set(imported);
+          for (const key of takenOver) takeOverStamp(key);
           const blobExplicit: string[] = Array.isArray(settings.explicitSettings)
             ? settings.explicitSettings.filter((key: unknown): key is string => typeof key === 'string')
             : legacyExplicitSettings(settings);
@@ -1774,16 +2024,20 @@ export const useSettingsStore = create<SettingsState>()(
           applyVisualSettings();
 
           // Apply cross-store settings
-          if (settings.theme) {
+          if (settings.theme && !keepsLocal('theme')) {
             // A mode the user never chose leaves room for the operator's
             // default (#1280). Blobs from before themeChosen count any mode
             // but the built-in default as chosen.
             const themeChosen = typeof settings.themeChosen === 'boolean' ? settings.themeChosen : settings.theme !== 'system';
             useThemeStore.getState().setTheme(settings.theme, { chosen: themeChosen });
+            takeOverStamp('theme');
+            takeOverStamp('themeChosen');
           }
-          if (settings.locale) {
+          if (settings.locale && !keepsLocal('locale')) {
             useLocaleStore.getState().setLocale(settings.locale);
+            takeOverStamp('locale');
           }
+          if (local) saveLocalStamps(local);
           // Templates live in their own store but ride along in the synced
           // settings blob (#825). Server loads merge, because every account's
           // blob carries the full (account-agnostic) template list and a stale
@@ -1814,6 +2068,8 @@ export const useSettingsStore = create<SettingsState>()(
         } catch (error) {
           console.error('Failed to import settings:', error);
           return false;
+        } finally {
+          if (fromServer) unstampedWrites--;
         }
       },
 
@@ -1939,19 +2195,14 @@ export const useSettingsStore = create<SettingsState>()(
         syncServerUrl = serverUrl;
         syncEnabled = true;
         syncLog('Settings sync enabled for', username);
-        if (pushTemplatesAfterLoad) {
-          pushTemplatesAfterLoad = false;
+        if (pushAfterLoad) {
+          pushAfterLoad = false;
           if (!get().settingsSyncDisabled) requestSync?.();
         }
       },
 
       flushSync: async () => {
-        if (syncTimeout) {
-          clearTimeout(syncTimeout);
-          syncTimeout = null;
-        }
-        const job = pendingSync;
-        pendingSync = null;
+        const job = takePendingSync();
         if (job) await syncSettingsJob(job);
       },
 
@@ -1959,11 +2210,7 @@ export const useSettingsStore = create<SettingsState>()(
         syncEnabled = false;
         syncUsername = null;
         syncServerUrl = null;
-        if (syncTimeout) {
-          clearTimeout(syncTimeout);
-          syncTimeout = null;
-        }
-        pendingSync = null;
+        takePendingSync();
         syncLog('Settings sync disabled');
       },
 
@@ -1980,12 +2227,13 @@ export const useSettingsStore = create<SettingsState>()(
             writeSettingsOwner(null);
             blockedSyncAccountId = accountId;
           }
+          forgetSignedOutChoices();
           return false;
         };
         blockedSyncAccountId = null;
         try {
           syncLog('Loading settings from server for', username);
-          pushTemplatesAfterLoad = false;
+          pushAfterLoad = false;
           const res = await apiFetch('/api/settings', {
             headers: {
               'x-settings-username': username,
@@ -2008,7 +2256,8 @@ export const useSettingsStore = create<SettingsState>()(
             // previous account left in this browser (#1185).
             if (heldByOther) resetSyncedState({ keepCrossAccountViews });
             writeSettingsOwner(accountId);
-            pushTemplatesAfterLoad = localTemplatesAhead(null, accountId);
+            forgetSignedOutChoices();
+            pushAfterLoad = localTemplatesAhead(null, accountId) || hasUnsyncedChanges();
             return false;
           }
           if (settings && typeof settings === 'object') {
@@ -2026,7 +2275,9 @@ export const useSettingsStore = create<SettingsState>()(
             });
             isLoadingFromServer = false;
             writeSettingsOwner(accountId);
-            pushTemplatesAfterLoad = localTemplatesAhead(settings, accountId);
+            forgetSignedOutChoices();
+            // Changes kept over the server copy go up now.
+            pushAfterLoad = localTemplatesAhead(settings, accountId) || hasUnsyncedChanges();
             syncLog('Settings loaded from server successfully');
             void settingsHooks.onSettingsSync.emit({ direction: 'pulled' });
             // The per-account preferred sender identity (#507) is re-applied by
@@ -2057,7 +2308,7 @@ export const useSettingsStore = create<SettingsState>()(
     },
     {
       name: 'settings-storage',
-      version: 12,
+      version: 15,
       migrate: migrateSettings,
       onRehydrateStorage: () => {
         return (state) => {
@@ -2081,6 +2332,8 @@ export const useSettingsStore = create<SettingsState>()(
             if (!Array.isArray(state.explicitSettings)) {
               state.explicitSettings = [];
             }
+            // Stored before tasks were on by default; no version step of its own.
+            migrateCalendarTasksDefault(state as unknown as Record<string, unknown>);
             state.notificationMutes = normalizeNotificationMutes(state.notificationMutes);
             state.messageListOrder = sanitizeSortLevels(state.messageListOrder);
             if (state.messageListOrderScope !== 'inbox' && state.messageListOrderScope !== 'all') {
@@ -2109,13 +2362,15 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
           state.density = state.listDensity;
           delete state.listDensity;
         }
-        if (![0, 10, 30, 60].includes(state.sendDelaySeconds as number)) {
+        if (!isSendDelaySeconds(state.sendDelaySeconds)) {
           state.sendDelaySeconds = 0;
         }
         if (version < 3 && typeof state.protocolOpenMode !== 'string' && typeof state.protocolMailtoOpenMode === 'string') {
           state.protocolOpenMode = state.protocolMailtoOpenMode;
         }
         delete state.protocolMailtoOpenMode;
+        // Plain wording became the only wording: the switch is gone.
+        delete state.plainLanguage;
         // Never read: drafts save 2 s after the last change.
         delete state.autoSaveDraftInterval;
         // v4: `dateFormat` was repurposed from 'regional'|'iso'|'custom' to
@@ -2169,8 +2424,11 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
         // taken as chosen below.
         migrateNotificationSoundDefault(state);
         migrateTintListRowsDefault(state);
-        // The old default must not be taken as chosen below either.
-        migrateAttachmentPosition(state);
+        migrateCalendarTasksDefault(state);
+        migrateUndoSendDefault(state);
+        migrateTrustedSendersBookDefault(state);
+        // v15: attachments always sit under the header; the setting is gone.
+        dropAttachmentPosition(state);
         // v8: admin policy defaults (#1248) skip settings the user chose.
         // Earlier builds did not record that, so a setting that differs from
         // the build default is taken as chosen.
@@ -2182,14 +2440,16 @@ export function migrateSettings(persisted: unknown, version: number): SettingsSt
 }
 
 /**
- * v12: the attachments next to the sender ('beside-sender', the old default)
- * gave way to the bar under the header. Imports and server copies from older
- * builds still carry the old value and go through this too.
+ * v15: attachments always show under the message header, so the Attachment
+ * position setting is gone. A stored value ('below-message', or the older
+ * 'beside-sender') and its "chosen" mark are dropped, so nothing keeps it
+ * around and writes it back. Imports and server copies from older builds
+ * still carry it and go through this too.
  */
-export function migrateAttachmentPosition(state: Record<string, unknown>): void {
-  if (state.attachmentPosition === undefined) return;
-  if (state.attachmentPosition !== 'below-header' && state.attachmentPosition !== 'below-message') {
-    state.attachmentPosition = 'below-header';
+export function dropAttachmentPosition(state: Record<string, unknown>): void {
+  delete state.attachmentPosition;
+  if (Array.isArray(state.explicitSettings)) {
+    state.explicitSettings = (state.explicitSettings as unknown[]).filter((key) => key !== 'attachmentPosition');
   }
 }
 
@@ -2231,6 +2491,45 @@ export function migrateTintListRowsDefault(state: Record<string, unknown>): void
   if (state.tintListRowsByTag !== true) return;
   const chosen = Array.isArray(state.explicitSettings) && state.explicitSettings.includes('tintListRowsByTag');
   if (!chosen) state.tintListRowsByTag = false;
+}
+
+/**
+ * v13: undo send is on by default, with 5 seconds. Off (0) that the user
+ * never picked was only the old default and moves to 5; Off they picked
+ * stays. Imports and server copies from older builds still carry the 0 and
+ * go through this too.
+ */
+export function migrateUndoSendDefault(state: Record<string, unknown>): void {
+  if (state.sendDelaySeconds !== 0) return;
+  const chosen = Array.isArray(state.explicitSettings) && state.explicitSettings.includes('sendDelaySeconds');
+  if (!chosen) state.sendDelaySeconds = 5;
+}
+
+/**
+ * Tasks are on by default (pim-8). Off that the user never chose was only
+ * the old default and turns on; off they chose stays off. Imports and
+ * server copies from older builds still carry the old default and go
+ * through this too.
+ */
+export function migrateCalendarTasksDefault(state: Record<string, unknown>): void {
+  if (state.enableCalendarTasks !== false) return;
+  const chosen = Array.isArray(state.explicitSettings) && state.explicitSettings.includes('enableCalendarTasks');
+  if (!chosen) state.enableCalendarTasks = true;
+}
+
+/**
+ * v14: trusted senders are kept in their own address book by default. Off
+ * (false, the default before 2026-07) or "not decided yet" (null, the
+ * default since) that the user never picked turns on; off they picked
+ * stays. A choice made before explicitSettings existed (v8) was never
+ * recorded for this key, so it turns on too. Imports and server copies
+ * from older builds go through this as well, so an older device's copy
+ * doesn't switch it back off.
+ */
+export function migrateTrustedSendersBookDefault(state: Record<string, unknown>): void {
+  if (!('trustedSendersAddressBook' in state) || state.trustedSendersAddressBook === true) return;
+  const chosen = Array.isArray(state.explicitSettings) && state.explicitSettings.includes('trustedSendersAddressBook');
+  if (!chosen || typeof state.trustedSendersAddressBook !== 'boolean') state.trustedSendersAddressBook = true;
 }
 
 // Helper functions to apply settings to DOM
@@ -2291,9 +2590,8 @@ if (typeof window !== 'undefined') {
   applyInterfaceLayout(store.interfaceLayout, store.density);
 
   // The service worker shows push notifications without this store, so it
-  // reads the sound preference from its own Cache store (#1289).
-  // Do not disturb can't keep a push from showing (browsers require one per
-  // push), but it keeps it silent.
+  // reads the sound preference from its own Cache store (#1289). Whether they
+  // show at all goes per login (NotificationActionsHost).
   const pushSound = (s: SettingsState) => s.emailNotificationsEnabled && s.emailNotificationSound && !s.doNotDisturb;
   let lastPushSound = pushSound(store);
   void writePushPreferences({ sound: lastPushSound });
@@ -2311,6 +2609,28 @@ if (typeof window !== 'undefined') {
     useSettingsStore.getState().applyAdminPolicy(prev.policy);
   });
 
+  // Each change the user makes gets a change time, before the push below
+  // reads them. Server loads, policy defaults and the store's own hydration
+  // aren't changes made here.
+  const STAMPED_KEYS = Object.keys(DEFAULT_SETTINGS).filter(
+    (key) => key !== 'explicitSettings' && !DEVICE_LOCAL_SETTING_KEYS.has(key),
+  ) as (keyof SettingsState)[];
+  const stampsPaused = () => isLoadingFromServer || unstampedWrites > 0;
+  useSettingsStore.subscribe((state, prev) => {
+    if (stampsPaused() || !useSettingsStore.persist.hasHydrated()) return;
+    const changed = STAMPED_KEYS.filter((key) => state[key] !== prev[key]);
+    if (changed.length > 0) markLocalChange(changed as string[]);
+  });
+  // A mode the user didn't choose is the operator's default, not a change.
+  useThemeStore.subscribe((state, prev) => {
+    if (stampsPaused() || !state.themeChosen) return;
+    if (state.theme !== prev.theme || state.themeChosen !== prev.themeChosen) markLocalChange(['theme', 'themeChosen']);
+  });
+  useLocaleStore.subscribe((state, prev) => {
+    if (stampsPaused() || state.locale === prev.locale) return;
+    markLocalChange(['locale']);
+  });
+
   const triggerSync = () => {
     if (!syncEnabled || !syncUsername || !syncServerUrl || isLoadingFromServer) return;
     pendingSync = {
@@ -2320,12 +2640,13 @@ if (typeof window !== 'undefined') {
         forSync: true,
         subscriptionOwner: subscriptionOwnerFor(syncServerUrl, syncUsername),
       })),
+      dirty: { ...getLocalStamps().dirty },
     };
+    syncDesktopFlush();
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(async () => {
       syncTimeout = null;
-      const job = pendingSync;
-      pendingSync = null;
+      const job = takePendingSync();
       if (!job) return;
       try {
         await syncSettingsJob(job);
@@ -2336,6 +2657,24 @@ if (typeof window !== 'undefined') {
   };
 
   requestSync = triggerSync;
+
+  // A reload, a closed tab or a tab sent to the background (where mobile
+  // browsers may end it) sends the pending push now instead of after the
+  // debounce. What still doesn't arrive stays marked and the next load keeps it.
+  const sendPendingNow = () => {
+    const job = takePendingSync();
+    if (job) void syncSettingsJob(job, 0, { keepalive: true });
+  };
+  window.addEventListener('pagehide', sendPendingNow);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') sendPendingNow();
+  });
+  // Changes made without a connection go up when it's back.
+  window.addEventListener('online', () => {
+    if (useSettingsStore.getState().settingsSyncDisabled || !hasUnsyncedChanges()) return;
+    triggerSync();
+    void useSettingsStore.getState().flushSync();
+  });
 
   // Auto-sync settings to server on any state change
   let prevSyncDisabled = useSettingsStore.getState().settingsSyncDisabled;

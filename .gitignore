@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# Playwright run state (scripts/undust-e2e)
+/test-results/
 
 # next.js
 /.next/
@@ -23,6 +25,9 @@
 /public/plugin-sandbox-assets/
 # scripts/build-pst-worker.mjs
 /public/pst-worker.js
+# scripts/build-store-worker.mjs
+/public/store-worker.js
+/public/sqlite3mc/
 
 # production
 /build

@@ -18,7 +18,18 @@ export interface ShortcutEntry {
   readonly feature?: keyof FeatureGates;
   /** The action behind the row when its key can be changed in the settings (lib/shortcut-bindings). */
   readonly action?: CustomizableShortcutAction;
+  /**
+   * Keys the desktop app adds (its menus run them, src/main/menu.ts in the desktop
+   * repo): on every system, on Windows and Linux, or on Windows only. A row whose
+   * `key` is empty is listed only where one of these applies.
+   */
+  readonly desktopKey?: string;
+  readonly desktopPcKey?: string;
+  readonly desktopWindowsKey?: string;
 }
+
+/** Where the help is shown: a browser, or the desktop app on one system. */
+export type ShortcutHost = "browser" | "windows" | "linux" | "mac";
 
 /** A titled group of rows. A section with no rows (after filtering) is not drawn. */
 export interface ShortcutSection {

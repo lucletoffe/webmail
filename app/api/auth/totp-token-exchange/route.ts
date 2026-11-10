@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
-import { refreshTokenCookieName, refreshTokenServerCookieName } from '@/lib/oauth/tokens';
+import { getPasswordLoginScope, refreshTokenCookieName, refreshTokenServerCookieName } from '@/lib/oauth/tokens';
 import { getCookieOptions, getSignInCookieOptions } from '@/lib/oauth/cookie-config';
 import { readFileEnv } from '@/lib/read-file-env';
 import { configManager } from '@/lib/admin/config-manager';
@@ -16,6 +16,11 @@ import { loginClientAddress } from '@/lib/auth/client-address';
 import { LOGIN_BUDGET_RETRY_AFTER_SECONDS, reserveLoginAttempt } from '@/lib/auth/verify-budget';
 import { isStoreUnavailable, storeUnavailableResponse } from '@/lib/auth/store-unavailable';
 import { writeSignInStamp } from '@/lib/auth/session-age';
+import { IS_DESKTOP_BUILD } from '@/lib/desktop/flag';
+import { isDesktopTrustedServer } from '@/lib/desktop/trusted-servers';
+import { devicePolicyServerRefusal } from '@/lib/desktop/server-policy';
+import { stalwartDefaultClientId } from '@/lib/auth/stalwart-password-login';
+import { writeCustomUpstream } from '@/lib/oauth/custom-upstream';
 
 /**
  * Exchange a password + (optional) TOTP code for OAuth tokens.
@@ -79,6 +84,7 @@ async function attemptLogin(
     clientIp,
     // Stalwart 1.0 knows no client by the default name.
     registerUnknownClient: !configuredClientId,
+    scope: configuredClientId ? getPasswordLoginScope() : undefined,
   });
   // Only a rejected password spends the budget. `totp_required` means the
   // password was right and the code is still missing, which every TOTP login
@@ -113,7 +119,12 @@ async function attemptLogin(
 
   logger.info('TOTP login succeeded');
   void recordLogin(username, base);
-  return await storeAndRespond(result.tokens, slot, serverId, rememberMe);
+  // The desktop app's servers are in no configured list, so the refresh has to
+  // be told where this token belongs and which client it was issued to.
+  const upstream = IS_DESKTOP_BUILD && !serverId
+    ? { serverUrl: base, clientId: await stalwartDefaultClientId(base, clientId, upstreamTrusted) }
+    : null;
+  return await storeAndRespond(result.tokens, slot, serverId, rememberMe, upstream);
 }
 
 function trimUrl(url: string): string {
@@ -153,6 +164,9 @@ export async function POST(request: NextRequest) {
     const serverList = parseJmapServers(configManager.get<unknown>('jmapServers', []));
 
     let upstreamUrl: string;
+    const refusedByDevice = devicePolicyServerRefusal(serverUrl);
+    if (refusedByDevice) return refusedByDevice;
+
     let upstreamTrusted = true;
     let resolvedServerId: string | null = null;
     const requestedEntry = findServerById(serverList, requestedServerId);
@@ -164,6 +178,9 @@ export async function POST(request: NextRequest) {
       resolvedServerId = matchedEntry.id;
     } else if (configuredServerUrl && !customRequested) {
       upstreamUrl = configuredServerUrl;
+    // Spelled out as in lib/admin/jmap-servers.ts, so other builds don't hold it.
+    } else if (process.env.NEXT_PUBLIC_BULWARK_DESKTOP === '1' && isDesktopTrustedServer(serverUrl)) {
+      upstreamUrl = serverUrl;
     } else if (allowCustomEndpoint) {
       if (!(await isPublicHttpUrl(serverUrl))) {
         logger.warn('TOTP login: rejected non-public server URL');
@@ -193,7 +210,7 @@ export async function POST(request: NextRequest) {
       slot,
       resolvedServerId,
       upstreamTrusted,
-      loginClientAddress(request),
+      loginClientAddress(request, upstreamUrl),
       // Clients from before the flag remembered every sign-in.
       rememberMe !== false,
     );
@@ -210,6 +227,7 @@ async function storeAndRespond(
   slot: number,
   serverId: string | null,
   rememberMe: boolean,
+  upstream: { serverUrl: string; clientId: string } | null,
 ): Promise<NextResponse> {
   const cookieStore = await cookies();
   // A sign-in: the maximum session length counts from here (lib/auth/session-age.ts).
@@ -227,6 +245,7 @@ async function storeAndRespond(
   } else {
     cookieStore.delete(serverCookieName);
   }
+  if (upstream && tokens.refresh_token) writeCustomUpstream(cookieStore, slot, upstream, rememberMe);
 
   return NextResponse.json({
     access_token: tokens.access_token,

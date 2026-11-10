@@ -207,7 +207,7 @@ test('item 1: a sender trusted in the list stays blocked once the organisation l
   const subject = `Trust list ${RUN}`;
   await policy({}, browser);
   await deliverAndWait({ from: ENT.bob, to: [ENT.alice], subject, html: html('Newsletter') });
-  const alice = await seededPage(browser, ENT.alice, { externalContentPolicy: 'block', trustedSendersAddressBook: false });
+  const alice = await seededPage(browser, ENT.alice, { externalContentPolicy: 'block', trustedSendersAddressBook: false, explicitSettings: ['trustedSendersAddressBook'] });
   const pixel = pixelRequests(alice);
   await openMessage(alice, subject);
   await trustSender(alice);
@@ -242,7 +242,8 @@ test('item 1: under the lock the trusted senders list offers no Add (fails on ma
   await policy({ restrictions: LOCK }, browser);
   const alice = await userPage(browser, ENT.alice);
   await alice.locator('a[href$="/settings"]').first().click();
-  await alice.locator('[data-testid="settings-tab-reading"]').first().click();
+  // Trusted senders are on the Privacy page since the settings reorganisation.
+  await alice.locator('[data-testid="settings-tab-privacy"]').first().click();
   await expect(alice.getByText('Trusted senders').first()).toBeVisible();
   await alice.getByRole('button', { name: /^\d+ senders?$|None/ }).first().click();
   await expect(alice.getByText('Add sender manually')).toHaveCount(0);
@@ -257,12 +258,8 @@ test('item 1: a reply draft from before the lock loads no remote image when reop
   await folderRow(alice, { role: 'drafts' }).first().click();
   const row = alice.locator('[data-testid="email-list-item"], [data-thread-keys]', { hasText: `Trust list ${RUN}` }).first();
   await expect(row).toBeVisible({ timeout: 30_000 });
+  // A draft opens straight in the composer (e7cef5ba1), with no reader step.
   await row.click();
-  await alice.getByTestId('edit-draft').waitFor({ state: 'visible' });
-  await alice.waitForTimeout(2000);
-  // Viewing the draft loads nothing either.
-  expect(pixel.count(), 'requests while the draft is shown in the reader').toBe(0);
-  await alice.getByTestId('edit-draft').click();
   await alice.locator('[data-testid="email-composer"]').waitFor({ state: 'visible', timeout: 20_000 });
   await alice.waitForTimeout(3000);
   expect(pixel.count()).toBe(0);
@@ -392,6 +389,8 @@ test('item 2: the ARF format arrives as a feedback report', async ({ browser }) 
   await deliverAndWait({ from: ENT.bob, to: [ENT.alice], subject, text: 'Click here' });
   const alice = await userPage(browser, ENT.alice);
   await alice.locator(`[data-testid="email-list-item"][data-subject="${subject}"]`).first().click({ button: 'right', timeout: 60_000 });
+  // A row's menu has it under More actions.
+  await alice.getByTestId('ctx-more').click();
   await alice.getByTestId('ctx-report-phishing').click();
   await alice.getByTestId('phishing-report-confirm').click();
   await expect(alice.getByText(`Reported to ${ENT.sec} and moved to Junk.`).first()).toBeVisible({ timeout: 30_000 });
@@ -501,10 +500,11 @@ test('item 3: Undo send brings the message back with its label', async ({ browse
   const subject = `Undo label ${RUN}`;
   await policy({ organisation: { labels: { list: GENERIC_LABELS, defaultId: 'internal', required: true, extraHeader: '' } } }, browser);
   const alice = await userPage(browser, ENT.alice);
-  // Undo send on, through Settings (a synced setting).
+  // Undo send on, through Settings (a synced setting). The row is "Undo send"
+  // under Sending now.
   await alice.locator('a[href$="/settings"]').first().click();
   await alice.locator('[data-testid="settings-tab-composing"]').first().click();
-  const delay = alice.locator('[data-search-label="Undo send / send delay"] select').first();
+  const delay = alice.locator('[data-search-label="Undo send"] select').first();
   await delay.selectOption('30');
   await alice.getByText('Back to mail').first().click();
   await folderRow(alice, { role: 'inbox' }).first().waitFor({ state: 'visible', timeout: 30_000 });
@@ -524,7 +524,7 @@ test('item 3: Undo send brings the message back with its label', async ({ browse
   // Undo send off again, for the other tests.
   await alice.locator('a[href$="/settings"]').first().click();
   await alice.locator('[data-testid="settings-tab-composing"]').first().click();
-  await alice.locator('[data-search-label="Undo send / send delay"] select').first().selectOption('0');
+  await alice.locator('[data-search-label="Undo send"] select').first().selectOption('0');
   await alice.waitForTimeout(1500);
   await alice.context().close();
 });
@@ -534,7 +534,7 @@ test('item 3: a quick reply keeps the original’s label', async ({ browser }) =
   await policy({ organisation: { labels: { list: GENERIC_LABELS, defaultId: '', required: true, extraHeader: '' } } }, browser);
   const bob = await userPage(browser, ENT.bob);
   await openMessage(bob, subject);
-  const box = bob.getByPlaceholder('Write a quick reply...');
+  const box = bob.getByPlaceholder(/^Reply to /);
   await box.fill(`Quick reply ${RUN}`);
   await box.press('Control+Enter');
   await expect(box).toHaveValue('', { timeout: 30_000 });
@@ -549,7 +549,7 @@ test('item 3: a quick reply with no label to keep opens the composer to pick one
   await deliverAndWait({ from: ENT.carol, to: [ENT.bob], subject, text: 'No label' });
   const bob = await userPage(browser, ENT.bob);
   await openMessage(bob, subject);
-  const box = bob.getByPlaceholder('Write a quick reply...');
+  const box = bob.getByPlaceholder(/^Reply to /);
   await box.fill(`Needs a label ${RUN}`);
   await box.press('Control+Enter');
   await expect(bob.locator('[data-testid="email-composer"]')).toBeVisible({ timeout: 20_000 });

@@ -125,6 +125,16 @@ function parseCombo(combo: string): ParsedCombo | null {
   return { mod: !!match[1], alt: !!match[2], shift: !!match[3], key };
 }
 
+/**
+ * Whether a combo is a single key in the sense of the single-key setting
+ * (lib/keyboard.ts isSingleCharacterKey): one character, Shift allowed, no
+ * Ctrl/Cmd or Alt. Turning single keys off silences it.
+ */
+export function isSingleKeyCombo(combo: string): boolean {
+  const parsed = parseCombo(combo);
+  return !!parsed && !parsed.mod && !parsed.alt && parsed.key.length === 1;
+}
+
 /** Whether a combo may be used as a custom key at all (conflicts aside). */
 export function isBindableCombo(combo: string): boolean {
   const parsed = parseCombo(combo);

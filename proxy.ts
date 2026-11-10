@@ -10,12 +10,16 @@ import {
   pickAppFrameOriginsCookie,
 } from "./lib/security/app-frame-origins";
 import { configManager } from "./lib/admin/config-manager";
+import { managedAppOriginsWith } from "./lib/sidebar-apps";
 import { isNoThirdPartyTrafficOn } from "./lib/admin/third-party-mode";
 import { listReachableHosts, noThirdPartyCspSources } from "./lib/admin/reachable-hosts";
 import { getWopiEditorOrigins } from "./lib/wopi/discovery";
 import { detectSetupState } from "./lib/setup/state";
 import { isServedOverHttps } from "./lib/security/request-protocol";
 import { bootGateResponse } from "./lib/shared-store/boot-gate";
+import { IS_DESKTOP_BUILD } from "./lib/desktop/flag";
+import { isDesktopBlockedRoute } from "./lib/desktop/blocked-routes";
+import { signedOutStartTarget, START_COOKIE } from "./lib/signed-out-start";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
@@ -86,7 +90,7 @@ export const config = {
 // /en/mail/folder/inbox/statement.pdf a real signed-in page, and it rendered
 // without a CSP or any other security header (GHSA-xvjh-v9c6-qcvc). Only what
 // is genuinely static may skip locale routing and the headers.
-const STATIC_ASSET_PATTERN = /^\/[^/]+\.[^/]+$|^\/(?:branding|notification|demo|plugin-sandbox-assets)\//;
+const STATIC_ASSET_PATTERN = /^\/[^/]+\.[^/]+$|^\/(?:branding|notification|demo|plugin-sandbox-assets|sqlite3mc)\//;
 
 export function isStaticAssetPath(pathname: string): boolean {
   return STATIC_ASSET_PATTERN.test(pathname);
@@ -200,6 +204,45 @@ function redirectTo(request: NextRequest, pathname: string, search: string): Nex
   return NextResponse.redirect(new URL(`${request.nextUrl.basePath}${pathname}${search}`, request.url));
 }
 
+/** The redirect of a signed-out first visit to the sign-in page, or null (lib/signed-out-start.ts). */
+function signedOutStartRedirect(
+  request: NextRequest,
+  pathname: string,
+  intlResponse: NextResponse | null,
+  locales: readonly string[],
+): NextResponse | null {
+  const basePath = request.nextUrl.basePath;
+  let intlRedirect: string | null = null;
+  const location = intlResponse?.headers.get("location");
+  if (location) {
+    const path = routePathOf(new URL(location, request.url).pathname);
+    intlRedirect = basePath && path.startsWith(basePath) ? path.slice(basePath.length) || "/" : path;
+  }
+  const target = signedOutStartTarget({
+    method: request.method,
+    pathname,
+    search: request.nextUrl.search,
+    header: (name) => request.headers.get(name),
+    cookieNames: request.cookies.getAll().map((cookie) => cookie.name),
+    locales,
+    intlRedirect,
+    demoMode: configManager.get<boolean>("demoMode", false) === true,
+  });
+  if (!target) return null;
+  const response = redirectTo(request, target, "");
+  // It depends on this browser's cookies: no cache may keep it for another.
+  response.headers.set("Cache-Control", "private, no-store");
+  // Whatever the locale middleware set (its locale cookie) still applies.
+  for (const cookie of intlResponse?.cookies.getAll() ?? []) response.cookies.set(cookie);
+  response.cookies.set(START_COOKIE, "1", {
+    maxAge: 60,
+    path: basePath || "/",
+    sameSite: "lax",
+    secure: isServedOverHttps(request),
+  });
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   // The probes answer without config or store, so a replica that is still
   // starting (or lost its shared store) can say so (#1066). The metrics
@@ -268,6 +311,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Cross-origin request rejected" }, { status: 403 });
   }
 
+  if (IS_DESKTOP_BUILD && isDesktopBlockedRoute(pathname)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (PROXY_SKIP_PATTERN.test(pathname) || isStaticAssetPath(pathname)) {
     // No page CSP here, but what comes back can still be a document: the
     // not-found shell for a missing /foo.html or an unknown /api route. It
@@ -288,7 +335,7 @@ export async function proxy(request: NextRequest) {
   // bundles via `new Function`. The untrusted route is null-origin
   // (sandbox="allow-scripts"); the privileged route is same-origin
   // (allow-same-origin) so a vetted plugin gets real WebCrypto + IndexedDB.
-  // Both get the SAME CSP relaxations (unsafe-eval, frame-ancestors 'self');
+  // Both get the SAME CSP relaxations (unsafe-eval);
   // the privileged route's extra power comes from the iframe sandbox flag the
   // host sets, gated by signature + admin approval, NOT from a wider CSP.
   const isSandboxPath =
@@ -304,8 +351,8 @@ export async function proxy(request: NextRequest) {
   // They also disappear entirely while the plugin feature is off, so a stock
   // install never serves a document carrying 'unsafe-eval'
   // (GHSA-96cx-gx36-3g79). Other destinations pass - `iframe` for the bridge,
-  // `empty` for the router's own RSC refetches - and cross-site framing is
-  // already blocked by the `frame-ancestors 'self'` below.
+  // `empty` for the router's own RSC refetches - and framing by any site
+  // outside the mail UI's frame-ancestors is blocked by the CSP below.
   if (isSandboxPath) {
     const pluginsEnabled = configManager.getPolicy().features?.pluginsEnabled === true;
     if (!pluginsEnabled || request.headers.get("sec-fetch-dest") === "document") {
@@ -354,10 +401,14 @@ export async function proxy(request: NextRequest) {
   // The admin dashboard and the setup wizard are never framed. The embedding
   // allowance is for the mail UI a portal wraps; a framed admin page is a
   // clickjacking target with nothing to gain from being embedded.
+  //
+  // The sandbox routes get the mail UI's list. The browser checks
+  // frame-ancestors against every ancestor, not just the parent, so with
+  // 'self' alone a portal that frames the mail UI blocks every plugin frame
+  // inside it (#1533). The parent is still the webmail itself: the runtime
+  // only takes messages from its parent posting from its own origin.
   const isAdminOrSetupPath = /^\/(?:admin|setup)(?:\/|$)/.test(pathname);
-  const frameAncestors = isSandboxPath
-    ? `'self'`
-    : isAdminOrSetupPath
+  const frameAncestors = isAdminOrSetupPath
     ? "'none'"
     : mailFrameAncestors(configManager.get<string>("allowedFrameAncestors", ""));
 
@@ -465,7 +516,10 @@ export async function proxy(request: NextRequest) {
       console.error('Locale middleware error:', error);
     }
   }
-  const response = intlResponse ?? NextResponse.next();
+  // A first visit (no session cookie, no kept accounts) goes straight to the
+  // sign-in page instead of starting the mail view (lib/signed-out-start.ts).
+  const startRedirect = IS_DESKTOP_BUILD ? null : signedOutStartRedirect(request, pathname, intlResponse, locales);
+  const response = startRedirect ?? intlResponse ?? NextResponse.next();
 
   // Expose the nonce AND the request pathname to server components as request
   // headers. The root (main)/layout renders <html> ABOVE the [locale] segment,
@@ -494,9 +548,17 @@ export async function proxy(request: NextRequest) {
   if (isServedOverHttps(request)) {
     response.headers.set("Strict-Transport-Security", "max-age=63072000");
   }
+  // Camera and microphone are off. An inline app the operator granted them
+  // (its policy entry's `allow`) is named here, as no frame's `allow` can
+  // widen this header; a frame gets a feature only while this document has it
+  // too, so `self` comes with it.
+  const mediaAllowlist = (feature: "camera" | "microphone") => {
+    const origins = managedAppOriginsWith(policy.defaultSidebarApps, feature);
+    return origins.length > 0 ? ["self", ...origins.map((origin) => `"${origin}"`)].join(" ") : "";
+  };
   response.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=(), payment=()"
+    `camera=(${mediaAllowlist("camera")}), microphone=(${mediaAllowlist("microphone")}), geolocation=(), payment=()`
   );
   response.headers.set("Content-Security-Policy", csp);
 

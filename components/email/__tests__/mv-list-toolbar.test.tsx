@@ -67,7 +67,8 @@ describe('MvListToolbar filing actions', () => {
     toolbar();
 
     fireEvent.click(screen.getByLabelText('move_to'));
-    expect(screen.queryByText('mailboxes.inbox')).toBeNull();
+    // Shown greyed, where the sidebar has it.
+    expect(screen.getByText('mailboxes.inbox').closest('button')).toBeDisabled();
   });
 
   it('puts a tag on the whole selection when only some of it carries the tag', async () => {
@@ -105,7 +106,7 @@ describe('MvListToolbar filing actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'move_to' }));
     expect(screen.getByText('Travel')).toBeInTheDocument();
-    fireEvent.change(screen.getByRole('textbox', { name: 'move_to' }), { target: { value: 'rec' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'filter_placeholder' }), { target: { value: 'rec' } });
     expect(screen.getByText('Receipts')).toBeInTheDocument();
     expect(screen.queryByText('Travel')).toBeNull();
 
@@ -159,10 +160,10 @@ describe('MvListToolbar overflow menu', () => {
     render(<MvListToolbar loadedCount={1} onRefresh={() => {}} onEmptyFolder={() => {}} />);
     open();
 
-    expect(screen.queryByText('empty_folder')).toBeNull();
+    for (const label of ['empty_folder', 'empty_trash', 'empty_spam']) expect(screen.queryByText(label)).toBeNull();
   });
 
-  it('offers it in the bin', () => {
+  it('offers it in the bin, as Empty Trash', () => {
     useEmailStore.setState({
       mailboxes: [mailbox('trash', 'Trash', 'trash')],
       selectedMailbox: 'trash',
@@ -171,7 +172,7 @@ describe('MvListToolbar overflow menu', () => {
     render(<MvListToolbar loadedCount={1} onRefresh={() => {}} onEmptyFolder={onEmptyFolder} />);
     open();
 
-    fireEvent.click(screen.getByText('empty_folder'));
+    fireEvent.click(screen.getByText('empty_trash'));
     expect(onEmptyFolder).toHaveBeenCalledOnce();
   });
 });
@@ -278,7 +279,7 @@ describe('MvListToolbar delete prompt', () => {
     deleteSelection();
 
     // A selection: "Delete these emails permanently?", not the one-message title.
-    expect(await screen.findByText('permanent_delete_confirm_batch_title')).toBeInTheDocument();
+    expect(await screen.findByText('delete_forever_batch_title')).toBeInTheDocument();
     expect(batchDelete).not.toHaveBeenCalled();
   });
 });

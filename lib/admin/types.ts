@@ -88,7 +88,9 @@ export interface FeatureGates {
 
 export const DEFAULT_FEATURE_GATES: FeatureGates = {
   pluginsEnabled: false,
-  pluginsUploadEnabled: true,
+  // Users rarely have a plugin ZIP; the admin's plugins are what they get.
+  // A policy saved before this change keeps its stored value.
+  pluginsUploadEnabled: false,
   requirePluginApproval: true,
   themesEnabled: true,
   sidebarAppsEnabled: true,
@@ -162,10 +164,24 @@ export interface AdminSidebarApp {
   url: string;
   /** Lucide icon name (e.g. 'Globe'). */
   icon: string;
+  /**
+   * An image drawn in place of `icon` (an app's own logo): https, on the app's
+   * own origin. Only for apps of the policy; `icon` shows when it fails to load.
+   */
+  iconUrl?: string;
   /** Open in a new browser tab, or embedded in an iframe. */
   openMode: 'tab' | 'inline';
   showOnMobile: boolean;
+  /**
+   * Browser features an inline app of the policy may use in its frame
+   * (lib/sidebar-apps.ts, SIDEBAR_APP_FEATURES). Never honoured for a user's
+   * own app.
+   */
+  allow?: SidebarAppFeature[];
 }
+
+/** What an operator may grant an inline sidebar app's frame. */
+export type SidebarAppFeature = 'clipboard-write' | 'microphone' | 'camera' | 'display-capture' | 'fullscreen';
 
 export interface SettingsPolicy {
   restrictions: Record<string, SettingRestriction>;
@@ -282,6 +298,11 @@ export const CONFIG_ENV_MAP: Record<string, { envVar: string; fileEnvVar?: strin
   helpUrl: { envVar: 'HELP_URL', type: 'url', defaultValue: '' },
   easyReadUrl: { envVar: 'EASY_READ_URL', type: 'url', defaultValue: '' },
   signLanguageUrl: { envVar: 'SIGN_LANGUAGE_URL', type: 'url', defaultValue: '' },
+  // A link under Authentication in Settings > Account to the mail server's
+  // own account page, for 2FA and app passwords (#1570). An http(s) URL or a
+  // path on the page's host (/account/). Empty hides it.
+  accountManagementUrl: { envVar: 'ACCOUNT_MANAGEMENT_URL', type: 'string', defaultValue: '' },
+  accountManagementLabel: { envVar: 'ACCOUNT_MANAGEMENT_LABEL', type: 'string', defaultValue: '' },
   // Login header customization. The logo box is otherwise a fixed 64×64
   // (w-16/h-16), which fits a wide wordmark to ~13px tall; set a max height
   // and/or width (any CSS length, e.g. "230px" or "3rem") to size it. The
@@ -289,6 +310,15 @@ export const CONFIG_ENV_MAP: Record<string, { envVar: string; fileEnvVar?: strin
   // reads as the brand (e.g. a wordmark) and they'd be redundant.
   loginLogoMaxHeight: { envVar: 'LOGIN_LOGO_MAX_HEIGHT', type: 'string', defaultValue: '' },
   loginLogoMaxWidth: { envVar: 'LOGIN_LOGO_MAX_WIDTH', type: 'string', defaultValue: '' },
+  // The login page's layout and background (lib/login-backdrop.ts): the form
+  // in a card in the middle, or in a panel at the side with the background
+  // filling the rest. The dark image falls back to the light one. Dim is a
+  // percentage (0-80), blur a radius in px (0-24).
+  loginLayout: { envVar: 'LOGIN_LAYOUT', type: 'enum', defaultValue: 'centered', enumValues: ['centered', 'split'] },
+  loginBackgroundLightUrl: { envVar: 'LOGIN_BACKGROUND_LIGHT_URL', type: 'url', defaultValue: '' },
+  loginBackgroundDarkUrl: { envVar: 'LOGIN_BACKGROUND_DARK_URL', type: 'url', defaultValue: '' },
+  loginBackgroundDim: { envVar: 'LOGIN_BACKGROUND_DIM', type: 'string', defaultValue: '' },
+  loginBackgroundBlur: { envVar: 'LOGIN_BACKGROUND_BLUR', type: 'string', defaultValue: '' },
   loginShowHeading: { envVar: 'LOGIN_SHOW_HEADING', type: 'boolean', defaultValue: true },
   loginShowSubtitle: { envVar: 'LOGIN_SHOW_SUBTITLE', type: 'boolean', defaultValue: true },
   // Hide the manual "I have a 2FA code" toggle on the login form. Deployments
@@ -300,6 +330,9 @@ export const CONFIG_ENV_MAP: Record<string, { envVar: string; fileEnvVar?: strin
   // password. For JMAP servers that hand out API tokens, such as Fastmail,
   // whose API accepts no passwords at all.
   loginShowTokenLogin: { envVar: 'LOGIN_SHOW_TOKEN_LOGIN', type: 'boolean', defaultValue: false },
+  // The desktop app's "Sign in with your browser". Turn off on a terminal server: another
+  // user there can bind a loopback port and send a link that asks for someone's sign-in.
+  desktopBrowserSignIn: { envVar: 'DESKTOP_BROWSER_SIGN_IN', type: 'boolean', defaultValue: true },
   // Show the "Remember me" box on the login form. Off (the default) remembers
   // every sign-in, as long as a SESSION_SECRET makes that possible.
   loginShowRememberMe: { envVar: 'LOGIN_SHOW_REMEMBER_ME', type: 'boolean', defaultValue: false },
@@ -308,6 +341,10 @@ export const CONFIG_ENV_MAP: Record<string, { envVar: string; fileEnvVar?: strin
   loginShowVersion: { envVar: 'LOGIN_SHOW_VERSION', type: 'boolean', defaultValue: true },
   oauthEnabled: { envVar: 'OAUTH_ENABLED', type: 'boolean', defaultValue: false },
   oauthOnly: { envVar: 'OAUTH_ONLY', type: 'boolean', defaultValue: false },
+  // With OAUTH_ONLY, keep a demoted "Sign in with a password" link on the
+  // SSO-only login card and allow password sign-in at the API, for
+  // deployments whose provider accounts also have local passwords.
+  oauthPasswordFallbackEnabled: { envVar: 'OAUTH_PASSWORD_FALLBACK_ENABLED', type: 'boolean', defaultValue: false },
   oauthClientId: { envVar: 'OAUTH_CLIENT_ID', type: 'string', defaultValue: '' },
   oauthClientSecret: { envVar: 'OAUTH_CLIENT_SECRET', fileEnvVar: 'OAUTH_CLIENT_SECRET_FILE', fileKey: "oauthClientSecretFile", type: 'string', defaultValue: '' },
   oauthIssuerUrl: { envVar: 'OAUTH_ISSUER_URL', type: 'url', defaultValue: '' },

@@ -8,8 +8,11 @@ import { Button } from '@/components/ui/button';
 import { ChevronRight } from '@/components/icons';
 import { ThemesSettings } from './themes-settings';
 import { LayoutSection, SidebarSection, ExperimentalSection } from './layout-settings';
+import { PrintingSection } from './printing-settings';
 import { cn } from '@/lib/utils';
 import { usePolicyStore } from '@/stores/policy-store';
+import { useConfig } from '@/hooks/use-config';
+import { productName } from '@/lib/product-name';
 
 const DENSITY_PREVIEW: Record<Density, { py: string; gap: string; showAvatar: boolean; showPreview: boolean }> = {
   'extra-compact': { py: 'py-0.5', gap: 'gap-1.5', showAvatar: false, showPreview: false },
@@ -69,17 +72,21 @@ function DensityPreview({ density }: { density: Density }) {
 /**
  * The Appearance page: theme, text and motion, layout, sidebar, how several
  * accounts show together, and the experimental Pro interface. The former
- * Layout and Themes tabs live here as sections.
+ * Layout and Themes tabs live here as sections, and Printing (the print
+ * style add-ons can offer).
  */
 export function AppearanceSettings() {
   const t = useTranslations('settings.appearance');
+  const tWords = useTranslations('ux_p3_words');
+  const appName = productName(useConfig().appName);
   const { theme, setTheme } = useThemeStore();
   const { density, updateSetting } = useSettingsStore();
   const { isSettingLocked, isSettingHidden, getColorModePolicy, isFeatureEnabled } = usePolicyStore();
 
   return (
     <div className="space-y-8">
-      <SettingsSection id="theme" title={t('title')} description={t('description')}>
+      {/* The product's name, not "your webmail" (desktop-p3-16). */}
+      <SettingsSection id="theme" title={t('title')} description={tWords('appearance_description', { appName })}>
         <SettingItem label={t('theme.label')} description={t('theme.description')} locked={getColorModePolicy().locked}>
           <RadioGroup
             value={theme}
@@ -128,6 +135,8 @@ export function AppearanceSettings() {
 
       <LayoutSection />
       <SidebarSection />
+
+      <PrintingSection />
 
       <ExperimentalSection />
     </div>

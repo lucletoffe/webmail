@@ -145,11 +145,20 @@ test("a scheduled mail is stamped with its release time, and Send now re-checks 
   expect(Date.parse(copy[0].sentAt)).toBeLessThan(Date.parse(draft.sentAt as string) - 3600_000);
 });
 
-test("an invitation awaiting a reply is hatched in the calendar", async ({ page }) => {
+test("an invitation awaiting a reply is marked in the calendar (upstream 1.21 marker, replaces our rsvp1 hatch)", async ({ page }) => {
   // The mock lists the user as organizer; make them an attendee who has not replied.
   await page.route("**/api/dev-jmap/api", async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
+    // 1.21 fires more requests around a page change: a response disposed
+    // by a navigation is not this test's business.
+    let response;
+    let body;
+    try {
+      response = await route.fetch();
+      body = await response.json();
+    } catch {
+      await route.fallback().catch(() => undefined);
+      return;
+    }
     for (const [name, result] of body.methodResponses ?? []) {
       if (name !== "CalendarEvent/get") continue;
       for (const event of result.list ?? []) {
@@ -169,10 +178,8 @@ test("an invitation awaiting a reply is hatched in the calendar", async ({ page 
   await signIn(page);
   await openApp(page, "calendar");
 
-  const pending = page.locator('[aria-label*="Awaiting reply"]').first();
+  const pending = page.locator('[data-reply-state="needs-action"]').first();
   await expect(pending).toBeVisible({ timeout: 20_000 });
-  const backgroundImage = await pending.evaluate((el) => (el as HTMLElement).style.backgroundImage || getComputedStyle(el).backgroundImage);
-  expect(backgroundImage).toContain("repeating-linear-gradient");
 });
 
 test("a custom key replaces the built-in one for a mail action", async ({ page }) => {
@@ -353,7 +360,7 @@ test("a re-opened draft written elsewhere goes out with its author's signature o
   // The external draft: no second signature in the composer, none at send.
   await page.locator('[data-testid="folder-row"][data-folder-role="drafts"]').first().click();
   await page.locator('[data-tour="email-list"] [role="row"]', { hasText: "Standup notes" }).first().click();
-  await page.getByTestId("edit-draft").first().click();
+  // A click opens the draft straight in the composer.
   const editor = page.locator(".ProseMirror").first();
   await expect(editor.getByText(HAND)).toBeVisible();
   await expect(editor.locator("[data-signature-block-node]")).toHaveCount(0);

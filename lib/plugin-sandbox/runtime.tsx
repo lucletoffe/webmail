@@ -32,6 +32,7 @@ import { backgroundReactDom, backgroundUiKit } from './ui-kit/background-kit';
 import { initFloatingDropdownBridge, dispatchFloatingDropdownEvent } from './ui-kit/floating-dropdown-bridge';
 import { interpolate, lookup, textDirection, type LocaleTables } from './plugin-i18n';
 import { isFillableSlot, isInlineSlot, MAX_INLINE_SLOT_WIDTH } from './slot-layout';
+import { frameEscapeListener } from './frame-escape';
 import type {
   AppInfoView, AppSettingsView, HostFeaturesView, SettingsSearchResult, CalendarEventInput, CalendarEventView, CalendarView, ComposeInput, DraftInput, EmailForwardInput, EmailForwardResult, EmailReadView,
   EmailSummary, IdentityPatch, IdentityView, MailboxView, NotificationInput, SlotName, TaskInput,
@@ -290,8 +291,10 @@ function openActivityPort(): MessagePort | null {
  *    is never a host.
  *  - `location.origin` is the URL origin even when this iframe runs with an
  *    opaque origin (sandbox="allow-scripts"), and the host page is served
- *    from that same origin: the bridge loads a same-origin path and the route
- *    CSP pins `frame-ancestors 'self'`.
+ *    from that same origin: the bridge loads a same-origin path. The route
+ *    CSP's frame-ancestors also admits the portals the operator lets frame
+ *    the mail UI (#1533), so the origin check on every message is what keeps
+ *    a portal that frames this route directly from driving it.
  *
  * Pinning the first sender instead (pre-fix) let any website window.open()
  * the route, post its own `init` before a real host could, and run its code
@@ -506,6 +509,30 @@ function buildCoreApi(manifest: PluginManifest) {
         return () => { hostFeatureListeners.delete(listener); };
       },
     },
+    /**
+     * The OS certificate store and smart cards, in the desktop app. Privileged tier
+     * with the `keystore` permission, when api.host.features.keystore is true. The
+     * shell asks the user first, so any call can answer keystore:cancelled. Key
+     * operations have no timeout here: the OS may be showing a PIN prompt, and the shell
+     * gives up by itself. Errors are bare codes: keystore:cancelled, ask-first, not-found,
+     * unsupported, locked, invalid, failed. `{ quiet: true }` never opens a dialog: it
+     * answers from what's already allowed, or with ask-first. Use it for anything the user
+     * didn't just ask for.
+     */
+    keystore: {
+      /** Certificates fit for mail that have a private key. The OS doesn't prompt, and it has the usual timeout. */
+      list: (options?: { quiet?: boolean }) => callApi('keystore.list', [options]),
+      /**
+       * Signs a CMS message's signed attributes, given as their DER (a SET): content type,
+       * message digest and signing time at least. The shell hashes them, and asks every time.
+       * scheme: { scheme: 'rsa-pkcs1' | 'rsa-pss' | 'ecdsa', hash }. RSA gives the raw signature, ECDSA DER.
+       */
+      sign: (id: string, signedAttributes: Uint8Array, scheme: unknown) => callApi('keystore.sign', [id, signedAttributes, scheme], 0) as Promise<Uint8Array>,
+      /** Unwraps a content key. scheme: { scheme: 'rsa-pkcs1' } or { scheme: 'rsa-oaep', hash, label? }. */
+      decrypt: (id: string, data: Uint8Array, scheme: unknown, options?: { quiet?: boolean }) => callApi('keystore.decrypt', [id, data, scheme, options], 0) as Promise<Uint8Array>,
+      /** ECDH: the raw shared secret, big-endian, from the peer's SubjectPublicKeyInfo. */
+      agree: (id: string, peerPublicKey: Uint8Array, options?: { quiet?: boolean }) => callApi('keystore.agree', [id, peerPublicKey, options], 0) as Promise<Uint8Array>,
+    },
     /** The app the plugin runs in: product, the administrator's name for it, version, edition. No permission needed. */
     app: {
       getInfo: () => callApi('app.getInfo', []) as Promise<AppInfoView>,
@@ -694,6 +721,14 @@ function buildCoreApi(manifest: PluginManifest) {
       /** Replace own text, optionally only at expectedRevision; signature and quote stay. Needs compose:write. */
       replaceBody: (composerId: string, content: { text: string } | { html: string }, options?: { expectedRevision: string }) =>
         callApi('composer.replaceBody', [composerId, content, options]) as Promise<boolean>,
+      /**
+       * Replace the subject with plain text (Bulwark 1.21 and later). Line
+       * breaks and other control characters become spaces; at most 998
+       * characters. One Ctrl+Z undoes it, and the draft saves as after
+       * typing. Needs compose:write.
+       */
+      setSubject: (composerId: string, subject: string) =>
+        callApi('composer.setSubject', [composerId, subject]) as Promise<boolean>,
       /** Attach a blob from jmap.uploadBlob. Needs email:blob-write. */
       attach: (composerId: string, file: { blobId: string; name: string; type?: string; size: number }) =>
         callApi('composer.attach', [composerId, file]) as Promise<boolean>,
@@ -809,8 +844,23 @@ function buildCoreApi(manifest: PluginManifest) {
        * HTML with <style>, sanitised like a message body, no scripts, images
        * as data: URLs only. Opens the browser's print dialog (where the user
        * can also save a PDF); 3 times a minute.
+       *
+       * Bulwark 1.21 and later: `{ title?, pdf }` with a PDF's bytes in place
+       * of `html` prints that PDF: it opens in the app's file preview, which
+       * brings up the print dialog. Same limits as for openFile.
        */
-      print: (page: { title?: string; html: string }) => callApi('ui.print', [page], 0) as Promise<boolean>,
+      print: (page: { title?: string; html: string } | { title?: string; pdf: ArrayBuffer | ArrayBufferView | Blob }) =>
+        callApi('ui.print', [page], 0) as Promise<boolean>,
+      /**
+       * Show a file the plugin made in Bulwark's own file preview, the one
+       * attachments and Files use, with its Download and Print (Bulwark 1.21
+       * and later). Only PDF and PNG, JPEG, GIF or WebP images, checked by
+       * their bytes; at most 25 MiB; 5 a minute. The file stays in memory
+       * and is gone when the user closes the preview. Resolves to true once
+       * it shows.
+       */
+      openFile: (file: { content: ArrayBuffer | ArrayBufferView | Blob; filename: string; contentType: string }) =>
+        callApi('ui.openFile', [file]) as Promise<boolean>,
       /** Downloads a file generated by the plugin. Not a user's file or attachment. */
       /** `content` is text, or the file's bytes (ArrayBuffer / Uint8Array). */
       downloadFile: (opts: { content: string | ArrayBuffer | Uint8Array; filename: string; contentType?: string }) =>
@@ -844,6 +894,18 @@ function buildCoreApi(manifest: PluginManifest) {
       /** Short labels and dots on calendar days. Replaces this plugin's earlier labels. */
       setDayLabels: (labels: Array<{ date: string; text?: string; title?: string; dot?: boolean }>) =>
         callApi('ui.setDayLabels', [labels]) as Promise<void>,
+      /**
+       * A print style the user can pick under Settings > Appearance >
+       * Printing: CSS for printed messages, contacts and calendars, and a
+       * letterhead (plain text above and below a printed message). The CSS
+       * is scoped to the printout; url(), @import and other at-rules except
+       * @media, @supports and @page { margin } are removed, and the
+       * warnings say what. Same id again replaces it; at most 5 per plugin.
+       */
+      registerPrintTheme: (theme: { id: string; label: string; css?: string; header?: string; footer?: string }) =>
+        callApi('ui.registerPrintTheme', [theme]) as Promise<{ warnings: string[] }>,
+      /** Removes one of this plugin's print styles; printouts that used it go back to Standard. */
+      unregisterPrintTheme: (id: string) => callApi('ui.unregisterPrintTheme', [id]) as Promise<void>,
       /** Full pages with a button in the navigation bar; the `app-page` slot renders them. */
       setPages: (pages: Array<{ id: string; title: string; icon?: string }>) =>
         callApi('ui.setPages', [pages]) as Promise<void>,
@@ -1516,6 +1578,7 @@ async function bootSlot(payload: SlotInit): Promise<void> {
 
   const reactRoot = renderer.ReactDOM.createRoot(rootEl);
   reactRoot.render(React.createElement(SlotShell));
+  window.addEventListener('keydown', frameEscapeListener(() => sendToHost({ type: 'frame-escape' })));
   sendToHost({ type: 'init-done', hooks: [], slots: [], shortcuts: [] });
 }
 

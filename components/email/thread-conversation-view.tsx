@@ -20,6 +20,7 @@ import { ReceivedLabelChip } from "./received-label-chip";
 import { collectReferencedCids, isEmbeddedInBody, isReportPart, normalizeCid, rewriteCidReferences } from "@/lib/attachment-visibility";
 import { collapsePlainTextQuotes, setupQuoteCollapse } from "@/lib/quote-collapse";
 import { measureEmailFrameHeight } from "@/lib/email-frame-height";
+import { forwardFrameKeys } from "@/lib/email-frame-keys";
 import { fitEmailBodyWidth } from "@/lib/email-fit-width";
 import { mailLanguage } from "@/lib/mail-language";
 import { htmlToReadableText } from "@/lib/html-to-readable-text";
@@ -48,20 +49,33 @@ import {
   Download,
   Eye,
   CalendarClock,
+  Pencil,
+  Trash2,
 } from "@/components/icons";
 import { formatScheduledSendAt } from "@/lib/scheduled-send-label";
 import { useTranslations } from "next-intl";
+import { useInvitationPrint } from "@/lib/print/invitation-print";
+import { buildMessagePrintFields } from "./message-print-fields";
+import { CONVERSATION_MESSAGE_ATTR, conversationPrintSource, focusedConversationMessageId, printConversationMessage, printLabels, useConversationPrintSource } from "./conversation-print";
+import { ConversationMessageMenu } from "./conversation-message-menu";
+import { MessagePrint } from "./message-print";
+import { usePrintListener, usePrinting } from "@/components/print/print-root";
+import { FilePen } from "@/components/icons";
+import { editAccountOf, useEditAttachment } from "@/hooks/use-edit-attachment";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useContactStore } from "@/stores/contact-store";
 import { useEmailStore, resolveEmailBlobContext, type EmailBlobContext } from "@/stores/email-store";
 import { useAuthStore } from "@/stores/auth-store";
+import { useIdentityStore } from "@/stores/identity-store";
+import { useAccountStore } from "@/stores/account-store";
+import { isSelfSent, ownReplyAddresses } from "@/lib/reply-recipients";
 import { isFilePreviewable, toInertBlob } from "@/lib/file-preview";
 import { useWopiStatus, canWopiOpen } from "@/hooks/use-wopi-status";
 import { useOwnDomainAddress } from "@/hooks/use-own-domain-address";
 import { emitThreadExpand } from "@/lib/plugin-thread-expand";
 import { PluginSlot } from "@/components/plugins/plugin-slot";
 import { ReaderSelectionMenu, useReaderSelectionMenu, watchBodySelection } from "./reader-selection-menu";
-import { PluginActions, useMessageActionTarget } from "@/components/plugins/plugin-actions";
+import { PluginActions, targetFilter, useMessageActionTarget, usePluginActions } from "@/components/plugins/plugin-actions";
 import { usePluginSlotOffers } from "@/hooks/use-plugin-slot-offers";
 import { useDeviceDetection } from "@/hooks/use-media-query";
 import { usePluginRenderedBody } from "@/hooks/use-plugin-rendered-body";
@@ -70,6 +84,7 @@ import { AttachmentPluginMenu, ReaderAboveQuoteSlot } from "./reader-plugin-surf
 import { useRemoteContentBlockedByOrg, useRemoteContentChecks } from "@/hooks/use-third-party-mode";
 import { ConversationHeaderActions, type ConversationActions } from "./conversation-header-actions";
 import { PhishingMarkBanner } from "./phishing-mark-banner";
+import { ROW_ITEM_ATTR, ROW_MORE_ATTR, useFirstRowLimit } from "@/hooks/use-first-row-limit";
 import { turnOffLinks } from "@/lib/phishing-links";
 import { usePhishingMarked } from "@/hooks/use-phishing-report";
 import { useDevicePolicy } from "@/hooks/use-device-policy";
@@ -88,6 +103,9 @@ interface ThreadConversationViewProps {
   onReply?: (email: Email) => void;
   onReplyAll?: (email: Email) => void;
   onForward?: (email: Email) => void;
+  /** A draft in the conversation (compose-p2-6): Edit and Discard take Reply's place. */
+  onEditDraft?: (email: Email) => void;
+  onDiscardDraft?: (email: Email) => void;
   onDownloadAttachment?: ConversationAttachmentHandler;
   /** Routing captured when this conversation was opened. */
   blobSource?: EmailBlobContext;
@@ -193,6 +211,8 @@ export function ThreadConversationView({
   onReply,
   onReplyAll,
   onForward,
+  onEditDraft,
+  onDiscardDraft,
   onDownloadAttachment,
   blobSource,
   onMarkAsRead,
@@ -201,8 +221,20 @@ export function ThreadConversationView({
 }: ThreadConversationViewProps) {
   const t = useTranslations();
   const externalContent = useConversationExternalContent();
-  const emailIdList = emails.map((email) => email.id).join(',');
-  const { isMobile: summaryOnPhone, isTablet: summaryOnTablet } = useDeviceDetection();
+  // Oldest first, the newest at the bottom, as on every other layout and in
+  // Gmail (mail-p2-6). The thread arrives newest first.
+  const ordered = useMemo(() => oldestFirst(emails), [emails]);
+  const newestId = newestReadable(ordered)?.id ?? null;
+  const emailIdList = ordered.map((email) => email.id).join(',');
+  // Your own messages say "me" while folded, as Gmail and Apple Mail do (mail-p3-15).
+  const identities = useIdentityStore((s) => s.identities);
+  const activeAccountId = useAuthStore((s) => s.activeAccountId);
+  const account = useAccountStore((s) => (activeAccountId ? s.getAccountById(activeAccountId) : undefined));
+  const ownEmails = useMemo(
+    () => ownReplyAddresses(identities.map((i) => i.email), [account?.email, account?.username]),
+    [identities, account?.email, account?.username],
+  );
+  const { isMobile: summaryOnPhone, isCompact: summaryOnTablet } = useDeviceDetection();
   const threadSummaryProps = useMemo(
     () => ({ threadId: thread.latestEmail.threadId ?? null, emailIds: emailIdList ? emailIdList.split(',') : [], deviceType: summaryOnPhone ? 'mobile' : summaryOnTablet ? 'tablet' : 'desktop' }),
     [thread.latestEmail.threadId, emailIdList, summaryOnPhone, summaryOnTablet],
@@ -210,28 +242,51 @@ export function ThreadConversationView({
 
   // Track which emails are expanded (most recent by default)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const scrolledThreadRef = useRef<string | null>(null);
 
-  // Auto-expand most recent email AND all unread emails when thread opens
+  // Auto-expand the newest email (your own reply too) AND all unread emails
+  // when the thread opens.
   useEffect(() => {
-    if (emails.length > 0) {
+    if (ordered.length > 0) {
       const idsToExpand = new Set<string>();
 
-      // Always expand most recent
-      idsToExpand.add(emails[0].id);
+      if (newestId) idsToExpand.add(newestId);
 
       // Also expand all unread emails
-      emails.forEach(email => {
-        if (!email.keywords?.$seen) {
+      ordered.forEach(email => {
+        if (!email.keywords?.$seen && !email.keywords?.$draft) {
           idsToExpand.add(email.id);
         }
       });
 
       setExpandedIds(idsToExpand);
     }
-  }, [emails]);
+  }, [ordered, newestId]);
+
+  // Once per conversation, show the newest message: it is at the bottom.
+  useEffect(() => {
+    const threadId = ordered[0]?.threadId ?? null;
+    if (!newestId || !threadId || scrolledThreadRef.current === threadId) return;
+    scrolledThreadRef.current = threadId;
+    const frame = requestAnimationFrame(() => {
+      cardsRef.current?.querySelector<HTMLElement>(`[data-thread-email-id="${CSS.escape(newestId)}"]`)?.scrollIntoView?.({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ordered, newestId]);
+
+  // Ctrl+P while a message has the focus (a click in it) prints that
+  // message alone, as its ⋮ > Print does. Otherwise the page prints as before.
+  usePrintListener();
+  const printing = usePrinting();
+  const focusedPrintId = useMemo(
+    () => (printing ? focusedConversationMessageId(cardsRef.current) : null),
+    [printing],
+  );
+  const focusedPrint = focusedPrintId ? conversationPrintSource(focusedPrintId) : null;
 
   const toggleExpanded = (emailId: string) => {
-    const target = emails.find((e) => e.id === emailId);
+    const target = ordered.find((e) => e.id === emailId);
     if (target) emitThreadExpand(target.threadId, [target], !expandedIds.has(emailId));
     setExpandedIds(prev => {
       const next = new Set(prev);
@@ -266,7 +321,7 @@ export function ThreadConversationView({
           <h2 className="font-semibold text-foreground break-words line-clamp-2" dir="auto" title={thread.latestEmail.subject || undefined}>
             {thread.latestEmail.subject || t("email_viewer.no_subject")}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="truncate text-xs sm:text-sm text-muted-foreground">
             {t("threads.messages_count", { count: emails.length })}
           </p>
         </div>
@@ -276,30 +331,53 @@ export function ThreadConversationView({
       {/* Email Cards */}
       <div className="flex-1 overflow-y-auto">
         <PluginSlot name="thread-summary" className="w-full" extraProps={threadSummaryProps} />
-        <div className="space-y-3" style={{ padding: 'var(--density-card-p)' }}>
-          {emails.map((email, index) => (
+        <div ref={cardsRef} className="space-y-3" style={{ padding: 'var(--density-card-p)' }}>
+          {ordered.map((email) => {
+            const draft = !!email.keywords?.$draft;
+            return (
+            <div key={email.id} data-thread-email-id={email.id} className="scroll-mt-16">
             <EmailCard
-              key={email.id}
               email={email}
               isExpanded={expandedIds.has(email.id)}
-              isLatest={index === 0}
+              isLatest={email.id === newestId}
+              isOwn={isSelfSent(email, ownEmails)}
               allowExternal={externalContent.isAllowed(email)}
               onToggleExpanded={() => toggleExpanded(email.id)}
               onAllowExternal={() => externalContent.allow(email.id)}
               onTrustSender={externalContent.trustSender(email)}
-              onReply={onReply ? () => onReply(email) : undefined}
-              onReplyAll={onReplyAll ? () => onReplyAll(email) : undefined}
-              onForward={onForward ? () => onForward(email) : undefined}
+              isDraft={draft}
+              onEditDraft={draft && onEditDraft ? () => onEditDraft(email) : undefined}
+              onDiscardDraft={draft && onDiscardDraft ? () => onDiscardDraft(email) : undefined}
+              onReply={!draft && onReply ? () => onReply(email) : undefined}
+              onReplyAll={!draft && onReplyAll ? () => onReplyAll(email) : undefined}
+              onForward={!draft && onForward ? () => onForward(email) : undefined}
               onDownloadAttachment={onDownloadAttachment}
             blobSource={blobSource}
               onMarkAsRead={onMarkAsRead}
               mailboxRole={mailboxRole}
             />
-          ))}
+            </div>
+            );
+          })}
         </div>
       </div>
+      {focusedPrint && !focusedPrint.noPrint && <MessagePrint fields={focusedPrint.fields} />}
     </div>
   );
+}
+
+/** A conversation's messages from the oldest to the newest. */
+export function oldestFirst(emails: Email[]): Email[] {
+  return [...emails].sort((a, b) => (Date.parse(a.receivedAt) || 0) - (Date.parse(b.receivedAt) || 0));
+}
+
+/** The newest message that isn't a draft or waiting to be sent. */
+export function newestReadable(ordered: Email[]): Email | undefined {
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    const e = ordered[i];
+    if (!e.keywords?.$draft && !e.isScheduled) return e;
+  }
+  return ordered[ordered.length - 1];
 }
 
 // Individual email card component
@@ -307,6 +385,8 @@ interface EmailCardProps {
   email: Email;
   isExpanded: boolean;
   isLatest: boolean;
+  /** Sent by the user: "me" on the folded card. */
+  isOwn?: boolean;
   allowExternal: boolean;
   onToggleExpanded: () => void;
   onAllowExternal: () => void;
@@ -314,6 +394,9 @@ interface EmailCardProps {
   onReply?: () => void;
   onReplyAll?: () => void;
   onForward?: () => void;
+  isDraft?: boolean;
+  onEditDraft?: () => void;
+  onDiscardDraft?: () => void;
   onDownloadAttachment?: ConversationAttachmentHandler;
   /** Routing captured when this conversation was opened. */
   blobSource?: EmailBlobContext;
@@ -333,8 +416,8 @@ function useConversationPluginProps(email: Email) {
   const belowSubjectOffers = usePluginSlotOffers('reader-below-subject').length;
   const bannerOffers = usePluginSlotOffers('email-banner').length;
   const wantsView = headerOffers + belowSubjectOffers + bannerOffers > 0;
-  const { isMobile, isTablet } = useDeviceDetection();
-  const deviceType = isMobile ? 'mobile' : isTablet ? 'tablet' : 'desktop';
+  const { isMobile, isCompact } = useDeviceDetection();
+  const deviceType = isMobile ? 'mobile' : isCompact ? 'tablet' : 'desktop';
   const emailProps = useMemo(() => ({ email: wantsView ? emailToReadView(email) : null, deviceType }), [email, wantsView, deviceType]);
   const idProps = useMemo(() => ({ emailId: email.id }), [email.id]);
   const actionTarget = useMessageActionTarget(email);
@@ -345,6 +428,7 @@ function EmailCard({
   email,
   isExpanded,
   isLatest: _isLatest,
+  isOwn = false,
   allowExternal,
   onToggleExpanded,
   onAllowExternal,
@@ -352,6 +436,9 @@ function EmailCard({
   onReply,
   onReplyAll,
   onForward,
+  isDraft = false,
+  onEditDraft,
+  onDiscardDraft,
   onDownloadAttachment,
   blobSource,
   onMarkAsRead,
@@ -361,6 +448,8 @@ function EmailCard({
   const density = useSettingsStore((state) => state.density);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const plugin = useConversationPluginProps(email);
+  // The same filter PluginActions uses, so the ⋮ shows only when its menu has a plugin item.
+  const readerActions = usePluginActions("reader-actions", { mailboxRole: mailboxRole ?? null, ...targetFilter(plugin.actionTarget, undefined) });
   const sender = email.from?.[0];
   const senderWarning = useSenderWarning(email);
   const formatAddress = useOwnDomainAddress();
@@ -369,10 +458,17 @@ function EmailCard({
 
   // Mark as read when email is expanded
   useMarkReadWhenShown(email, isExpanded, onMarkAsRead);
+  // Print in its own ⋮: this message alone.
+  const devices = useDevicePolicy(email);
+  const onPrint = devices.noPrint
+    ? undefined
+    : () => { printConversationMessage(email.id, printLabels((key) => t(`email_viewer.${key}`))); };
 
   return (
-    <div className={cn(
-      "rounded-lg border border-border overflow-hidden transition-all duration-200",
+    // Unfolded, focusable by a click (tabIndex -1), so Ctrl+P knows which
+    // message the user is in.
+    <div {...(isExpanded ? { [CONVERSATION_MESSAGE_ATTR]: email.id, tabIndex: -1 } : {})} className={cn(
+      "rounded-lg border border-border overflow-hidden transition-all duration-200 outline-none",
       isExpanded ? "bg-background shadow-sm" : "bg-muted/30",
       isUnread && !isExpanded && "start-bar border-s-transparent [--start-bar-width:2px] [--start-bar:var(--color-primary)]"
     )}>
@@ -399,14 +495,21 @@ function EmailCard({
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span dir="auto" className={cn(
+            <span dir="auto" data-conversation-sender="" className={cn(
               "font-medium truncate",
               isUnread ? "text-foreground" : "text-muted-foreground"
-            )}>
-              {sender?.name || (sender?.email && formatAddress(sender.email)) || t('email_viewer.unknown_sender')}
+            )} title={isOwn && !isExpanded ? (sender?.name || sender?.email) : undefined}>
+              {isOwn && !isExpanded
+                ? t('email_viewer.recipient_me')
+                : sender?.name || (sender?.email && formatAddress(sender.email)) || t('email_viewer.unknown_sender')}
             </span>
             <ExternalSenderChip from={email.from} accountId={email.sourceClientAccountId} interactive={false} />
             <ReceivedLabelChip email={email} />
+            {isDraft && (
+              <span data-testid="conversation-draft-label" className="text-xs font-medium text-destructive shrink-0">
+                {t('email_list.draft')}
+              </span>
+            )}
             {email.isScheduled && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary shrink-0">
                 <CalendarClock className="w-3.5 h-3.5" />
@@ -472,6 +575,34 @@ function EmailCard({
               in the single reader's More panel on phones. Long names (Arabic
               "Reply all") wrap to a second line instead of being cut. */}
           <div className="px-4 pb-4 flex flex-wrap gap-2">
+            {onEditDraft && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditDraft();
+                }}
+                className="flex-auto px-2 whitespace-nowrap"
+              >
+                <Pencil className="w-4 h-4 me-1.5 shrink-0" />
+                {t("email_viewer.edit_draft")}
+              </Button>
+            )}
+            {onDiscardDraft && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDiscardDraft();
+                }}
+                className="flex-auto px-2 whitespace-nowrap"
+              >
+                <Trash2 className="w-4 h-4 me-1.5 shrink-0" />
+                {t("email_composer.discard")}
+              </Button>
+            )}
             {onReply && (
               <Button
                 variant="outline"
@@ -514,14 +645,21 @@ function EmailCard({
                 {t("email_viewer.forward")}
               </Button>
             )}
-            <PluginActions
-              surface="reader-actions"
-              context={plugin.idProps}
-              target={plugin.actionTarget}
-              mailboxRole={mailboxRole ?? null}
-              overflow
-              className="flex-shrink-0 rounded-md border border-border"
-            />
+            {/* One ⋮ per message: Print and the plugins' reader actions share it. */}
+            <ConversationMessageMenu
+              onPrint={onPrint}
+              hasExtra={readerActions.length > 0}
+              className="w-auto h-8 px-2 flex-shrink-0 rounded-md border border-border"
+              iconClassName="w-4 h-4"
+            >
+              <PluginActions
+                surface="reader-actions"
+                variant="menu"
+                context={plugin.idProps}
+                target={plugin.actionTarget}
+                mailboxRole={mailboxRole ?? null}
+              />
+            </ConversationMessageMenu>
           </div>
         </div>
       )}
@@ -549,7 +687,7 @@ interface ConversationEmailBodyProps {
  */
 export function ConversationEmailBody({
   email,
-  allowExternal,
+  allowExternal: externalAllowed,
   onAllowExternal,
   onTrustSender,
   onDownloadAttachment,
@@ -589,6 +727,8 @@ export function ConversationEmailBody({
   const fallbackSource = useEmailStore(useShallow(() => resolveEmailBlobContext(email, client)));
   const source = blobSource ?? fallbackSource;
   const { client: blobClient, accountId } = source;
+  const editAccount = source.clientAccountId ?? editAccountOf(email);
+  const { canEdit: canEditAttachment, edit: editAttachment } = useEditAttachment(editAccount);
   // Reported as phishing: a banner, links off, no cards (as in the reader).
   const phishingMarked = usePhishingMarked(email);
   const tPhishing = useTranslations('phishing_report');
@@ -602,6 +742,8 @@ export function ConversationEmailBody({
   const cidBlobUrls = useMemo(() => cidResult?.request === cidRequest ? cidResult.urls : {}, [cidResult, cidRequest]);
   // A crypto plugin's decrypted body (PGP, S/MIME) replaces the message's own.
   const pluginBody = usePluginRenderedBody(email);
+  // The plugin can't vouch for its body: external content stays off, whatever was allowed.
+  const allowExternal = externalAllowed && !pluginBody.blockExternal;
   // reader-above-quote: the body the quote was collapsed in, once it is on screen.
   const [htmlBodyEl, setHtmlBodyEl] = useState<HTMLElement | null>(null);
   const [plainBodyEl, setPlainBodyEl] = useState<HTMLDivElement | null>(null);
@@ -790,6 +932,11 @@ export function ConversationEmailBody({
     const bodyCids = collectReferencedCids(getRenderableHtmlBody(email));
     return attachments.filter(att => !isEmbeddedInBody(att, bodyCids));
   }, [email, hideInlineImageAttachments]);
+  const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
+  const attachmentRow = useFirstRowLimit(visibleAttachments.length, !attachmentsExpanded);
+  const attachmentLimit = attachmentsExpanded ? null : attachmentRow.limit;
+  const shownAttachments = attachmentLimit === null ? visibleAttachments : visibleAttachments.slice(0, attachmentLimit);
+  const hiddenAttachments = attachmentLimit === null ? [] : visibleAttachments.slice(attachmentLimit);
 
   // Render the sanitized HTML body inside a sandboxed iframe so a malicious
   // (or accidentally-bypassed) email cannot inject styles/scripts/forms into
@@ -920,17 +1067,131 @@ export function ConversationEmailBody({
         emailId: email.id,
         onContextMenu: (point, text) => selectionMenu.openRef.current(point, { emailId: email.id, text }),
       });
+      // j, k, e and the other shortcuts keep working after a click into the body.
+      forwardFrameKeys(doc, iframe);
       setHtmlBodyEl(doc.body);
     } catch {
       // contentDocument may be inaccessible under stricter sandboxes; ignore.
     }
   }, [t, isDark, allowExternal, email.id, selectionMenu.openRef, reading.textFactor, reading.minFontSize, reading.overrideStyles, reading.fitWidth, reading.pauseImages]);
 
+  // Print in the message's ⋮, and Ctrl+P while it has the focus, print this
+  // message alone, as it shows here, in the reader's single-message layout.
+  const printTimeFormat = useSettingsStore((state) => state.timeFormat);
+  const invitationPrint = useInvitationPrint(email.id);
+  useConversationPrintSource(email.id, () => ({
+    fields: buildMessagePrintFields({
+      email,
+      html: emailContent.html,
+      isHtml: emailContent.isHtml,
+      attachments: visibleAttachments,
+      invitation: invitationPrint,
+      timeFormat: printTimeFormat,
+      noSubject: t('email_viewer.no_subject'),
+      unknownSender: t('email_viewer.unknown_sender'),
+    }),
+    externalBlocked: !allowExternal,
+    watermark,
+    noPrint: devices.noPrint,
+  }));
+
   return (
     <div className={className}>
+      {/* A security warning first, so it is read before a file is opened. */}
       {phishingMarked && <PhishingMarkBanner className="px-4" />}
+      {/* Attachments: right under the message's header and its security
+          warning, above the other notices and the body, on one line; the
+          rest behind "Show N more". Inline images stay in the body, so a
+          message with only those has none. */}
+      {visibleAttachments.length > 0 && (
+        <div
+          data-conversation-attachments=""
+          style={bodyStyle ? { paddingTop: '0.25rem', paddingBottom: '0.25rem' } : { paddingInline: 'var(--density-card-p)', paddingTop: 'var(--density-card-p)' }}
+        >
+          <div ref={attachmentRow.ref} className="flex flex-wrap items-center gap-2">
+            {shownAttachments.map((attachment, idx) => {
+              const { icon: Icon, className: iconClass } = attachmentIcon(attachment.type, attachment.name);
+              const isPreviewable = isFilePreviewable(attachment.name, attachment.type)
+                || (!!attachment.blobId && canWopiOpen(wopiStatus, attachment.name));
+              // Without downloads, whatever can be previewed is, and nothing else opens.
+              const opensPreview = isPreviewable && (mailAttachmentAction === 'preview' || devices.noDownloads);
+              const locked = devices.noDownloads && !opensPreview;
+              return (
+                <span key={idx} {...{ [ROW_ITEM_ATTR]: "" }} className="inline-flex min-w-0 max-w-full items-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (locked) return;
+                    onDownloadAttachment?.(attachment.blobId, attachment.name || 'attachment', attachment.type, source);
+                  }}
+                  aria-disabled={locked || undefined}
+                  title={locked ? t('device_policy.downloads_off') : opensPreview ? t('files.preview') : t('email_viewer.download')}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm"
+                >
+                  <Icon className={cn("w-4 h-4", iconClass)} />
+                  {/* The action, for screen readers: the visible name alone
+                      doesn't say whether the button previews or downloads. */}
+                  <span className="sr-only">{opensPreview ? t('files.preview') : t('email_viewer.download')}</span>{' '}
+                  <span className="truncate max-w-[150px]">{attachment.name ? stripBidiControls(attachment.name) : 'Attachment'}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {formatFileSize(attachment.size)}
+                  </span>
+                  {opensPreview ? (
+                    <Eye className="w-4 h-4 text-muted-foreground" />
+                  ) : locked ? null : (
+                    <Download className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+                {blobClient && attachment.blobId && !phishingMarked && canEditAttachment(attachment.name) && (
+                  <button
+                    type="button"
+                    title={t('desktopEdit.edit')}
+                    aria-label={t('desktopEdit.edit_named', { name: stripBidiControls(attachment.name ?? '') })}
+                    className="-ms-1.5 self-center rounded-lg p-2 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const { blobId } = attachment;
+                      void editAttachment({
+                        key: `mail:${editAccount}:${email.id}:${blobId}`,
+                        name: attachment.name ?? 'attachment',
+                        type: attachment.type,
+                        account: editAccount,
+                        source: { kind: 'mail', emailId: email.id, ownerAccountId: accountId },
+                        load: () => blobClient.fetchBlobArrayBuffer(blobId, undefined, undefined, accountId),
+                      });
+                    }}
+                  >
+                    <FilePen className="h-4 w-4" />
+                  </button>
+                )}
+                <AttachmentPluginMenu emailId={email.id} attachment={attachment} className="-ms-1.5 self-center p-2 rounded-lg" />
+                </span>
+              );
+            })}
+            {hiddenAttachments.length > 0 && (
+              <button
+                type="button"
+                {...{ [ROW_MORE_ATTR]: "" }}
+                onClick={(e) => { e.stopPropagation(); setAttachmentsExpanded(true); }}
+                className="px-3 py-2 rounded-lg text-sm text-primary hover:bg-muted transition-colors"
+              >
+                {t('email_viewer.attachments_show_more', { count: hiddenAttachments.length })}
+              </button>
+            )}
+            {attachmentsExpanded && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setAttachmentsExpanded(false); }}
+                className="px-3 py-2 rounded-lg text-sm text-primary hover:bg-muted transition-colors"
+              >
+                {t('email_viewer.attachments_show_fewer')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {/* External content warning */}
-      {hasBlockedContent && !allowExternal && emailContent.isHtml && (
+      {hasBlockedContent && !allowExternal && !pluginBody.blockExternal && emailContent.isHtml && (
         <div className="px-4 py-2 bg-muted/50 flex items-center justify-between text-sm" data-testid="external-content-notice">
           <span className="text-muted-foreground">
             {remoteBlockedByOrg ? t("third_party.remote_content_blocked") : t("email_viewer.external_content_warning")}
@@ -1033,50 +1294,6 @@ export function ConversationEmailBody({
         />
       </div>
 
-      {/* Attachments */}
-      {visibleAttachments.length > 0 && (
-        <div className="px-4 pb-4">
-          <div className="flex flex-wrap gap-2">
-            {visibleAttachments.map((attachment, idx) => {
-              const { icon: Icon, className: iconClass } = attachmentIcon(attachment.type, attachment.name);
-              const isPreviewable = isFilePreviewable(attachment.name, attachment.type)
-                || (!!attachment.blobId && canWopiOpen(wopiStatus, attachment.name));
-              // Without downloads, whatever can be previewed is, and nothing else opens.
-              const opensPreview = isPreviewable && (mailAttachmentAction === 'preview' || devices.noDownloads);
-              const locked = devices.noDownloads && !opensPreview;
-              return (
-                <React.Fragment key={idx}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (locked) return;
-                    onDownloadAttachment?.(attachment.blobId, attachment.name || 'attachment', attachment.type, source);
-                  }}
-                  aria-disabled={locked || undefined}
-                  title={locked ? t('device_policy.downloads_off') : opensPreview ? t('files.preview') : t('email_viewer.download')}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted hover:bg-muted/80 transition-colors text-sm"
-                >
-                  <Icon className={cn("w-4 h-4", iconClass)} />
-                  {/* The action, for screen readers: the visible name alone
-                      doesn't say whether the button previews or downloads. */}
-                  <span className="sr-only">{opensPreview ? t('files.preview') : t('email_viewer.download')}</span>{' '}
-                  <span className="truncate max-w-[150px]">{attachment.name ? stripBidiControls(attachment.name) : 'Attachment'}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {formatFileSize(attachment.size)}
-                  </span>
-                  {opensPreview ? (
-                    <Eye className="w-4 h-4 text-muted-foreground" />
-                  ) : locked ? null : (
-                    <Download className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </button>
-                <AttachmentPluginMenu emailId={email.id} attachment={attachment} className="-ms-1.5 self-center p-2 rounded-lg" />
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

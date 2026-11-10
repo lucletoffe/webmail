@@ -94,6 +94,11 @@ export interface SearchRequestOptions {
    * where the list must not wait for the highlighting.
    */
   deferSnippets?: boolean;
+  /**
+   * For the search palette. It searches on every few keystrokes, so it keeps its
+   * paging apart from the mail list's, and waits less for the local store.
+   */
+  palette?: boolean;
 }
 
 export interface SearchEmailsResult {
@@ -166,6 +171,18 @@ export interface IJMAPClient {
   hasSSEStream(): boolean;
   onConnectionChange(callback: (connected: boolean) => void): void;
   onRateLimit(callback: (rateLimited: boolean, retryAfterMs: number) => void): void;
+  /**
+   * The mail server itself answered 401 after a fresh try at signing in, with
+   * `refusedForMs` since it first did with no good answer in between. Not called
+   * for an outage, a proxy's page or a token renewal that failed.
+   */
+  onCredentialsRefused?(callback: (refusedForMs: number) => void): void;
+  /**
+   * The mail server answered 403 for the session or the API itself, as Stalwart
+   * does for an account deleted while signed in. The client sends nothing more.
+   */
+  onAccessRefused?(callback: () => void): void;
+  isAccessRefused?(): boolean;
   isRateLimited(): boolean;
   getRateLimitRemainingMs(): number;
   onStateChange(callback: (change: StateChange) => void): void;
@@ -276,6 +293,12 @@ export interface IJMAPClient {
   getEmailQuerySortOptions?(accountId?: string): string[] | null;
   getEmailsInMailbox(mailboxId: string): Promise<Email[]>;
   getEmail(emailId: string, accountId?: string): Promise<Email | null>;
+  /**
+   * An uploaded message (Email/parse) with what the reader shows. It is in no
+   * folder: its id is the blobId, and it has no folders or keywords. Null when
+   * the blob isn't a message. Throws when the server can't be asked.
+   */
+  parseEmailBlob?(blobId: string, accountId?: string): Promise<Email | null>;
   getSomeEmails(emailsId: string[], accountId?: string): Promise<Email[]>
   /**
    * Attachment parts per email id for list-row chips, fetched lazily because
@@ -468,7 +491,7 @@ export interface IJMAPClient {
     // `draftAccountId`: the account `draftId` lives in, so the sent draft is
     // destroyed there (default: the primary account). `noSentCopy`: no copy
     // stays in Sent (a phishing report).
-    options?: { requestReadReceipt?: boolean; requestDsn?: boolean; requireTls?: boolean; priority?: MessagePriority; headers?: Record<string, string>; draftAccountId?: string; noSentCopy?: boolean; labelHeaders?: Record<string, string> },
+    options?: { requestReadReceipt?: boolean; requestDsn?: boolean; requireTls?: boolean; priority?: MessagePriority; headers?: Record<string, string>; draftAccountId?: string; noSentCopy?: boolean; labelHeaders?: Record<string, string>; keywords?: string[] },
   ): Promise<SendEmailResult>;
   /** Whether the submission account advertises an SMTP extension ("DSN", "REQUIRETLS", …). */
   supportsSubmissionExtension?(extension: string, accountId?: string): boolean;
@@ -494,8 +517,8 @@ export interface IJMAPClient {
     humanText?: string;
   }): Promise<void>;
 
-  sendRawEmail(blob: Blob, identityId: string, sentMailboxId: string, draftMailboxId?: string, delayedUntil?: string, envelopeRecipients?: string[]): Promise<SendEmailResult>;
-  submitRawEmail(blob: Blob, identityId: string, delayedUntil?: string, envelopeRecipients?: string[]): Promise<SendEmailResult>;
+  sendRawEmail(blob: Blob, identityId: string, sentMailboxId: string, draftMailboxId?: string, delayedUntil?: string, envelopeRecipients?: string[], existingCopyId?: string): Promise<SendEmailResult>;
+  submitRawEmail(blob: Blob, identityId: string, delayedUntil?: string, envelopeRecipients?: string[], existingCopyId?: string): Promise<SendEmailResult>;
   getScheduledEmails(limit?: number, position?: number): Promise<{ emails: ScheduledEmail[]; hasMore: boolean; total: number; totalByAccount?: Record<string, number>; nextPosition: number }>;
   /** Cancels a pending submission, then destroys its record. */
   cancelEmailSubmission(submissionId: string, accountId?: string): Promise<void>;
@@ -548,6 +571,7 @@ export interface IJMAPClient {
           accountId?: string;
           onProgress?: (loaded: number, total: number) => void;
           signal?: AbortSignal;
+          noHold?: boolean;
         },
   ): Promise<{ blobId: string; size: number; type: string }>;
   getBlobDownloadUrl(blobId: string, name?: string, type?: string, accountId?: string): string;
@@ -635,6 +659,8 @@ export interface IJMAPClient {
     options?: CalendarEventUpdateOptions,
   ): Promise<void>;
   deleteCalendarEvent(eventId: string, sendSchedulingMessages?: boolean, targetAccountId?: string): Promise<void>;
+  /** Whether the last request was answered from this device instead of the server. */
+  answeredFromDevice?(): boolean;
   batchDeleteCalendarEvents(eventIds: string[], targetAccountId?: string): Promise<{ destroyed: string[]; notDestroyed: Record<string, { type?: string; description?: string }> }>;
   queryCalendarEvents(filter: CalendarEventFilter, sort?: Array<{ property: string; isAscending: boolean }>, limit?: number, targetAccountId?: string, options?: CalendarQueryOptions): Promise<CalendarEvent[]>;
   queryAllCalendarEvents(filter: CalendarEventFilter, sort?: Array<{ property: string; isAscending: boolean }>, limit?: number, options?: CalendarQueryOptions): Promise<CalendarEvent[]>;

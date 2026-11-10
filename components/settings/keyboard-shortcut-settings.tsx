@@ -44,7 +44,7 @@ export function KeyboardShortcutSettings() {
   const [recording, setRecording] = useState<CustomizableShortcutAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const rows = ROWS.filter((entry) => !entry.feature || (features[entry.feature] ?? true));
+  const rows = ROWS.filter((entry) => !entry.feature || (features?.[entry.feature] ?? true));
   const labelOf = (action: CustomizableShortcutAction) => {
     const entry = ROWS.find((row) => row.action === action);
     return entry ? t(entry.description) : action;

@@ -29,6 +29,12 @@ ENV BULWARK_SOURCE_MAPS=$BULWARK_SOURCE_MAPS
 # Empty keeps the built-in default. Baked in at build time.
 ARG NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL=
 ENV NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL=$NEXT_PUBLIC_UNDUST_MEET_RESERVE_URL
+# One build id for every platform of a release (#1531). CI passes the same
+# seed to the amd64 and arm64 builds; without one each build makes its own id
+# (next.config.ts), and a load balancer mixing the two would tell open tabs a
+# new version is out on every check.
+ARG BULWARK_BUILD_SEED=
+ENV BULWARK_BUILD_SEED=$BULWARK_BUILD_SEED
 # The mock JMAP server (DEV_MOCK_JMAP) accepts any password and is for
 # `npm run dev` only; images ship without it.
 # `next build` type-checks every .ts file, and some unit tests import the
@@ -39,8 +45,10 @@ RUN rm -rf "app/api/dev-jmap" && \
       \( -name __tests__ -o -name "*.test.ts" -o -name "*.test.tsx" \) \
       -prune -exec rm -rf {} \; && \
     node scripts/build-pst-worker.mjs && \
+    node scripts/build-store-worker.mjs && \
     node scripts/build-plugin-sandbox.mjs && \
-    npx next build --webpack
+    npx next build --webpack && \
+    node scripts/standalone-guard.mjs
 
 # webpack has no debug IDs of its own, so sentry-cli adds them to the
 # chunks; then every map moves to /sourcemaps (exported with
@@ -84,11 +92,14 @@ COPY --from=builder /app/scripts/healthcheck.mjs ./healthcheck.mjs
 # Every data dir exists up front and belongs to the runtime user, so a fresh
 # volume on /app/data (Docker copies these into it) or on any one of them is
 # writable. plugin-secrets holds users' plugin credentials, version-check the
-# result of the last update check.
+# result of the last update check. They are also group 0's with the owner's
+# rights, so the image runs as any uid in group 0 (`user: "<uid>:0"` in
+# compose, OpenShift's random uids) without giving anyone else write access.
 RUN mkdir -p /app/.next/cache /app/data/settings /app/data/admin /app/data/admin-state \
       /app/data/telemetry /app/data/plugin-secrets /app/data/version-check && \
     chmod 700 /app/data/plugin-secrets && \
-    chown -R nextjs:nodejs /app/.next/cache /app/data
+    chown -R nextjs:0 /app/.next/cache /app/data && \
+    chmod -R g=u /app/.next/cache /app/data
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000

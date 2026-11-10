@@ -8,11 +8,14 @@ import {
   SHORTCUT_APPS,
   sectionsWithGeneral,
   shortcutAppForPath,
+  shortcutKeyFor,
   type ShortcutAppId,
   type ShortcutEntry,
+  type ShortcutHost,
   type ShortcutSection,
 } from "@/lib/keyboard-shortcuts";
-import { shortcutAlternatives } from "@/lib/shortcut-keys";
+import { isApplePlatform, shortcutAlternatives } from "@/lib/shortcut-keys";
+import { getDesktopBridge } from "@/lib/desktop/bridge";
 import { formatCombo } from "@/lib/shortcut-bindings";
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
@@ -52,14 +55,16 @@ export function KeyboardShortcutsModal({ isOpen, onClose, app }: KeyboardShortcu
 
   // Rows that belong to one interface layout (or one shell) are listed only under it,
   // and a row of a gated feature only while the admin has it on.
+  const host = shortcutHost();
   const shown = (entries: readonly ShortcutEntry[]) =>
-    entries.filter((entry) => (!entry.layout || entry.layout === interfaceLayout)
+    entries.filter((entry) => shortcutKeyFor(entry, host) !== null
+      && (!entry.layout || entry.layout === interfaceLayout)
       && (!entry.shell || entry.shell === shell)
       && (!entry.feature || (features[entry.feature] ?? true)));
   // A key the user chose in the settings replaces the built-in ones.
   const keyOf = (entry: ShortcutEntry) => {
     const custom = entry.action ? shortcutBindings?.[entry.action] : undefined;
-    return custom ? formatCombo(custom) : entry.key;
+    return custom ? formatCombo(custom) : shortcutKeyFor(entry, host)!;
   };
 
   const apps = SHORTCUT_APPS.filter((a) => a.sections.some((s) => shown(s.entries).length > 0));
@@ -178,6 +183,13 @@ export function KeyboardShortcutsModal({ isOpen, onClose, app }: KeyboardShortcu
       </div>
     </Dialog>
   );
+}
+
+/** The desktop app has keys of its own (its menus), and they differ by system. */
+function shortcutHost(): ShortcutHost {
+  if (!getDesktopBridge()) return "browser";
+  if (isApplePlatform()) return "mac";
+  return typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent) ? "windows" : "linux";
 }
 
 function ShortcutRow({
