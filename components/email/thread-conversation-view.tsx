@@ -32,7 +32,7 @@ import { useThemeStore } from "@/stores/theme-store";
 import { useShallow } from "zustand/react/shallow";
 import { Avatar } from "@/components/ui/avatar";
 import { useSenderWarning } from "@/hooks/use-sender-warning";
-import { brandIndicatorDomain } from "@/lib/email-headers";
+import { useBrandDomain } from "@/hooks/use-brand-domain";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatFileSize, cn, cleanPreview } from "@/lib/utils";
 import { IconButton } from "@/components/ui/icon-button";
@@ -312,7 +312,7 @@ export function ThreadConversationView({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center px-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-10" style={{ gap: 'var(--density-item-gap)', paddingBlock: 'var(--density-header-py)' }}>
+      <div data-plugin-list-avoid="" className="flex items-center px-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 sticky top-0 z-10" style={{ gap: 'var(--density-item-gap)', paddingBlock: 'var(--density-header-py)' }}>
         <IconButton size="icon-lg" className="-ms-2 flex-shrink-0" onClick={onBack} label={t('email_viewer.back_to_list')}>
           <ArrowLeft />
         </IconButton>
@@ -452,6 +452,7 @@ function EmailCard({
   const readerActions = usePluginActions("reader-actions", { mailboxRole: mailboxRole ?? null, ...targetFilter(plugin.actionTarget, undefined) });
   const sender = email.from?.[0];
   const senderWarning = useSenderWarning(email);
+  const brandDomain = useBrandDomain(email);
   const formatAddress = useOwnDomainAddress();
   const isUnread = !email.keywords?.$seen;
   const isStarred = email.keywords?.$flagged;
@@ -477,6 +478,7 @@ function EmailCard({
       <button
         onClick={onToggleExpanded}
         aria-expanded={isExpanded}
+        data-plugin-list-avoid=""
         className={cn(
           "w-full flex items-start text-start transition-colors",
           !isExpanded && "hover:bg-muted/50"
@@ -490,7 +492,7 @@ function EmailCard({
             size="md"
             className="flex-shrink-0"
             senderWarning={senderWarning}
-            brandDomain={brandIndicatorDomain(email)}
+            brandDomain={brandDomain}
           />
         )}
         <div className="flex-1 min-w-0">
@@ -574,7 +576,7 @@ function EmailCard({
           {/* Action Buttons; plugin reader actions behind a "more" button, as
               in the single reader's More panel on phones. Long names (Arabic
               "Reply all") wrap to a second line instead of being cut. */}
-          <div className="px-4 pb-4 flex flex-wrap gap-2">
+          <div className="px-4 pb-4 flex flex-wrap gap-2" data-conversation-message-actions="" data-plugin-list-avoid="">
             {onEditDraft && (
               <Button
                 variant="outline"
@@ -925,13 +927,15 @@ export function ConversationEmailBody({
   // Parts the body embeds via cid: stay out of the attachment row while the
   // user hides inline images - the desktop viewer's rule, shared through
   // lib/attachment-visibility.ts so the two views cannot drift apart. The
-  // report parts of a bounce or read receipt never show.
+  // report parts of a bounce or read receipt never show. Shown as plain text,
+  // the body embeds nothing, not even the images declared inline.
   const visibleAttachments = useMemo(() => {
     const attachments = (email.attachments ?? []).filter(att => !isReportPart(att.type));
     if (!hideInlineImageAttachments) return attachments;
-    const bodyCids = collectReferencedCids(getRenderableHtmlBody(email));
-    return attachments.filter(att => !isEmbeddedInBody(att, bodyCids));
-  }, [email, hideInlineImageAttachments]);
+    const plainText = mailViewMode === 'plain';
+    const bodyCids = collectReferencedCids(plainText ? null : getRenderableHtmlBody(email));
+    return attachments.filter(att => !isEmbeddedInBody(att, bodyCids, attachments, { plainText }));
+  }, [email, hideInlineImageAttachments, mailViewMode]);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
   const attachmentRow = useFirstRowLimit(visibleAttachments.length, !attachmentsExpanded);
   const attachmentLimit = attachmentsExpanded ? null : attachmentRow.limit;
@@ -1274,7 +1278,7 @@ export function ConversationEmailBody({
               "[&_table]:border-collapse [&_td]:p-2 [&_th]:p-2",
               "[&_img]:max-w-full [&_img]:h-auto"
             )}
-            style={{ whiteSpace: 'pre-wrap', ...(plainTextFont === 'mono' && { fontFamily: 'ui-monospace, "SF Mono", Consolas, monospace' }), fontSize: reading.plainFontSize(13), ...(reading.comfortableWidth && { maxWidth: '80ch' }) }}
+            style={{ whiteSpace: 'pre-wrap', ...(plainTextFont === 'mono' && { fontFamily: 'ui-monospace, "SF Mono", Consolas, monospace' }), fontSize: reading.plainFontSize(13), ...(reading.comfortableWidth && { maxWidth: '80ch', marginInline: 'auto' }) }}
             data-plugin-source="email-body"
             data-email-id={email.id}
             onContextMenu={(e) => selectionMenu.onElementContextMenu(e, email.id)}

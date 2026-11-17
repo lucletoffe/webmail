@@ -20,10 +20,11 @@ import { batched, batchedBySize, itemsPerRequest } from "./request-limits";
 import { keywordPointer, pointerToken } from "./patch-pointer";
 import { FirstTouchGate } from "./first-touch-gate";
 import { debug } from "@/lib/debug";
-import { normalizeCalendarEventLike, parseDurationSeconds } from "@/lib/calendar-event-normalization";
+import { normalizeCalendarEventLike, normalizeStalwartPropertyNames, parseDurationSeconds } from "@/lib/calendar-event-normalization";
 import { SYNTHETIC_ID_PROBE, RECURRENCE_BASE_PROPERTIES, hydrateRecurrenceInstances, isServerRecurrenceInstance } from "@/lib/recurrence-instances";
 import { isTaskLikeObject, type ScannedCalendarObject } from "@/lib/calendar-component-detection";
-import { DEFAULT_CALENDAR_COMPONENTS, mkCalendarCollection, newCalendarCollectionName } from "@/lib/webdav/calendar-collection";
+import { DEFAULT_CALENDAR_COMPONENTS, mkCalendarCollection, newCalendarCollectionName, fetchCalendarCollectionComponents, davComponentsFor } from "@/lib/webdav/calendar-collection";
+import { getAccountSlotHeadersFor } from "@/lib/auth/active-account-slot";
 import { sanitizeDisplayName, splitMailbox } from "@/lib/rfc5322-mailbox";
 import { decodeFileNodeName } from "./filenode-name";
 import { PartialAccountsError } from "./partial-accounts";
@@ -61,6 +62,7 @@ import { outgoingKeywordMap } from "@/lib/outgoing/outgoing-keywords";
 import { draftLabelProperty } from "@/lib/classification/labels";
 import { attachmentParts, HTML_PART_ID, relatedBodyStructure, repointAttachments, TEXT_PART_ID, type OutgoingBodyPart, type SavedPart } from "./outgoing-body";
 import { addBodyMediaToAttachments } from "./body-media-attachments";
+import { isThreadingMessageId } from "@/lib/email-threading";
 
 // Cap for the follow-up Email/get issued when a displayed body part comes
 // back truncated at the normal 256000-byte limit (see refetchTruncatedBodyValues
@@ -812,7 +814,10 @@ const TASK_PROGRESS_NORMALIZATION = new Map<string, CalendarTask['progress']>([
   ['canceled', 'cancelled'],
 ]);
 
-function normalizeCalendarTask(task: CalendarTask): CalendarTask {
+function normalizeCalendarTask(raw: CalendarTask): CalendarTask {
+  // Stalwart names the rule recurrenceRule (one object); the task list and
+  // the calendar read recurrenceRules, as for events.
+  const task = normalizeStalwartPropertyNames(raw as unknown as Partial<CalendarEvent>) as unknown as CalendarTask;
   const progress = task.progress as unknown;
   if (typeof progress !== 'string') return task;
 
@@ -2213,6 +2218,15 @@ export class JMAPClient implements IJMAPClient {
       }
 
       const session = await sessionResponse.json();
+      // A session without an accounts object, an API URL and a download URL
+      // is no sign-in: reading on would show an empty mailbox of account "0".
+      if (
+        !session || typeof session !== 'object'
+        || !session.accounts || typeof session.accounts !== 'object' || Array.isArray(session.accounts)
+        || typeof session.apiUrl !== 'string' || typeof session.downloadUrl !== 'string'
+      ) {
+        throw new Error('No mail account found in session');
+      }
       this.rewriteSessionUrls(session);
 
       this.session = session;
@@ -3620,6 +3634,9 @@ export class JMAPClient implements IJMAPClient {
     } as Email;
     addBodyMediaToAttachments(email);
     if (email.headers) await this.parseEmailHeaders(email);
+    // A message read from a file was never received by this server: whatever
+    // its own Received and Authentication-Results lines say earns it nothing.
+    email.authenticationResultsOnReceipt = false;
     return email;
   }
 
@@ -4675,15 +4692,10 @@ export class JMAPClient implements IJMAPClient {
       }, "0"],
     ]);
 
-    const result = response.methodResponses?.[0]?.[1];
+    const result = methodResult(response, '0', 'Create mailbox');
     if (result?.notCreated?.[createId]) {
       const err = result.notCreated[createId];
-      const details = [err.type || 'unknown error'];
-      if (Array.isArray(err.properties) && err.properties.length > 0) {
-        details.push(`properties=[${err.properties.join(', ')}]`);
-      }
-      if (err.description) details.push(err.description);
-      throw new Error(`Failed to create mailbox: ${details.join(' – ')}`);
+      throw jmapError(err.description || `Failed to create mailbox: ${err.type || 'unknown error'}`, err);
     }
 
     const created = result?.created?.[createId];
@@ -4718,9 +4730,10 @@ export class JMAPClient implements IJMAPClient {
       }, "0"],
     ]);
 
-    const result = response.methodResponses?.[0]?.[1];
+    const result = methodResult(response, '0', 'Update mailbox');
     if (result?.notUpdated?.[mailboxId]) {
-      throw new Error(`Failed to update mailbox: ${result.notUpdated[mailboxId].type || 'unknown error'}`);
+      const err = result.notUpdated[mailboxId];
+      throw jmapError(err.description || `Failed to update mailbox: ${err.type || 'unknown error'}`, err);
     }
   }
 
@@ -4761,7 +4774,7 @@ export class JMAPClient implements IJMAPClient {
       }, "0"],
     ]);
 
-    const result = response.methodResponses?.[0]?.[1];
+    const result = methodResult(response, '0', 'Delete mailbox');
     if (result?.notDestroyed?.[mailboxId]) {
       const err = result.notDestroyed[mailboxId];
       throw jmapError(err.description || `Failed to delete mailbox: ${err.type || 'unknown error'}`, err);
@@ -5398,7 +5411,7 @@ export class JMAPClient implements IJMAPClient {
     references?: string[],
     // `classification`: the composer's label choice (an id, null for none),
     // kept in X-Bulwark-Label so a re-opened draft restores it.
-    options?: { priority?: MessagePriority; accountId?: string; previousDraftAccountId?: string; classification?: string | null },
+    options?: { priority?: MessagePriority; accountId?: string; previousDraftAccountId?: string; classification?: string | null; keywords?: string[] },
   ): Promise<string> {
     // A draft for a group identity belongs in the group's Drafts, like its
     // Sent copy (#1090).
@@ -5446,9 +5459,10 @@ export class JMAPClient implements IJMAPClient {
 
     const sanitizedFromName = sanitizeIdentityDisplayName(fromName);
     // A reply draft keeps its thread: re-opened or re-sent after Undo, it has
-    // nothing else to rebuild In-Reply-To / References from.
-    const draftInReplyTo = inReplyTo?.map(stripMessageIdBrackets).filter(Boolean);
-    const draftReferences = references?.map(stripMessageIdBrackets).filter(Boolean);
+    // nothing else to rebuild In-Reply-To / References from. An id with white
+    // space or a control character in it is dropped (isThreadingMessageId).
+    const draftInReplyTo = inReplyTo?.map(stripMessageIdBrackets).filter(isThreadingMessageId);
+    const draftReferences = references?.map(stripMessageIdBrackets).filter(isThreadingMessageId);
     const emailData: EmailDraft = {
       // Fixed here: when the connection breaks on the way, this is how the
       // device later finds out whether the server took the draft after all.
@@ -5461,7 +5475,7 @@ export class JMAPClient implements IJMAPClient {
       cc: cc?.length ? cc.map(parseRecipientString) : undefined,
       bcc: bcc?.length ? bcc.map(parseRecipientString) : undefined,
       subject,
-      keywords: { "$seen": true, "$draft": true },
+      keywords: { ...outgoingKeywordMap(options?.keywords), "$seen": true, "$draft": true },
       mailboxIds: { [draftsMailbox.id]: true },
       bodyValues: htmlBody
         ? { "text": { value: body }, "html": { value: htmlBody } }
@@ -5697,8 +5711,10 @@ export class JMAPClient implements IJMAPClient {
 
     // Per RFC 8621 §4.1.2.3 inReplyTo/references are arrays of bare msg-ids
     // (no angle brackets). Stalwart may return them either way, so normalize.
-    const normalizedInReplyTo = inReplyTo?.map(stripMessageIdBrackets).filter(Boolean);
-    const normalizedReferences = references?.map(stripMessageIdBrackets).filter(Boolean);
+    // The server writes them into the header as they are: an id with white
+    // space or a control character in it is dropped (isThreadingMessageId).
+    const normalizedInReplyTo = inReplyTo?.map(stripMessageIdBrackets).filter(isThreadingMessageId);
+    const normalizedReferences = references?.map(stripMessageIdBrackets).filter(isThreadingMessageId);
 
     const sanitizedFromName = sanitizeIdentityDisplayName(fromEmail ? fromName : fromName || identityName);
     // Always create a new email with the final body content
@@ -9071,7 +9087,7 @@ export class JMAPClient implements IJMAPClient {
 
       if (response.methodResponses?.[0]?.[0] === "Calendar/get") {
         const calendars = (response.methodResponses[0][1].list || []) as Calendar[];
-        const tasksOnly = await this.getTasksOnlyCalendarIds(accountId, calendars.map((c) => c.id));
+        const tasksOnly = await this.getTasksOnlyCalendarIds(accountId, calendars);
         return calendars.map((cal) => ({ ...cal, isTasksOnly: tasksOnly.has(cal.id) }));
       }
       return [];
@@ -9084,7 +9100,9 @@ export class JMAPClient implements IJMAPClient {
   /**
    * Ids of the given calendars that hold only tasks and no events, so the event
    * calendar UI can hide them. Stalwart's Calendar/get exposes no
-   * supported-component set, so this is derived by inspecting objects per calendar.
+   * supported-component set over JMAP, so component support is checked over
+   * CalDAV first (where an empty VTODO-only collection is recognized
+   * immediately), and any other calendar is derived by inspecting objects.
    *
    * Each calendar is queried on its own with the singular `inCalendar`
    * condition, so a large event archive in one calendar no longer pushes the
@@ -9092,10 +9110,42 @@ export class JMAPClient implements IJMAPClient {
    * soon as one event turns up; one whose pages are all tasks is paged to the
    * end and only then marked. Queries are chunked by maxCallsInRequest and gets
    * by maxObjectsInGet. Past the per-calendar cap, on a failed query or on any
-   * error the calendar is left visible (fail open). Empty calendars stay visible.
+   * error the calendar is left visible (fail open). Empty calendars stay
+   * visible unless a CalDAV collection explicitly supports only VTODO.
    */
-  private async getTasksOnlyCalendarIds(accountId: string, rawCalendarIds: string[]): Promise<Set<string>> {
+  private async getTasksOnlyCalendarIds(
+    accountId: string,
+    rawCalendarsOrIds: Array<{ id: string; name?: string }> | string[],
+    cachedDavComponents?: Record<string, CalendarComponentType[]>,
+  ): Promise<Set<string>> {
+    const rawCalendarIds = rawCalendarsOrIds.map((c) => (typeof c === 'string' ? c : c.id));
     if (rawCalendarIds.length === 0) return new Set();
+
+    const tasksOnly = new Set<string>();
+    const calendarsToScan: string[] = [];
+
+    try {
+      // The PROPFIND reads the login's own calendar home, so it says nothing
+      // about the calendars of an account shared with the login.
+      const ownAccount = accountId === this.getCalendarsAccountId();
+      const davComponents = ownAccount
+        ? cachedDavComponents ?? await fetchCalendarCollectionComponents(getAccountSlotHeadersFor(this.username, this.serverUrl))
+        : {};
+      const named = rawCalendarsOrIds.map((c) => (typeof c === 'string' ? { id: c } : { id: c.id, name: c.name }));
+      for (const cal of named) {
+        const id = cal.id;
+        const comps = davComponentsFor(cal, davComponents, named);
+        if (comps && comps.includes('VTODO') && !comps.includes('VEVENT')) {
+          tasksOnly.add(id);
+        } else {
+          calendarsToScan.push(id);
+        }
+      }
+    } catch {
+      calendarsToScan.push(...rawCalendarIds);
+    }
+
+    if (calendarsToScan.length === 0) return tasksOnly;
 
     const QUERY_PAGE = 200;
     const MAX_SCAN_PER_CALENDAR = 5000; // safety bound; beyond this we fail open
@@ -9103,9 +9153,8 @@ export class JMAPClient implements IJMAPClient {
     const timeZone = await this.calendarTimeZone();
     const maxCalls = Math.max(1, this.getMaxCallsInRequest());
     const maxGet = Math.max(1, this.getMaxObjectsInGet());
-    const tasksOnly = new Set<string>();
     const position = new Map<string, number>();
-    let pending = Array.from(new Set(rawCalendarIds)); // calendars with no event seen so far
+    let pending = Array.from(new Set(calendarsToScan)); // calendars with no event seen so far
 
     try {
       while (pending.length > 0) {
@@ -9194,13 +9243,19 @@ export class JMAPClient implements IJMAPClient {
     const primaryId = this.getCalendarsAccountId();
     const accountIds = this.getCalendarCapableAccountIds();
 
+    let davComponentsPromise: Promise<Record<string, CalendarComponentType[]> | undefined> | undefined;
+
     for (const accountId of accountIds) {
       const isPrimary = accountId === primaryId;
       if (!isPrimary && this.calendarAccessDenied.has(accountId)) continue;
       const account = this.accounts[accountId];
 
       try {
-        const response = await this.requestCalendars(accountId);
+        const calendarsPromise = this.requestCalendars(accountId);
+        davComponentsPromise ??= fetchCalendarCollectionComponents(
+          getAccountSlotHeadersFor(this.username, this.serverUrl),
+        ).catch(() => undefined);
+        const response = await calendarsPromise;
         const [method, result] = response.methodResponses?.[0] ?? [];
 
         if (method !== "Calendar/get") {
@@ -9212,7 +9267,8 @@ export class JMAPClient implements IJMAPClient {
         }
 
         const rawCalendars = (result.list || []) as Calendar[];
-        const tasksOnly = await this.getTasksOnlyCalendarIds(accountId, rawCalendars.map((c) => c.id));
+        const cachedDavComponents = await davComponentsPromise;
+        const tasksOnly = await this.getTasksOnlyCalendarIds(accountId, rawCalendars, cachedDavComponents);
         const calendars = rawCalendars.map((cal) => ({
           ...cal,
           id: isPrimary ? cal.id : `${accountId}:${cal.id}`,
@@ -10520,6 +10576,9 @@ export class JMAPClient implements IJMAPClient {
       taskData.calendarIds = resolved.calendarIds;
     }
     const cleanTask = { ...completeBareTaskDates(taskData), '@type': 'Task', uid: taskData.uid || generateUUID() };
+    // A task moved to another login carries recurrenceRules, which Stalwart
+    // refuses (0.16) or drops (1.0) under that name.
+    cleanRecurrenceRules(cleanTask as Record<string, unknown>);
 
     debug.group('CalendarTask/create', 'tasks');
     debug.log('tasks', 'CalendarTask/create accountId', accountId);

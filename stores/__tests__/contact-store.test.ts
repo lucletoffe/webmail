@@ -15,6 +15,8 @@ import { clearContactPhotoCache } from '@/lib/contact-photo-cache';
 import { PrincipalsRequestError } from '@/lib/jmap/principals-error';
 import { PartialAccountsError } from '@/lib/jmap/partial-accounts';
 import { setClientLookup } from '../client-registry';
+import { DEFAULT_POLICY } from '@/lib/admin/types';
+import { usePolicyStore } from '../policy-store';
 
 vi.stubGlobal('crypto', { randomUUID: () => '00000000-0000-0000-0000-000000000000' });
 
@@ -177,8 +179,18 @@ describe('contact-store', () => {
   });
 
   describe('setDefaultAddressBook', () => {
-    const makeClient = () => ({
-      setDefaultAddressBook: vi.fn().mockResolvedValue(undefined),
+    // The client is the one of every login the books name: a write to a
+    // login without a client is refused.
+    const makeClient = () => {
+      const client = {
+        setDefaultAddressBook: vi.fn().mockResolvedValue(undefined),
+      };
+      setClientLookup(() => client as unknown as IJMAPClient);
+      return client;
+    };
+
+    afterEach(() => {
+      setClientLookup(() => undefined);
     });
 
     it('should move the default flag to the chosen book', async () => {
@@ -1206,11 +1218,21 @@ describe('contact-store', () => {
   });
 
   describe('address-book id namespacing on mutations (#133, #1043)', () => {
-    const makeClient = () => ({
-      getContactsAccountId: vi.fn(() => 'acct-primary'),
-      createContact: vi.fn(async (c: Partial<ContactCard>) => ({ ...makeContact(), ...c, id: 'created-id' })),
-      updateContact: vi.fn().mockResolvedValue(undefined),
-      deleteContact: vi.fn().mockResolvedValue(undefined),
+    // The client is the one of every login the cards and books name: a
+    // write to a login without a client is refused.
+    const makeClient = () => {
+      const client = {
+        getContactsAccountId: vi.fn(() => 'acct-primary'),
+        createContact: vi.fn(async (c: Partial<ContactCard>) => ({ ...makeContact(), ...c, id: 'created-id' })),
+        updateContact: vi.fn().mockResolvedValue(undefined),
+        deleteContact: vi.fn().mockResolvedValue(undefined),
+      };
+      setClientLookup(() => client as unknown as IJMAPClient);
+      return client;
+    };
+
+    afterEach(() => {
+      setClientLookup(() => undefined);
     });
 
     it('strips the local-account prefix from a personal book on update', async () => {
@@ -1516,6 +1538,69 @@ describe('contact-store', () => {
       expect(state.directoryPrincipals).toEqual([
         { id: 'a', name: 'Ana Silva', email: 'ana@example.org', description: 'Ana Silva', type: 'individual' },
       ]);
+    });
+
+    describe('with directory rules in the policy', () => {
+      const emails = () => useContactStore.getState().directoryPrincipals.map((e) => e.email);
+      const principals = [
+        principal('a', 'ana@example.org', 'Ana Silva'),
+        principal('b', 'bob@example.net', 'Bob'),
+        principal('c', 'NoReply@example.org', 'No Reply'),
+        principal('d', 'carla@EXAMPLE.org', 'Carla'),
+      ];
+      const clientFor = (username: string) => ({
+        supportsPrincipals: () => true,
+        getUsername: () => username,
+        getPrincipals: vi.fn().mockResolvedValue(principals),
+      } as unknown as IJMAPClient);
+      const rules = { ...DEFAULT_POLICY, directorySameDomainOnly: true, directoryHiddenLocalparts: ['noreply'] };
+      const refreshIfPartial = usePolicyStore.getState().refreshIfPartial;
+
+      afterEach(() => {
+        usePolicyStore.setState({ policy: { ...DEFAULT_POLICY }, loaded: false, partial: false, refreshIfPartial });
+      });
+
+      it('applies the rules of the full policy, not of the public subset', async () => {
+        usePolicyStore.setState({
+          policy: { ...DEFAULT_POLICY },
+          loaded: true,
+          partial: true,
+          refreshIfPartial: async () => usePolicyStore.setState({ policy: rules, partial: false }),
+        });
+        await useContactStore.getState().fetchDirectory(clientFor('Ana@Example.org'));
+        expect(emails()).toEqual(['ana@example.org', 'carla@EXAMPLE.org']);
+      });
+
+      it('takes the domain of the account, not of the admin, on a master login', async () => {
+        usePolicyStore.setState({ policy: rules, loaded: true, partial: false });
+        await useContactStore.getState().fetchDirectory(clientFor('bob@example.net%admin@example.org'));
+        expect(emails()).toEqual(['bob@example.net']);
+      });
+
+      it('shows no one when the account has no domain to compare', async () => {
+        usePolicyStore.setState({ policy: rules, loaded: true, partial: false });
+        await useContactStore.getState().fetchDirectory(clientFor('ana'));
+        expect(emails()).toEqual([]);
+      });
+
+      it('lists everyone without rules', async () => {
+        usePolicyStore.setState({ policy: { ...DEFAULT_POLICY }, loaded: true, partial: false });
+        await useContactStore.getState().fetchDirectory(clientFor('ana@example.org'));
+        expect(emails()).toHaveLength(4);
+      });
+
+      it("keeps the domains of the account's identities, aliases included", async () => {
+        usePolicyStore.setState({ policy: rules, loaded: true, partial: false });
+        const client = {
+          ...clientFor('ana@example.org'),
+          getIdentities: vi.fn().mockResolvedValue([
+            { id: 'i1', name: 'Ana', email: 'ana@example.org' },
+            { id: 'i2', name: 'Ana', email: 'ana@example.net' },
+          ]),
+        } as unknown as IJMAPClient;
+        await useContactStore.getState().fetchDirectory(client);
+        expect(emails()).toEqual(['ana@example.org', 'bob@example.net', 'carla@EXAMPLE.org']);
+      });
     });
 
     it('marks a refused query as forbidden, not as an empty directory', async () => {

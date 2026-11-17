@@ -22,6 +22,7 @@
       "totp_required": "二要素認証コードが必要です。以下にコードを入力してください。",
       "totp_invalid": "認証コードが無効です。認証アプリを確認してください。",
       "oauth_discovery_failed": "SSOは有効ですが、IDプロバイダーに接続できません。OAuth設定を確認してください。",
+      "oauth_issuer_mismatch": "このプロバイダーでのサインインは正しく設定されていません。管理者がプロバイダーの発行者 (issuer) アドレスを設定する必要があります。",
       "token_exchange_failed": "パスワードとコードは受け付けられましたが、メールサーバーがこのアプリのセッション開始を拒否しました。管理者に OAuth クライアントの設定を確認してもらってください。"
     },
     "show_password": "パスワードを表示",
@@ -338,6 +339,14 @@
     "show_on_mobile": "モバイルで表示"
   },
   "email_list": {
+    "date_groups": {
+      "today": "今日",
+      "yesterday": "昨日",
+      "last_week": "先週",
+      "last_month": "先月",
+      "older": "それ以前"
+    },
+    "group_by_date": "日付でグループ化",
     "sections": {
       "unread": "未読",
       "everything_else": "その他すべて",
@@ -1081,6 +1090,7 @@
     "templates_menu": "テンプレート",
     "insert_template": "テンプレートを挿入…",
     "options": "オプション",
+    "tags": "タグ",
     "option_plain_text": "プレーンテキスト",
     "option_plain_text_hint": "書式なしで送信",
     "option_read_receipt": "開封確認を要求",
@@ -1282,6 +1292,14 @@
       "edit": "画像の説明を編集",
       "plain_text": "[画像: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "名前を変更",
+    "rename_named": "{name} の名前を変更",
+    "rename_menu": "名前を変更…",
+    "rename_title": "添付ファイルの名前を変更",
+    "rename_invalid_chars": "ファイル名に / や \\、制御文字は使えません",
+    "rename_too_long": "名前が長すぎます"
   },
   "compose_ux": {
     "draft_discarded": "下書きを破棄しました",
@@ -1797,12 +1815,17 @@
       "title": "メールラベル",
       "description": "ラベルを作ってメッセージを整理します。ラベルはメッセージと一緒にサーバーに保存されます。",
       "add_keyword": "ラベルを追加",
+      "empty": "ラベルはまだありません。",
       "label_field": "表示名",
       "label_placeholder": "例：仕事、個人、緊急",
       "id_field": "ラベルID",
       "id_placeholder": "例：work、personal",
       "color_field": "色",
-      "id_exists": "このラベルIDは既に存在します",
+      "custom_color": "カスタムカラー",
+      "color_code": "カラーコード",
+      "pick_custom_color": "カスタムカラーを選択",
+      "invalid_color": "#1a73e8 のようなカラーコードを入力してください。",
+      "name_exists": "この名前のタグはすでにあります",
       "edit": "ラベルを編集",
       "delete": "ラベルを削除",
       "edit_tag": "{name} を編集",
@@ -2085,6 +2108,10 @@
         "label": "プレーンテキストのみ",
         "description": "リッチテキストエディターを無効にし、返信や転送を含むすべてのメールをプレーンテキストのみで送信します"
       },
+      "reply_under_message": {
+        "label": "返信をメッセージの下に開く",
+        "description": "返信や転送は元のメッセージの下に開き、メッセージはその上で読めるままになります。オフにすると、新規メッセージと同じように閲覧パネル全体に表示されます。"
+      },
       "quick_reply": {
         "label": "クイック返信",
         "description": "メッセージの下にクイック返信欄を表示します。"
@@ -2132,6 +2159,10 @@
       "show_verification_codes": {
         "label": "確認コードを表示",
         "description": "サインインや確認のメールに含まれるコードをワンクリックでコピーできるようにします（一覧では1日間、メッセージ内では常に）"
+      },
+      "show_attachment_chips": {
+        "label": "一覧に添付ファイルを表示",
+        "description": "各メッセージの下に添付ファイルを表示し、一覧から直接開けるようにします。クリップのアイコンはどちらの場合も表示されます。"
       },
       "attachment_click_action": {
         "label": "添付ファイルクリック時の動作",
@@ -2276,6 +2307,10 @@
         "label": "右から左への編集サポート",
         "description": "エディターのツールバーに文字方向ボタンを追加し、段落を左から右または右から左に設定できます"
       },
+      "group_by_date": {
+        "label": "日付でグループ化",
+        "description": "メッセージを「今日」「昨日」「先週」などの日付見出しの下に表示します。リストが日付順のときのみ適用されます。"
+      },
       "group_conversations": {
         "label": "メッセージをスレッドにまとめる",
         "description": "返信を個別のメッセージではなく、1つのスレッドとしてまとめて表示します。"
@@ -2376,6 +2411,57 @@
       }
     },
     "security": {
+      "masked_addresses": {
+        "address": "アドレス",
+        "description_column": "説明",
+        "website_column": "ウェブサイト",
+        "state": "状態",
+        "actions": "操作",
+        "no_description": "説明なし",
+        "edit": "編集",
+        "close": "閉じる",
+        "pagination": "マスクアドレスのページ",
+        "page": "{page} / {pages} ページ",
+        "previous": "前へ",
+        "next": "次へ",
+        "delete": "削除",
+        "delete_title": "マスクアドレスを完全に削除しますか？",
+        "delete_warning": "{address} を削除しますか？この操作は取り消せません。このアドレス宛てのメールは今後配信されなくなります。",
+        "delete_confirm": "完全に削除",
+        "cancel": "キャンセル",
+        "deleted": "アドレスを完全に削除しました。",
+        "deleted_refresh_failed": "削除は確認されましたが、一覧を更新できませんでした。更新して最新の一覧を読み込んでください。",
+        "delete_forbidden": "現在のセッションにはマスクアドレスを削除する権限がありません。その他の許可された操作は引き続き使用できます。",
+        "delete_failed": "アドレスは削除されませんでした。一覧を更新してから、もう一度お試しください。",
+        "delete_unconfirmed": "削除を確認できませんでした。再試行は行われません。さらに削除する前に、一覧を更新してアドレスを確認してください。",
+        "title": "マスクアドレス",
+        "intro": "メインのアドレスを教えずにメールを受信できます。アドレスを無効にすると、そのアドレス宛ての新しいメールは拒否されます。これらのアドレスからメールを送信することはできません。",
+        "loading": "マスクアドレスを読み込んでいます…",
+        "count": "{count, plural, other {# 件のアドレス}}",
+        "empty": "マスクアドレスはまだありません。",
+        "website": "ウェブサイト（任意）",
+        "description": "説明（任意）",
+        "no_website": "指定なし",
+        "enabled": "有効",
+        "disabled": "無効",
+        "enable": "有効にする",
+        "disable": "無効にする",
+        "copy": "コピー",
+        "copied": "アドレスをコピーしました。",
+        "copy_failed": "コピーできませんでした。上のアドレスを選択してコピーしてください。",
+        "save": "説明を保存",
+        "create": "マスクアドレスを作成",
+        "refresh": "更新",
+        "saved": "変更を保存しました。",
+        "forbidden": "現在のセッションにはマスクアドレスを一覧表示する権限がありません。",
+        "unavailable": "このアカウントまたはサーバーではマスクアドレスを利用できません。",
+        "load_failed": "アドレスの一覧をすべて読み込めませんでした。更新してもう一度お試しください。",
+        "save_failed": "変更を確認できませんでした。一覧を更新してから、もう一度お試しください。",
+        "create_forbidden": "このセッションでは、サーバーがマスクアドレスの作成を許可しませんでした。",
+        "update_forbidden": "このセッションでは、サーバーがマスクアドレスの編集を許可しませんでした。アドレスのコピーは引き続き可能です。",
+        "over_quota": "サーバーのマスクアドレスの上限に達しました。無効にしたアドレスも上限に含まれる場合があります。",
+        "rate_limit": "サーバーの作成回数の制限に達しました。しばらくしてからもう一度お試しください。"
+      },
       "title": "アカウントセキュリティ",
       "description": "パスワード、二要素認証、セキュリティ設定を管理します",
       "detecting": "サーバー機能を検出中...",
@@ -3354,7 +3440,8 @@
         "description": "キーボードで選択中のボタン、リンク、入力欄を囲む枠です。",
         "normal": "標準",
         "thick": "太い",
-        "extra": "さらに太い"
+        "extra": "さらに太い",
+        "off": "オフ"
       },
       "focus_always": {
         "label": "フォーカスを常に表示",
@@ -3921,6 +4008,8 @@
     "delete_folder": "フォルダーを削除",
     "refresh": "更新",
     "hide_shared_account": "サイドバーから非表示",
+    "move_shared_account_up": "上へ移動",
+    "move_shared_account_down": "下へ移動",
     "mute_notifications": "通知をミュート",
     "unmute_notifications": "通知のミュートを解除",
     "mute_account_notifications": "このアカウントの通知をミュート",
@@ -5809,6 +5898,13 @@
   "unified_mailbox": {
     "search_unavailable": "統合ビューでは検索を利用できません"
   },
+  "account_routing": {
+    "group_members_one_account": "グループに入れられるのは 1 つのアカウントの連絡先だけです。",
+    "link_names_no_account": "このリンクにはメッセージのあるアカウントが示されていないため、開きませんでした。",
+    "group_member_gone": "選んだ連絡先の 1 つがもう存在しません。メンバーを選び直してください。",
+    "invitation_other_account": "この招待は別のアカウントにあります。返信したりカレンダーに追加したりするには、そのアカウントに切り替えてください。",
+    "tab_names_no_account": "このタブはアカウントの情報なしで保存されていたため、開きませんでした。閉じてから、該当するアカウントでもう一度開いてください。"
+  },
   "mail_import": {
     "menu_import": "メールをインポート…",
     "settings_label": "メールをインポート",
@@ -6410,6 +6506,9 @@
     "attachments_description": "保存したメッセージの添付ファイルと、オフライン用に保存したファイルを合計 {total} まで保存します。古いものから削除されます。",
     "total_locked": "組織の設定により、添付ファイルとファイルは最大 {size} までです。",
     "attachment_cap_label": "保存する添付ファイルの最大サイズ",
+    "total_cap_label": "保存する添付ファイルの合計サイズ",
+    "total_cap_unlimited": "制限なし",
+    "attachments_description_unlimited": "保存したメッセージの添付ファイルとオフラインで保存するファイル。合計サイズに制限はありません。",
     "usage_mail": "メッセージと検索インデックス",
     "usage_attachments": "添付ファイル",
     "usage_calendar": "カレンダー",
@@ -6752,6 +6851,10 @@
         "title": "サインアウトさせる",
         "body": "ウェブメールからサインアウトさせることができます。"
       },
+      "auth_impersonation_return": {
+        "title": "自分のアカウントに戻す",
+        "body": "管理者がなりすましでメールボックスを開いた後、そのセッションを終了し、開始元のアカウントに再度サインインします。"
+      },
       "account_read": {
         "title": "アカウントを見る",
         "body": "追加したアカウントと、そのアドレスとサーバー、およびどのメールアカウントがチームメールボックスかを見ることができます。"
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "他のウェブサイトに接続",
         "body": "次のサイトにリクエストを送信できます。プラグインが読めるものはすべて送信される可能性があります:"
+      },
+      "links_check": {
+        "title": "開くリンクの確認",
+        "body": "開くすべてのウェブリンクとそのテキストを確認し、リンクを止めたり、代わりに別のアドレスを開いたりできます。"
       },
       "admin_config": {
         "title": "管理者が保存した設定を読む",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "通知を表示",
-        "body": "デバイスに通知を表示します。通知を許可していない場合はアプリ内に表示します。どの通知にもプラグイン名が入ります。"
+        "body": "デバイスに通知を表示します。通知を許可していない場合はアプリ内に表示します。どの通知にもプラグイン名が入ります。アプリが表示するお知らせもプラグインが確認できます。"
       },
       "ui_message_list": {
         "title": "メッセージ一覧に追加",
@@ -7024,6 +7131,14 @@
     "not_available_title": "このページは利用できません",
     "not_available_description": "このページを追加したプラグインがオフになっているか、インストールされていません。",
     "back_to_mail": "メールに戻る"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "プラグイン {name} のリスト",
+    "dropdown_list_labelled": "{label}(プラグイン {name} のリスト)",
+    "oauth_failed": "サービスでサインインが完了しませんでした。このウィンドウを閉じて、もう一度お試しください。",
+    "banners_more": "その他のバナー（{count}）: {names}",
+    "banners_fewer": "バナーを折りたたむ",
+    "opened_by_plugin": "プラグイン {name} が開きました"
   },
   "command_palette": {
     "title": "コマンドパレット",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "{domain} からのメール「{subject}」から追加"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "このキャンセルは {sender} から送信されましたが、カレンダー上のこのイベントの主催者は {organizer} です。キャンセルできるのは主催者だけです。このメッセージを信頼できる場合は、ご自身で削除してください。",
+    "cancel_unverified": "このキャンセルが主催者から送信されたことを確認できませんでした。このメッセージを信頼できる場合は、ご自身でイベントを削除してください。",
+    "card_sender": "{domain} から",
+    "card_sender_title": "このメッセージは、{domain} についてメールサーバーの送信者チェックに合格しました。",
+    "outside_link": "外部サイト",
+    "outside_link_title": "このリンクは送信者のドメイン {domain} の外にある {host} に移動します。"
+  },
   "proofreading": {
     "kind": {
       "spelling": "スペル",
@@ -7321,6 +7444,8 @@
       "title": "アプリのウィンドウ",
       "double_click_label": "ダブルクリックでメッセージを新しいウィンドウで開く",
       "double_click_description": "シングルクリックでは、これまでどおりリストの横に開きます。",
+      "compose_window_label": "メッセージを常に新しいウィンドウで作成する",
+      "compose_window_description": "新規メッセージ、返信、転送、下書きはメインウィンドウではなく専用のウィンドウで開きます。",
       "restore_label": "起動時にウィンドウを再び開く",
       "restore_description": "終了時に開いていたメッセージと下書きのウィンドウが戻ります。"
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "サインインするとアプリが自動で起動します。",
     "start_minimized_label": "トレイで起動",
     "start_minimized_description": "サインイン時にウィンドウは開きません。トレイのアイコンから開いてください。",
+    "reopen_after_restart_label": "再起動後にもう一度開く",
+    "reopen_after_restart_description": "コンピューターの再起動時やサインアウト時にアプリが開いていた場合、次にサインインしたときに同じフォルダー、メッセージ、ページで再び開きます。",
     "attention_label": "新着メールでタスクバーを点滅",
     "attention_mac_label": "新着メールで Dock アイコンを跳ねさせる",
     "attention_description": "アプリが前面にないときのみ。",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "スターを付けました",
     "unstarred": "スターを外しました"
+  },
+  "impersonation": {
+    "return_notice": "なりすましで {mailbox} を開いています。",
+    "return_button": "自分のアカウントに戻る"
+  },
+  "admin_access": {
+    "label": "このサーバーのスーパーユーザーが管理ダッシュボードを開けるようにする",
+    "help": "このサーバーのスーパーユーザーは、メインの JMAP サーバーと同じく、管理者パスワードなしで管理ダッシュボードにサインインできます。自分で運用しているサーバーにだけオンにしてください。"
   }
 }

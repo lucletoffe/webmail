@@ -31,7 +31,7 @@ import { AlertCircle, ArrowBigUpDash, Loader2, X, Info, Eye, EyeOff, LogIn, Sun,
 import { type OAuthMetadata } from "@/lib/oauth/discovery";
 import { generateCodeVerifier, generateCodeChallenge, generateState } from "@/lib/oauth/pkce";
 import { DEFAULT_OAUTH_SCOPES, withProviderDataScopes } from "@/lib/oauth/scopes";
-import { addOauthResource } from "@/lib/oauth/resource";
+import { addOauthResource, normalizeOauthResource } from "@/lib/oauth/resource";
 import { useUpdateStore, selectBanner } from "@/stores/update-store";
 import { offersOwnOAuth, type PublicJmapServerEntry } from "@/lib/admin/jmap-servers";
 import { IS_LITE, getLiteInjectedClientId } from "@/lib/lite";
@@ -402,6 +402,9 @@ function LoginPageContent() {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [oauthMetadata, setOauthMetadata] = useState<OAuthMetadata | null>(null);
   const [oauthDiscoveryDone, setOauthDiscoveryDone] = useState(false);
+  // The server refused the provider's metadata for naming another issuer: a
+  // setting the admin has to fix, not an outage.
+  const [oauthIssuerMismatch, setOauthIssuerMismatch] = useState(false);
   const [oauthLoading, setOauthLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
 
@@ -788,6 +791,7 @@ function LoginPageContent() {
     if (!serverOauthEnabled || !serverUrl) return;
     setOauthDiscoveryDone(false);
     setOauthMetadata(null);
+    setOauthIssuerMismatch(false);
     const controller = new AbortController();
     // Discover via our own origin rather than fetching the IdP's /.well-known/*
     // documents directly from the browser. A direct cross-origin discovery
@@ -797,9 +801,14 @@ function LoginPageContent() {
     // side where CORS does not apply.
     const query = selectedServer?.id ? `?server_id=${encodeURIComponent(selectedServer.id)}` : "";
     apiFetch(`/api/auth/oauth/metadata${query}`, { signal: controller.signal })
-      .then(async (res) => (res.ok ? ((await res.json()) as OAuthMetadata) : null))
-      .then((metadata) => {
+      .then(async (res) => {
+        if (res.ok) return { metadata: (await res.json()) as OAuthMetadata, issuerMismatch: false };
+        const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        return { metadata: null, issuerMismatch: body?.error === "issuer_mismatch" };
+      })
+      .then(({ metadata, issuerMismatch }) => {
         setOauthMetadata(metadata);
+        setOauthIssuerMismatch(issuerMismatch);
         setOauthDiscoveryDone(true);
       })
       .catch((err) => {
@@ -1191,7 +1200,9 @@ function LoginPageContent() {
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("client_id", clientId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
-    authUrl.searchParams.set("scope", withProviderDataScopes(oauthScopes || DEFAULT_OAUTH_SCOPES, metadata.scopes_supported));
+    // As addOauthResource below: the resource goes to the global provider only.
+    const forResource = !server && !!normalizeOauthResource(oauthResource);
+    authUrl.searchParams.set("scope", withProviderDataScopes(oauthScopes || DEFAULT_OAUTH_SCOPES, metadata.scopes_supported, forResource));
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("code_challenge", challenge);
     authUrl.searchParams.set("code_challenge_method", "S256");
@@ -1947,7 +1958,7 @@ function LoginPageContent() {
                   </div>
                   <div className="flex-1 min-w-0 self-center">
                     <p className="text-sm text-warning leading-relaxed">
-                      {t("error.oauth_discovery_failed")}
+                      {oauthIssuerMismatch ? t("error.oauth_issuer_mismatch") : t("error.oauth_discovery_failed")}
                     </p>
                   </div>
                 </div>
@@ -2312,7 +2323,7 @@ function LoginPageContent() {
                   </div>
                   <div className="flex-1 min-w-0 self-center">
                     <p className="text-sm text-warning leading-relaxed">
-                      {t("error.oauth_discovery_failed")}
+                      {oauthIssuerMismatch && !liteOAuthFailed ? t("error.oauth_issuer_mismatch") : t("error.oauth_discovery_failed")}
                     </p>
                   </div>
                 </div>
@@ -2334,7 +2345,7 @@ function LoginPageContent() {
                     message: tP3("connection.message"),
                     confirm: tP3("connection.confirm"),
                     cancel: tCommonP3("cancel"),
-                  });
+                  }, "org");
                 }}
               >
                 {tP3("connection.org_link")}

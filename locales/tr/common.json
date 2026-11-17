@@ -22,6 +22,7 @@
       "totp_required": "İki faktörlü doğrulama kodu gereklidir. Lütfen kodunuzu aşağıya girin.",
       "totp_invalid": "Geçersiz doğrulama kodu. Lütfen doğrulama uygulamanızı kontrol edip tekrar deneyin.",
       "oauth_discovery_failed": "SSO etkin ancak kimlik sağlayıcısına ulaşılamıyor. OAuth yapılandırmanızı kontrol edin.",
+      "oauth_issuer_mismatch": "Bu sağlayıcıyla oturum açma doğru yapılandırılmamış. Yöneticinin sağlayıcının yayıncı (issuer) adresini ayarlaması gerekiyor.",
       "token_exchange_failed": "Parolanız ve kodunuz kabul edildi ancak posta sunucusu bu uygulama için oturum başlatmayı reddetti. Yöneticinizden OAuth istemci ayarlarını kontrol etmesini isteyin."
     },
     "show_password": "Şifreyi göster",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Mobilde göster"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Bugün",
+      "yesterday": "Dün",
+      "last_week": "Geçen hafta",
+      "last_month": "Geçen ay",
+      "older": "Daha eski"
+    },
+    "group_by_date": "Tarihe göre grupla",
     "sections": {
       "unread": "Okunmamış",
       "everything_else": "Diğer her şey",
@@ -1084,6 +1093,7 @@
     "templates_menu": "Şablonlar",
     "insert_template": "Şablon ekle…",
     "options": "Seçenekler",
+    "tags": "Etiketler",
     "option_plain_text": "Düz metin",
     "option_plain_text_hint": "Biçimlendirmeden gönder",
     "option_read_receipt": "Okundu bilgisi iste",
@@ -1282,6 +1292,14 @@
       "edit": "Görsel açıklamasını düzenle",
       "plain_text": "[Görsel: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Yeniden adlandır",
+    "rename_named": "{name} dosyasını yeniden adlandır",
+    "rename_menu": "Yeniden adlandır…",
+    "rename_title": "Eki yeniden adlandır",
+    "rename_invalid_chars": "Dosya adları / veya \\ ya da denetim karakterleri içeremez",
+    "rename_too_long": "Bu ad çok uzun"
   },
   "compose_ux": {
     "draft_discarded": "Taslak silindi",
@@ -1797,12 +1815,17 @@
       "title": "E-posta Etiketleri",
       "description": "İletilerinizi düzenlemek için etiketler oluşturun. Etiketler iletilerinizle birlikte sunucuda saklanır.",
       "add_keyword": "Etiket Ekle",
+      "empty": "Henüz etiket yok.",
       "label_field": "Görünen Ad",
       "label_placeholder": "ör. İş, Kişisel, Acil",
       "id_field": "Etiket Kimliği",
       "id_placeholder": "ör. is, kisisel",
       "color_field": "Renk",
-      "id_exists": "Bu etiket kimliği zaten mevcut",
+      "custom_color": "Özel renk",
+      "color_code": "Renk kodu",
+      "pick_custom_color": "Özel bir renk seçin",
+      "invalid_color": "#1a73e8 gibi bir renk kodu kullanın.",
+      "name_exists": "Bu adda bir etiket zaten var",
       "edit": "Etiketi düzenle",
       "delete": "Etiketi sil",
       "edit_tag": "{name} düzenle",
@@ -2090,9 +2113,17 @@
         "label": "Doğrulama kodlarını göster",
         "description": "Giriş ve onay e-postalarındaki kodu tek tıkla kopyalamak için sun; listede bir gün boyunca ve iletide"
       },
+      "show_attachment_chips": {
+        "label": "Ekleri listede göster",
+        "description": "Ekli dosyaları her iletinin altında göster, böylece doğrudan listeden açılabilsinler. Ataç simgesi her durumda görünür."
+      },
       "plain_text_mode": {
         "label": "Yalnızca Düz Metin",
         "description": "Zengin metin düzenleyicisini devre dışı bırak ve yanıtlar ve iletmeler dahil tüm e-postaları yalnızca düz metin olarak gönder"
+      },
+      "reply_under_message": {
+        "label": "Yanıtlar iletinin altında",
+        "description": "Bir yanıt veya iletme kendi iletisinin altında açılır ve ileti üstte okunabilir kalır. Kapalıyken yeni bir ileti gibi tüm okuma bölmesini kaplar."
       },
       "quick_reply": {
         "label": "Hızlı yanıt",
@@ -2276,6 +2307,10 @@
         "label": "Sağdan sola düzenleme desteği",
         "description": "Düzenleyici araç çubuğuna paragrafları soldan sağa veya sağdan sola ayarlayabileceğiniz bir yön düğmesi ekler"
       },
+      "group_by_date": {
+        "label": "Tarihe göre grupla",
+        "description": "İletileri Bugün, Dün ve Geçen hafta gibi tarih başlıkları altında gösterir. Yalnızca liste tarihe göre sıralandığında geçerlidir."
+      },
       "group_conversations": {
         "label": "İletileri konuşmaya göre grupla",
         "description": "Yanıtları ayrı iletiler yerine tek bir konuşma olarak birlikte göster."
@@ -2376,6 +2411,57 @@
       }
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adres",
+        "description_column": "Açıklama",
+        "website_column": "Web sitesi",
+        "state": "Durum",
+        "actions": "İşlemler",
+        "no_description": "Açıklama yok",
+        "edit": "Düzenle",
+        "close": "Kapat",
+        "pagination": "Maskeli adres sayfaları",
+        "page": "Sayfa {page}/{pages}",
+        "previous": "Önceki",
+        "next": "Sonraki",
+        "delete": "Sil",
+        "delete_title": "Maskeli adres kalıcı olarak silinsin mi?",
+        "delete_warning": "{address} silinsin mi? Bu işlem geri alınamaz. Bu adrese gönderilen postalar artık teslim edilmeyecek.",
+        "delete_confirm": "Kalıcı olarak sil",
+        "cancel": "İptal",
+        "deleted": "Adres kalıcı olarak silindi.",
+        "deleted_refresh_failed": "Silme işlemi onaylandı ancak liste yenilenemedi. Güncel listeyi yüklemek için yenileyin.",
+        "delete_forbidden": "Geçerli oturumunuzun maskeli adres silme izni yok. İzin verilen diğer işlemler kullanılabilir durumda.",
+        "delete_failed": "Adres silinmedi. Tekrar denemeden önce listeyi yenileyin.",
+        "delete_unconfirmed": "Silme işlemi onaylanamadı. Yeniden denenmeyecek. Başka bir silme işleminden önce listeyi yenileyip adresi kontrol edin.",
+        "title": "Maskeli adresler",
+        "intro": "Ana adresinizi paylaşmadan posta alın. Devre dışı bırakılan bir adres, kendisine gelen yeni postaları reddeder. Bu adreslerle posta gönderilemez.",
+        "loading": "Maskeli adresler yükleniyor…",
+        "count": "{count, plural, one {# adres} other {# adres}}",
+        "empty": "Henüz maskeli adres yok.",
+        "website": "Web sitesi (isteğe bağlı)",
+        "description": "Açıklama (isteğe bağlı)",
+        "no_website": "Belirtilmedi",
+        "enabled": "Etkin",
+        "disabled": "Devre dışı",
+        "enable": "Etkinleştir",
+        "disable": "Devre dışı bırak",
+        "copy": "Kopyala",
+        "copied": "Adres kopyalandı.",
+        "copy_failed": "Kopyalanamadı. Yukarıdaki adresi seçip kopyalayın.",
+        "save": "Açıklamayı kaydet",
+        "create": "Maskeli adres oluştur",
+        "refresh": "Yenile",
+        "saved": "Değişiklik kaydedildi.",
+        "forbidden": "Geçerli oturumunuzun maskeli adresleri listeleme izni yok.",
+        "unavailable": "Maskeli adresler bu hesap veya sunucu için kullanılamıyor.",
+        "load_failed": "Adres listesinin tamamı yüklenemedi. Tekrar denemek için yenileyin.",
+        "save_failed": "Değişiklik onaylanamadı. Tekrar denemeden önce listeyi yenileyin.",
+        "create_forbidden": "Sunucu bu oturumla maskeli adres oluşturulmasına izin vermedi.",
+        "update_forbidden": "Sunucu bu oturumla maskeli adreslerin düzenlenmesine izin vermedi. Adresleri kopyalamaya devam edebilirsiniz.",
+        "over_quota": "Sunucunun maskeli adres kotasına ulaşıldı. Devre dışı adresler sınıra dahil edilmeye devam edebilir.",
+        "rate_limit": "Sunucunun oluşturma hızı sınırına ulaşıldı. Daha sonra tekrar deneyin."
+      },
       "title": "Hesap Güvenliği",
       "description": "Parolanızı, iki faktörlü kimlik doğrulamayı ve güvenlik ayarlarını yönetin",
       "detecting": "Sunucu özellikleri algılanıyor...",
@@ -3354,7 +3440,8 @@
         "description": "Klavyenin üzerinde olduğu düğmenin, bağlantının veya alanın çevresindeki çerçeve.",
         "normal": "Normal",
         "thick": "Kalın",
-        "extra": "Çok kalın"
+        "extra": "Çok kalın",
+        "off": "Kapalı"
       },
       "focus_always": {
         "label": "Odağı her zaman göster",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Klasörü sil",
     "refresh": "Yenile",
     "hide_shared_account": "Kenar çubuğundan gizle",
+    "move_shared_account_up": "Yukarı taşı",
+    "move_shared_account_down": "Aşağı taşı",
     "mute_notifications": "Bildirimleri sessize al",
     "unmute_notifications": "Bildirimleri aç",
     "mute_account_notifications": "Bu hesabın bildirimlerini sessize al",
@@ -6078,6 +6167,13 @@
   "unified_mailbox": {
     "search_unavailable": "Birleşik görünümde arama kullanılamaz"
   },
+  "account_routing": {
+    "group_members_one_account": "Bir grup yalnızca tek bir hesabın kişilerini içerebilir.",
+    "link_names_no_account": "Bu bağlantı iletinin hangi hesapta olduğunu belirtmiyor, bu yüzden açılmadı.",
+    "group_member_gone": "Seçilen kişilerden biri artık yok. Üyeleri yeniden seçin.",
+    "invitation_other_account": "Bu davet başka bir hesapta. Yanıtlamak veya bir takvime eklemek için o hesaba geçin.",
+    "tab_names_no_account": "Bu sekme hesabı olmadan kaydedilmiş, bu yüzden açılmadı. Kapatıp ait olduğu hesaptan yeniden açın."
+  },
   "mail_import": {
     "menu_import": "E-posta içe aktar…",
     "settings_label": "E-posta içe aktar",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Tutulan iletilerin ekleri ve çevrimdışı tuttuğunuz dosyalar, toplam en fazla {total}. En eskiler önce silinir.",
     "total_locked": "Kuruluşunuz en fazla {size} ek ve dosyaya izin veriyor.",
     "attachment_cap_label": "Tutulacak en büyük ek",
+    "total_cap_label": "Saklanan eklerin toplam boyutu",
+    "total_cap_unlimited": "Sınır yok",
+    "attachments_description_unlimited": "Saklanan iletilerin ekleri ve çevrimdışı sakladığınız dosyalar, toplam boyut sınırı olmadan.",
     "usage_mail": "İletiler ve arama dizini",
     "usage_attachments": "Ekler",
     "usage_calendar": "Takvim",
@@ -6752,6 +6851,10 @@
         "title": "Oturumunuzu kapatma",
         "body": "Webmail'den çıkış yapmanızı sağlama."
       },
+      "auth_impersonation_return": {
+        "title": "Sizi kendi hesabınıza geri götürmek",
+        "body": "Bir yönetici bir posta kutusunu kimliğe bürünerek açtıktan sonra o oturumu kapatıp başladığı hesaba yeniden giriş yapmak."
+      },
       "account_read": {
         "title": "Hesaplarınızı görme",
         "body": "Eklediğiniz hesapları adresleri ve sunucularıyla birlikte ve hangi posta hesaplarının ekip posta kutusu olduğunu görme."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Başka web sitelerine bağlanma",
         "body": "Şu sitelere istek gönderme. Eklentinin okuyabildiği her şey oraya gönderilebilir:"
+      },
+      "links_check": {
+        "title": "Açtığınız bağlantıları denetleme",
+        "body": "Açtığınız her web bağlantısını metniyle birlikte görme ve onu durdurma ya da yerine başka bir adres açma."
       },
       "admin_config": {
         "title": "Yöneticinizin ayarlarını okuma",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "Bildirim gösterme",
-        "body": "Cihazınızda bildirim gösterme ya da bildirimlere izin vermediyseniz uygulama içinde gösterme. Her bildirimde eklentinin adı yer alır."
+        "body": "Cihazınızda bildirim gösterme ya da bildirimlere izin vermediyseniz uygulama içinde gösterme. Her bildirimde eklentinin adı yer alır. Eklenti, uygulamanın size gösterdiği bildirimleri de görür."
       },
       "ui_message_list": {
         "title": "İleti listesine öğe ekleme",
@@ -7024,6 +7131,14 @@
     "not_available_title": "Bu sayfa kullanılamıyor",
     "not_available_description": "Bu sayfayı ekleyen eklenti kapalı veya artık yüklü değil.",
     "back_to_mail": "Postaya Dön"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "{name} eklentisinden liste",
+    "dropdown_list_labelled": "{label}, {name} eklentisinden liste",
+    "oauth_failed": "Hizmet oturum açmayı tamamlamadı. Bu pencereyi kapatıp yeniden deneyin.",
+    "banners_more": "Diğer başlıklar ({count}): {names}",
+    "banners_fewer": "Daha az başlık",
+    "opened_by_plugin": "{name} eklentisi tarafından açıldı"
   },
   "command_palette": {
     "title": "Komut paleti",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "{domain} adresinden gelen “{subject}” e-postasından eklendi"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Bu iptal {sender} tarafından gönderildi; ancak takviminizdeki bu etkinliğin organizatörü {organizer}. Etkinliği yalnızca organizatör iptal edebilir. Bu iletiye güveniyorsanız etkinliği kendiniz kaldırın.",
+    "cancel_unverified": "Bu iptalin organizatörden geldiği doğrulanamadı. Bu iletiye güveniyorsanız etkinliği kendiniz kaldırın.",
+    "card_sender": "{domain} adresinden",
+    "card_sender_title": "Bu ileti, {domain} için e-posta sunucusunun gönderen denetiminden geçti.",
+    "outside_link": "Başka site",
+    "outside_link_title": "Bu bağlantı, gönderenin alan adı olan {domain} dışında, {host} adresine gider."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Yazım",
@@ -7321,6 +7444,8 @@
       "title": "Uygulama pencereleri",
       "double_click_label": "İletileri çift tıklamayla yeni pencerede aç",
       "double_click_description": "Tek tıklama iletiyi yine listenin yanında açar.",
+      "compose_window_label": "İletileri her zaman yeni pencerede yaz",
+      "compose_window_description": "Yeni iletiler, yanıtlar, iletmeler ve taslaklar ana pencere yerine kendi pencerelerinde açılır.",
       "restore_label": "Başlangıçta pencereleri yeniden aç",
       "restore_description": "Çıkarken açık olan ileti ve taslak pencereleri geri gelir."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "Oturum açtığınızda uygulama kendiliğinden başlar.",
     "start_minimized_label": "Sistem tepsisinde başlat",
     "start_minimized_description": "Oturum açarken pencere açılmaz. Sistem tepsisindeki simgeyle açın.",
+    "reopen_after_restart_label": "Yeniden başlatmadan sonra tekrar aç",
+    "reopen_after_restart_description": "Bilgisayar yeniden başlatıldığında veya oturumu kapattığınızda uygulama açıksa, yeniden oturum açtığınızda aynı klasörde, iletide veya sayfada tekrar açılır.",
     "attention_label": "Yeni postada görev çubuğunu yanıp söndür",
     "attention_mac_label": "Yeni postada Dock simgesini zıplat",
     "attention_description": "Yalnızca uygulama önde değilken.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Yıldız eklendi",
     "unstarred": "Yıldız kaldırıldı"
+  },
+  "impersonation": {
+    "return_notice": "{mailbox} posta kutusunu kimliğe bürünerek açtınız.",
+    "return_button": "Hesabıma dön"
+  },
+  "admin_access": {
+    "label": "Bu sunucunun süper kullanıcıları yönetim panelini açabilir",
+    "help": "Bu sunucunun süper kullanıcıları, ana JMAP sunucusundakiler gibi yönetici parolası olmadan yönetim paneline giriş yapar. Bunu yalnızca kendi işlettiğiniz bir sunucu için açın."
   }
 }

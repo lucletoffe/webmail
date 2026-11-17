@@ -22,6 +22,7 @@
       "totp_required": "Cần có mã xác thực hai yếu tố. Vui lòng nhập mã của bạn dưới đây.",
       "totp_invalid": "Mã xác thực không hợp lệ. Vui lòng kiểm tra ứng dụng xác thực của bạn và thử lại.",
       "oauth_discovery_failed": "SSO đã được bật nhưng không thể liên lạc được với nhà cung cấp danh tính. Kiểm tra cấu hình OAuth của bạn.",
+      "oauth_issuer_mismatch": "Đăng nhập qua nhà cung cấp này chưa được thiết lập đúng. Quản trị viên cần đặt địa chỉ issuer của nhà cung cấp.",
       "token_exchange_failed": "Mật khẩu và mã của bạn đã được chấp nhận nhưng máy chủ thư từ chối bắt đầu phiên cho ứng dụng này. Yêu cầu quản trị viên của bạn kiểm tra cài đặt ứng dụng khách OAuth của nó."
     },
     "show_password": "Hiển thị mật khẩu",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Hiển thị trên thiết bị di động"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Hôm nay",
+      "yesterday": "Hôm qua",
+      "last_week": "Tuần trước",
+      "last_month": "Tháng trước",
+      "older": "Cũ hơn"
+    },
+    "group_by_date": "Nhóm theo ngày",
     "sections": {
       "unread": "Chưa đọc",
       "everything_else": "Các thư còn lại",
@@ -1085,6 +1094,7 @@
     "templates_menu": "Mẫu",
     "insert_template": "Chèn mẫu…",
     "options": "Tùy chọn",
+    "tags": "Thẻ",
     "option_plain_text": "Văn bản thuần",
     "option_plain_text_hint": "Gửi không kèm định dạng",
     "option_read_receipt": "Yêu cầu xác nhận đã đọc",
@@ -1294,6 +1304,14 @@
       "edit": "Chỉnh sửa mô tả hình ảnh",
       "plain_text": "[Hình ảnh: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Đổi tên",
+    "rename_named": "Đổi tên {name}",
+    "rename_menu": "Đổi tên…",
+    "rename_title": "Đổi tên tệp đính kèm",
+    "rename_invalid_chars": "Tên tệp không được chứa / hoặc \\ hoặc ký tự điều khiển",
+    "rename_too_long": "Tên này quá dài"
   },
   "compose_ux": {
     "draft_discarded": "Đã hủy bản nháp",
@@ -1812,12 +1830,17 @@
       "title": "Nhãn thư",
       "description": "Tạo thẻ để sắp xếp thư. Các thẻ được lưu cùng thư trên máy chủ.",
       "add_keyword": "Nhãn mới",
+      "empty": "Chưa có nhãn nào.",
       "label_field": "Tên hiển thị",
       "label_placeholder": "Ví dụ: Công việc, Cá nhân, Khẩn cấp",
       "id_field": "Mã nhãn",
       "id_placeholder": "Ví dụ: cong-viec, ca-nhan",
       "color_field": "Màu",
-      "id_exists": "Mã nhãn này đã tồn tại",
+      "custom_color": "Màu tùy chỉnh",
+      "color_code": "Mã màu",
+      "pick_custom_color": "Chọn màu tùy chỉnh",
+      "invalid_color": "Hãy dùng mã màu như #1a73e8.",
+      "name_exists": "Thẻ có tên này đã tồn tại",
       "edit": "Sửa nhãn",
       "delete": "Xóa nhãn",
       "edit_tag": "Sửa {name}",
@@ -2105,9 +2128,17 @@
         "label": "Hiển thị mã xác minh",
         "description": "Cho phép sao chép mã trong thư đăng nhập và xác nhận chỉ bằng một lần nhấn; mã hiển thị trong danh sách một ngày và cả trong thư"
       },
+      "show_attachment_chips": {
+        "label": "Hiện tệp đính kèm trong danh sách",
+        "description": "Hiện các tệp đính kèm bên dưới mỗi thư để mở ngay từ danh sách. Biểu tượng kẹp giấy vẫn hiển thị trong mọi trường hợp."
+      },
       "plain_text_mode": {
         "label": "Chỉ dùng văn bản thuần",
         "description": "Tắt trình soạn thảo văn bản đa dạng thức và chỉ gửi thư dưới dạng văn bản thuần, kể cả thư trả lời và chuyển tiếp"
+      },
+      "reply_under_message": {
+        "label": "Mở thư trả lời bên dưới thư",
+        "description": "Thư trả lời hoặc chuyển tiếp mở bên dưới thư gốc, thư gốc vẫn đọc được ở phía trên. Khi tắt, nó chiếm toàn bộ ngăn đọc, giống như thư mới."
       },
       "quick_reply": {
         "label": "Trả lời nhanh",
@@ -2291,6 +2322,10 @@
         "label": "Hỗ trợ soạn thảo từ phải sang trái",
         "description": "Thêm nút chọn hướng vào thanh công cụ soạn thư để đặt hướng đoạn văn từ trái sang phải hoặc từ phải sang trái"
       },
+      "group_by_date": {
+        "label": "Nhóm theo ngày",
+        "description": "Hiển thị thư dưới các tiêu đề ngày như Hôm nay, Hôm qua và Tuần trước. Chỉ áp dụng khi danh sách được sắp xếp theo ngày."
+      },
       "group_conversations": {
         "label": "Nhóm thư theo cuộc trò chuyện",
         "description": "Hiển thị các thư trả lời cùng nhau trong một cuộc trò chuyện thay vì tách thành từng thư riêng."
@@ -2395,6 +2430,57 @@
       "managing": "Quản lý: {name}"
     },
     "security": {
+      "masked_addresses": {
+        "address": "Địa chỉ",
+        "description_column": "Mô tả",
+        "website_column": "Trang web",
+        "state": "Trạng thái",
+        "actions": "Thao tác",
+        "no_description": "Không có mô tả",
+        "edit": "Sửa",
+        "close": "Đóng",
+        "pagination": "Các trang địa chỉ ẩn danh",
+        "page": "Trang {page}/{pages}",
+        "previous": "Trước",
+        "next": "Tiếp",
+        "delete": "Xóa",
+        "delete_title": "Xóa vĩnh viễn địa chỉ ẩn danh?",
+        "delete_warning": "Xóa {address}? Không thể hoàn tác thao tác này. Thư gửi đến địa chỉ này sẽ không được chuyển nữa.",
+        "delete_confirm": "Xóa vĩnh viễn",
+        "cancel": "Hủy",
+        "deleted": "Đã xóa vĩnh viễn địa chỉ.",
+        "deleted_refresh_failed": "Đã xác nhận xóa, nhưng không thể làm mới danh sách. Hãy làm mới để tải danh sách hiện tại.",
+        "delete_forbidden": "Phiên hiện tại của bạn không được phép xóa địa chỉ ẩn danh. Các thao tác được phép khác vẫn khả dụng.",
+        "delete_failed": "Địa chỉ chưa bị xóa. Hãy làm mới danh sách trước khi thử lại.",
+        "delete_unconfirmed": "Không thể xác nhận việc xóa và sẽ không thử lại. Hãy làm mới danh sách để kiểm tra địa chỉ trước khi xóa thêm.",
+        "title": "Địa chỉ ẩn danh",
+        "intro": "Nhận thư mà không cần chia sẻ địa chỉ chính của bạn. Khi tắt một địa chỉ, thư mới gửi đến địa chỉ đó sẽ bị từ chối. Không thể dùng các địa chỉ này để gửi thư.",
+        "loading": "Đang tải địa chỉ ẩn danh…",
+        "count": "{count, plural, other {# địa chỉ}}",
+        "empty": "Chưa có địa chỉ ẩn danh nào.",
+        "website": "Trang web (tùy chọn)",
+        "description": "Mô tả (tùy chọn)",
+        "no_website": "Chưa chỉ định",
+        "enabled": "Đã bật",
+        "disabled": "Đã tắt",
+        "enable": "Bật",
+        "disable": "Tắt",
+        "copy": "Sao chép",
+        "copied": "Đã sao chép địa chỉ.",
+        "copy_failed": "Không thể sao chép. Hãy chọn và sao chép địa chỉ ở trên.",
+        "save": "Lưu mô tả",
+        "create": "Tạo địa chỉ ẩn danh",
+        "refresh": "Làm mới",
+        "saved": "Đã lưu thay đổi.",
+        "forbidden": "Phiên hiện tại của bạn không được phép liệt kê địa chỉ ẩn danh.",
+        "unavailable": "Địa chỉ ẩn danh không khả dụng cho tài khoản hoặc máy chủ này.",
+        "load_failed": "Không thể tải toàn bộ danh sách địa chỉ. Hãy làm mới để thử lại.",
+        "save_failed": "Không thể xác nhận thay đổi. Hãy làm mới danh sách trước khi thử lại.",
+        "create_forbidden": "Máy chủ không cho phép tạo địa chỉ ẩn danh bằng phiên này.",
+        "update_forbidden": "Máy chủ không cho phép sửa địa chỉ ẩn danh bằng phiên này. Bạn vẫn có thể sao chép địa chỉ.",
+        "over_quota": "Đã đạt hạn mức địa chỉ ẩn danh của máy chủ. Các địa chỉ đã tắt có thể vẫn được tính vào giới hạn.",
+        "rate_limit": "Đã đạt giới hạn tốc độ tạo của máy chủ. Hãy thử lại sau."
+      },
       "title": "Bảo mật tài khoản",
       "description": "Quản lý mật khẩu, xác thực hai yếu tố và cài đặt bảo mật của bạn",
       "detecting": "Đang phát hiện khả năng của máy chủ...",
@@ -3366,7 +3452,8 @@
         "description": "Đường viền quanh nút, liên kết hoặc trường đang nhận thao tác bàn phím.",
         "normal": "Bình thường",
         "thick": "Dày",
-        "extra": "Cực dày"
+        "extra": "Cực dày",
+        "off": "Tắt"
       },
       "focus_always": {
         "label": "Luôn hiển thị tiêu điểm",
@@ -3933,6 +4020,8 @@
     "delete_folder": "Xóa thư mục",
     "refresh": "Làm mới",
     "hide_shared_account": "Ẩn khỏi thanh bên",
+    "move_shared_account_up": "Di chuyển lên",
+    "move_shared_account_down": "Di chuyển xuống",
     "mute_notifications": "Tắt tiếng thông báo",
     "unmute_notifications": "Bật tiếng thông báo",
     "mute_account_notifications": "Ẩn thông báo cho tài khoản này",
@@ -6090,6 +6179,13 @@
   "unified_mailbox": {
     "search_unavailable": "Tìm kiếm không có sẵn trong chế độ xem hợp nhất"
   },
+  "account_routing": {
+    "group_members_one_account": "Một nhóm chỉ có thể chứa danh bạ của một tài khoản.",
+    "link_names_no_account": "Liên kết này không cho biết thư nằm trong tài khoản nào nên không được mở.",
+    "group_member_gone": "Một trong các liên hệ đã chọn không còn tồn tại. Hãy chọn lại thành viên.",
+    "invitation_other_account": "Lời mời này nằm trong tài khoản khác. Chuyển sang tài khoản đó để trả lời hoặc thêm vào lịch.",
+    "tab_names_no_account": "Thẻ này được lưu mà không kèm tài khoản nên không được mở. Hãy đóng thẻ và mở lại từ tài khoản chứa nó."
+  },
   "mail_import": {
     "menu_import": "Nhập thư…",
     "settings_label": "Nhập thư",
@@ -6422,6 +6518,9 @@
     "attachments_description": "Tệp đính kèm của các thư được giữ và các tệp bạn giữ ngoại tuyến, tối đa {total} tổng cộng. Tệp cũ nhất sẽ bị xóa trước.",
     "total_locked": "Tổ chức của bạn chỉ cho phép tối đa {size} tệp đính kèm và tệp.",
     "attachment_cap_label": "Tệp đính kèm lớn nhất được giữ",
+    "total_cap_label": "Tổng dung lượng tệp đính kèm được giữ",
+    "total_cap_unlimited": "Không giới hạn",
+    "attachments_description_unlimited": "Tệp đính kèm của thư được giữ và các tệp bạn giữ ngoại tuyến, không giới hạn tổng dung lượng.",
     "usage_mail": "Thư và chỉ mục tìm kiếm",
     "usage_attachments": "Tệp đính kèm",
     "usage_calendar": "Lịch",
@@ -6764,6 +6863,10 @@
         "title": "Đăng xuất bạn",
         "body": "Đăng xuất bạn khỏi webmail."
       },
+      "auth_impersonation_return": {
+        "title": "Đưa bạn về tài khoản của mình",
+        "body": "Sau khi quản trị viên mở một hộp thư bằng cách mạo danh, kết thúc phiên đó và đăng nhập lại vào tài khoản đã bắt đầu nó."
+      },
       "account_read": {
         "title": "Xem tài khoản của bạn",
         "body": "Xem các tài khoản bạn đã thêm cùng với địa chỉ và máy chủ của họ cũng như tài khoản thư nào là hộp thư của nhóm."
@@ -6779,6 +6882,10 @@
       "http_fetch": {
         "title": "Kết nối với các trang web khác",
         "body": "Gửi yêu cầu đến các trang web này. Mọi thứ plugin có thể đọc đều có thể được gửi ở đó:"
+      },
+      "links_check": {
+        "title": "Kiểm tra các liên kết bạn mở",
+        "body": "Xem mọi liên kết web bạn mở cùng văn bản của nó, và chặn liên kết đó hoặc mở một địa chỉ khác thay thế."
       },
       "admin_config": {
         "title": "Đọc cài đặt plugin từ quản trị viên",
@@ -6914,7 +7021,7 @@
       },
       "ui_notifications": {
         "title": "Hiển thị thông báo",
-        "body": "Hiển thị thông báo trên thiết bị, hoặc trong ứng dụng nếu bạn chưa cấp quyền thông báo. Mỗi thông báo đều ghi tên plugin."
+        "body": "Hiển thị thông báo trên thiết bị, hoặc trong ứng dụng nếu bạn chưa cấp quyền thông báo. Mỗi thông báo đều ghi tên plugin. Plugin cũng thấy các thông báo mà ứng dụng hiển thị cho bạn."
       }
     },
     "forward_approval": {
@@ -7036,6 +7143,14 @@
     "not_available_title": "Trang này không có sẵn",
     "not_available_description": "Plugin đã thêm nó đã bị tắt hoặc không còn được cài đặt.",
     "back_to_mail": "Quay lại thư"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Danh sách từ plugin {name}",
+    "dropdown_list_labelled": "{label}, danh sách từ plugin {name}",
+    "oauth_failed": "Dịch vụ chưa hoàn tất đăng nhập. Hãy đóng cửa sổ này và thử lại.",
+    "banners_more": "Thêm biểu ngữ ({count}): {names}",
+    "banners_fewer": "Bớt biểu ngữ",
+    "opened_by_plugin": "Được mở bởi plugin {name}"
   },
   "command_palette": {
     "title": "Bảng lệnh",
@@ -7239,6 +7354,14 @@
       "added_from_subject": "Được thêm từ thư “{subject}” của {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Thông báo hủy này được gửi từ {sender}, nhưng người tổ chức sự kiện này trong lịch của bạn là {organizer}. Chỉ người tổ chức mới có thể hủy sự kiện. Hãy tự xóa nếu bạn tin tưởng thư này.",
+    "cancel_unverified": "Không thể xác minh thông báo hủy này đến từ người tổ chức. Hãy tự xóa sự kiện nếu bạn tin tưởng thư này.",
+    "card_sender": "từ {domain}",
+    "card_sender_title": "Thư này đã vượt qua bước kiểm tra người gửi của máy chủ thư cho {domain}.",
+    "outside_link": "Trang khác",
+    "outside_link_title": "Liên kết này dẫn tới {host}, nằm ngoài {domain}, tên miền của người gửi."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Chính tả",
@@ -7333,6 +7456,8 @@
       "title": "Cửa sổ ứng dụng",
       "double_click_label": "Mở thư trong cửa sổ mới khi nhấp đúp",
       "double_click_description": "Nhấp một lần vẫn mở thư bên cạnh danh sách.",
+      "compose_window_label": "Luôn soạn thư trong cửa sổ mới",
+      "compose_window_description": "Thư mới, thư trả lời, thư chuyển tiếp và bản nháp mở trong cửa sổ riêng thay vì trong cửa sổ chính.",
       "restore_label": "Mở lại cửa sổ khi khởi động",
       "restore_description": "Các cửa sổ thư và bản nháp đang mở khi thoát sẽ trở lại."
     },
@@ -7740,6 +7865,8 @@
     "start_at_login_description": "Ứng dụng tự khởi động khi bạn đăng nhập.",
     "start_minimized_label": "Khởi động ở khay hệ thống",
     "start_minimized_description": "Không có cửa sổ nào mở khi đăng nhập. Mở bằng biểu tượng ở khay hệ thống.",
+    "reopen_after_restart_label": "Mở lại sau khi khởi động lại",
+    "reopen_after_restart_description": "Nếu ứng dụng đang mở khi máy tính khởi động lại hoặc bạn đăng xuất, ứng dụng sẽ mở lại khi bạn đăng nhập, tại cùng thư mục, thư hoặc trang.",
     "attention_label": "Nhấp nháy thanh tác vụ khi có thư mới",
     "attention_mac_label": "Làm biểu tượng Dock nảy khi có thư mới",
     "attention_description": "Chỉ khi ứng dụng không ở phía trước.",
@@ -8237,5 +8364,13 @@
   "selectionView": {
     "starred": "Đã gắn dấu sao",
     "unstarred": "Đã bỏ dấu sao"
+  },
+  "impersonation": {
+    "return_notice": "Bạn đã mở {mailbox} bằng cách mạo danh.",
+    "return_button": "Quay lại tài khoản của tôi"
+  },
+  "admin_access": {
+    "label": "Siêu người dùng của máy chủ này có thể mở bảng điều khiển quản trị",
+    "help": "Siêu người dùng của máy chủ này đăng nhập vào bảng điều khiển quản trị mà không cần mật khẩu quản trị, giống như siêu người dùng của máy chủ JMAP chính. Chỉ bật cho máy chủ do chính bạn vận hành."
   }
 }

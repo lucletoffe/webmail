@@ -590,6 +590,13 @@ function buildCoreApi(manifest: PluginManifest) {
       /** The IANA time zone the app shows times in (the user's setting, else the browser's). */
       getTimeZone: () => callApi('user.getTimeZone', []) as Promise<string>,
       logout: () => callApi('user.logout', []),
+      /**
+       * End the impersonation and sign back in to the account that started
+       * it; signs out when the server holds nothing to return to. Only in an
+       * impersonated session (the app-top-banner slot's `canReturn` says
+       * whether a return is waiting). Needs auth:impersonation-return.
+       */
+      returnToOwnAccount: () => callApi('user.returnToOwnAccount', []) as Promise<void>,
     },
     http: {
       // A Blob/File body is sent as a binary request; options.headers may then
@@ -1175,6 +1182,12 @@ function buildCoreApi(manifest: PluginManifest) {
     search: {
       run: (query: unknown, options?: { label?: string }) =>
         callApi('search.run', [query, options]) as Promise<void>,
+      /**
+       * End this plugin's own search; the folder's list shows again.
+       * Resolves false, changing nothing, when the running search is not
+       * this plugin's (none, one the user typed, another plugin's).
+       */
+      clear: () => callApi('search.clear', []) as Promise<boolean>,
     },
     // Calendar events (permissions: calendar:read / calendar:write). Writes
     // go through the calendar the way the user's own edits do, so other
@@ -1205,14 +1218,14 @@ function buildCoreApi(manifest: PluginManifest) {
     // the way the user's own edits go.
     tasks: {
       /** Open tasks, or every task with includeCompleted. At most 1000. */
-      list: (options?: { includeCompleted?: boolean }) => callApi('tasks.list', [options]) as Promise<TaskView[]>,
+      list: (options?: { includeCompleted?: boolean; calendarIds?: string[] }) => callApi('tasks.list', [options]) as Promise<TaskView[]>,
       /** One task, or null. */
       get: (id: string) => callApi('tasks.get', [id]) as Promise<TaskView | null>,
       /** Resolves to the new task, or null when another plugin stopped it. */
       create: (task: TaskInput) => callApi('tasks.create', [task]) as Promise<TaskView | null>,
       /**
-       * Change the given fields. `alerts`, `links` and `relatedTo` merge
-       * by id: an entry given is set, one given null is removed, the rest
+       * Change the given fields. `alerts`, `links`, `relatedTo` and
+       * `keywords` merge by id: an entry given is set, one given null is removed, the rest
        * stay as they are (each written by its own JMAP patch path); null
        * for the whole map clears it.
        */
@@ -1512,6 +1525,14 @@ async function bootSlot(payload: SlotInit): Promise<void> {
     document.body.style.height = '100%';
     document.body.style.overflow = 'hidden';
     rootEl.style.height = '100%';
+  }
+  // An inline slot's frame is sized to its content. With fractional display
+  // scaling (Windows at 125 %) that size can fall a fraction of a pixel
+  // short; the frame then shows classic scrollbars, which take room of
+  // their own and cut the row off. Nothing in it needs to scroll.
+  if (inline) {
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
   }
 
   // A trivial pub/sub so host-pushed `props-update` messages re-render the
