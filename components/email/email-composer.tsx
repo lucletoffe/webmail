@@ -2676,9 +2676,9 @@ export function EmailComposer({
 
   // The server takes only so many uploads at once (see embedDataImages).
   const inlineUploadConcurrency = useCallback((): number => {
-    const target = composerClientRef.current ?? client;
+    const target = composerClientRef.current;
     return target?.getCapabilities ? maxConcurrentUploads(target) : 1;
-  }, [client]);
+  }, []);
 
   const handleImageUpload = useCallback(async (
     file: File,
