@@ -22,6 +22,7 @@
       "totp_required": "En to-faktor-godkendelseskode er påkrævet. Indtast din kode nedenfor.",
       "totp_invalid": "Ugyldig godkendelseskode. Kontrollér din autentificeringsapp og prøv igen.",
       "oauth_discovery_failed": "SSO er aktiveret, men identitetsudbyderen kunne ikke nås. Kontrollér din OAuth-konfiguration.",
+      "oauth_issuer_mismatch": "Login med denne udbyder er ikke sat korrekt op. Administratoren skal angive udbyderens issuer-adresse.",
       "token_exchange_failed": "Din adgangskode og kode blev accepteret, men mailserveren nægtede at starte en session for denne app. Bed din administrator om at kontrollere OAuth-klientindstillingerne."
     },
     "show_password": "Vis adgangskode",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Vis på mobil"
   },
   "email_list": {
+    "date_groups": {
+      "today": "I dag",
+      "yesterday": "I går",
+      "last_week": "Sidste uge",
+      "last_month": "Sidste måned",
+      "older": "Ældre"
+    },
+    "group_by_date": "Gruppér efter dato",
     "sections": {
       "unread": "Ulæste",
       "everything_else": "Alt andet",
@@ -1083,6 +1092,7 @@
     "templates_menu": "Skabeloner",
     "insert_template": "Indsæt skabelon…",
     "options": "Indstillinger",
+    "tags": "Tags",
     "option_plain_text": "Ren tekst",
     "option_plain_text_hint": "Send uden formatering",
     "option_read_receipt": "Anmod om læsekvittering",
@@ -1282,6 +1292,14 @@
       "edit": "Rediger billedbeskrivelse",
       "plain_text": "[Billede: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Omdøb",
+    "rename_named": "Omdøb {name}",
+    "rename_menu": "Omdøb…",
+    "rename_title": "Omdøb vedhæftet fil",
+    "rename_invalid_chars": "Filnavne må ikke indeholde / eller \\ eller kontroltegn",
+    "rename_too_long": "Navnet er for langt"
   },
   "compose_ux": {
     "draft_discarded": "Kladde kasseret",
@@ -1800,12 +1818,17 @@
       "title": "E-mail-tags",
       "description": "Lav tags til at sortere dine beskeder. Taggene gemmes sammen med beskederne på serveren.",
       "add_keyword": "Tilføj tag",
+      "empty": "Ingen tags endnu.",
       "label_field": "Visningsnavn",
       "label_placeholder": "f.eks. Arbejde, Privat, Vigtigt",
       "id_field": "Tag-ID",
       "id_placeholder": "f.eks. arbejde, privat",
       "color_field": "Farve",
-      "id_exists": "Dette tag-ID findes allerede",
+      "custom_color": "Tilpasset farve",
+      "color_code": "Farvekode",
+      "pick_custom_color": "Vælg en tilpasset farve",
+      "invalid_color": "Brug en farvekode som #1a73e8.",
+      "name_exists": "Der findes allerede et mærke med det navn",
       "edit": "Redigér tag",
       "delete": "Slet tag",
       "edit_tag": "Rediger {name}",
@@ -2093,9 +2116,17 @@
         "label": "Vis bekræftelseskoder",
         "description": "Tilbyd koden fra login- og bekræftelsesmails til kopiering med ét klik, i listen i en dag og i beskeden"
       },
+      "show_attachment_chips": {
+        "label": "Vis vedhæftede filer i listen",
+        "description": "Vis vedhæftede filer under hver besked, så du kan åbne dem direkte fra listen. Papirclipsen vises under alle omstændigheder."
+      },
       "plain_text_mode": {
         "label": "Kun almindelig tekst",
         "description": "Deaktivér den rige teksteditor og send alle e-mails som ren tekst, inklusive svar og videresendelser"
+      },
+      "reply_under_message": {
+        "label": "Svar under beskeden",
+        "description": "Et svar eller en videresendelse åbner under sin besked, som forbliver læsbar ovenover. Når det er slået fra, fylder det hele læseruden ligesom en ny besked."
       },
       "quick_reply": {
         "label": "Hurtigt svar",
@@ -2279,6 +2310,10 @@
         "label": "Understøttelse af højre-mod-venstre-redigering",
         "description": "Tilføjer en retningsknap til værktøjslinjen i editoren, så afsnit kan sættes venstre-mod-højre eller højre-mod-venstre"
       },
+      "group_by_date": {
+        "label": "Gruppér efter dato",
+        "description": "Vis beskeder under datooverskrifter som I dag, I går og Sidste uge. Gælder kun, når listen er sorteret efter dato."
+      },
       "group_conversations": {
         "label": "Gruppér beskeder efter samtale",
         "description": "Vis svar samlet som én samtale i stedet for som separate beskeder."
@@ -2379,6 +2414,57 @@
       }
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adresse",
+        "description_column": "Beskrivelse",
+        "website_column": "Websted",
+        "state": "Status",
+        "actions": "Handlinger",
+        "no_description": "Ingen beskrivelse",
+        "edit": "Rediger",
+        "close": "Luk",
+        "pagination": "Sider med maskerede adresser",
+        "page": "Side {page} af {pages}",
+        "previous": "Forrige",
+        "next": "Næste",
+        "delete": "Slet",
+        "delete_title": "Slet den maskerede adresse permanent?",
+        "delete_warning": "Slet {address}? Det kan ikke fortrydes. Mail, der sendes til denne adresse, bliver ikke længere leveret.",
+        "delete_confirm": "Slet permanent",
+        "cancel": "Annuller",
+        "deleted": "Adressen er slettet permanent.",
+        "deleted_refresh_failed": "Sletningen er bekræftet, men listen kunne ikke opdateres. Opdater for at indlæse den aktuelle liste.",
+        "delete_forbidden": "Din nuværende session har ikke tilladelse til at slette maskerede adresser. Andre tilladte handlinger er stadig tilgængelige.",
+        "delete_failed": "Adressen blev ikke slettet. Opdater listen, før du prøver igen.",
+        "delete_unconfirmed": "Sletningen kunne ikke bekræftes. Den bliver ikke forsøgt igen. Opdater listen, og kontrollér adressen, før du sletter mere.",
+        "title": "Maskerede adresser",
+        "intro": "Modtag mail uden at dele din primære adresse. Når en adresse deaktiveres, afvises ny mail til den. Disse adresser kan ikke bruges til at sende mail.",
+        "loading": "Indlæser maskerede adresser…",
+        "count": "{count, plural, one {# adresse} other {# adresser}}",
+        "empty": "Ingen maskerede adresser endnu.",
+        "website": "Websted (valgfrit)",
+        "description": "Beskrivelse (valgfrit)",
+        "no_website": "Ikke angivet",
+        "enabled": "Aktiveret",
+        "disabled": "Deaktiveret",
+        "enable": "Aktivér",
+        "disable": "Deaktivér",
+        "copy": "Kopier",
+        "copied": "Adressen er kopieret.",
+        "copy_failed": "Kunne ikke kopiere. Markér og kopier adressen ovenfor.",
+        "save": "Gem beskrivelse",
+        "create": "Opret maskeret adresse",
+        "refresh": "Opdater",
+        "saved": "Ændringen er gemt.",
+        "forbidden": "Din nuværende session har ikke tilladelse til at vise maskerede adresser.",
+        "unavailable": "Maskerede adresser er ikke tilgængelige for denne konto eller server.",
+        "load_failed": "Den fulde adresseliste kunne ikke indlæses. Opdater for at prøve igen.",
+        "save_failed": "Ændringen kunne ikke bekræftes. Opdater listen, før du prøver igen.",
+        "create_forbidden": "Serveren tillod ikke at oprette en maskeret adresse med denne session.",
+        "update_forbidden": "Serveren tillod ikke at redigere maskerede adresser med denne session. Du kan stadig kopiere adresser.",
+        "over_quota": "Serverens kvote for maskerede adresser er nået. Deaktiverede adresser kan stadig tælle med i grænsen.",
+        "rate_limit": "Serverens grænse for oprettelser er nået. Prøv igen senere."
+      },
       "title": "Kontosikkerhed",
       "description": "Administrér din adgangskode, to-faktor-godkendelse og sikkerhedsindstillinger",
       "detecting": "Registrerer serverfunktioner...",
@@ -3354,7 +3440,8 @@
         "description": "Rammen om den knap, det link eller det felt, tastaturet står på.",
         "normal": "Normal",
         "thick": "Tyk",
-        "extra": "Ekstra tyk"
+        "extra": "Ekstra tyk",
+        "off": "Fra"
       },
       "focus_always": {
         "label": "Vis altid fokus",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Slet mappe",
     "refresh": "Opdatér",
     "hide_shared_account": "Skjul i sidepanelet",
+    "move_shared_account_up": "Flyt op",
+    "move_shared_account_down": "Flyt ned",
     "mute_notifications": "Slå notifikationer fra",
     "unmute_notifications": "Slå notifikationer til",
     "mute_account_notifications": "Slå notifikationer fra for denne konto",
@@ -6078,6 +6167,13 @@
   "unified_mailbox": {
     "search_unavailable": "Søgning er ikke tilgængelig i den samlede visning"
   },
+  "account_routing": {
+    "group_members_one_account": "En gruppe kan kun indeholde kontakter fra én konto.",
+    "link_names_no_account": "Dette link siger ikke, hvilken konto beskeden ligger i, så det blev ikke åbnet.",
+    "group_member_gone": "En af de valgte kontakter findes ikke længere. Vælg medlemmerne igen.",
+    "invitation_other_account": "Denne invitation ligger i en anden konto. Skift til den konto for at svare på den eller tilføje den til en kalender.",
+    "tab_names_no_account": "Denne fane blev gemt uden sin konto, så den blev ikke åbnet. Luk den, og åbn den igen fra den konto, den hører til."
+  },
   "mail_import": {
     "menu_import": "Importér mail…",
     "settings_label": "Importér mail",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Vedhæftede filer fra beholdte beskeder og de filer, du beholder offline, op til {total} i alt. De ældste fjernes først.",
     "total_locked": "Din organisation tillader højst {size} vedhæftede filer og filer.",
     "attachment_cap_label": "Største vedhæftede fil, der beholdes",
+    "total_cap_label": "Samlet størrelse af gemte vedhæftninger",
+    "total_cap_unlimited": "Ingen grænse",
+    "attachments_description_unlimited": "Vedhæftninger fra gemte beskeder og de filer, du gemmer offline, uden grænse for den samlede størrelse.",
     "usage_mail": "Beskeder og søgeindeks",
     "usage_attachments": "Vedhæftede filer",
     "usage_calendar": "Kalender",
@@ -6752,6 +6851,10 @@
         "title": "Logge dig ud",
         "body": "Logge dig ud af webmailen."
       },
+      "auth_impersonation_return": {
+        "title": "Sende dig tilbage til din egen konto",
+        "body": "Når en administrator har åbnet en postkasse via impersonering, afslutte den session og logge ind igen på den konto, den startede fra."
+      },
       "account_read": {
         "title": "Se dine konti",
         "body": "Se de konti, du har tilføjet, med deres adresser og servere, og hvilke mailkonti der er teampostkasser."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Forbinde til andre websteder",
         "body": "Sende forespørgsler til disse websteder. Alt, hvad pluginnet kan læse, kan blive sendt dertil:"
+      },
+      "links_check": {
+        "title": "Tjekke de links, du åbner",
+        "body": "Se hvert weblink, du åbner, med dets tekst, og stoppe det eller åbne en anden adresse i stedet."
       },
       "admin_config": {
         "title": "Læse sine indstillinger fra din administrator",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "Vise notifikationer",
-        "body": "Vise notifikationer på din enhed eller i appen, hvis du ikke har tilladt dem. Hver af dem nævner pluginets navn."
+        "body": "Vise notifikationer på din enhed eller i appen, hvis du ikke har tilladt dem. Hver af dem nævner pluginets navn. Pluginet ser også de beskeder, appen viser dig."
       },
       "ui_message_list": {
         "title": "Tilføje til beskedlisten",
@@ -7024,6 +7131,14 @@
     "not_available_title": "Denne side er ikke tilgængelig",
     "not_available_description": "Det plugin, der tilføjede den, er slået fra eller ikke længere installeret.",
     "back_to_mail": "Tilbage til mail"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Liste fra pluginet {name}",
+    "dropdown_list_labelled": "{label}, liste fra pluginet {name}",
+    "oauth_failed": "Tjenesten gennemførte ikke login. Luk dette vindue, og prøv igen.",
+    "banners_more": "Flere bannere ({count}): {names}",
+    "banners_fewer": "Færre bannere",
+    "opened_by_plugin": "Åbnet af pluginet {name}"
   },
   "command_palette": {
     "title": "Kommandopalet",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "Tilføjet fra mailen »{subject}« fra {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Denne aflysning blev sendt fra {sender}, men arrangøren af begivenheden i din kalender er {organizer}. Kun arrangøren kan aflyse den. Fjern den selv, hvis du stoler på denne besked.",
+    "cancel_unverified": "Det kunne ikke bekræftes, at denne aflysning kommer fra arrangøren. Fjern selv begivenheden, hvis du stoler på denne besked.",
+    "card_sender": "fra {domain}",
+    "card_sender_title": "Denne besked bestod mailserverens afsenderkontrol for {domain}.",
+    "outside_link": "Andet websted",
+    "outside_link_title": "Dette link fører til {host}, uden for {domain}, afsenderens domæne."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Stavning",
@@ -7321,6 +7444,8 @@
       "title": "Appens vinduer",
       "double_click_label": "Åbn beskeder i et nyt vindue ved dobbeltklik",
       "double_click_description": "Et enkelt klik åbner stadig beskeden ved siden af listen.",
+      "compose_window_label": "Skriv altid beskeder i et nyt vindue",
+      "compose_window_description": "Nye beskeder, svar, videresendelser og kladder åbnes i deres eget vindue i stedet for i hovedvinduet.",
       "restore_label": "Åbn vinduer igen ved start",
       "restore_description": "Besked- og kladdevinduer, der var åbne, da du lukkede, kommer tilbage."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "Appen starter selv, når du logger på.",
     "start_minimized_label": "Start i systembakken",
     "start_minimized_description": "Der åbnes intet vindue ved logon. Åbn appen med ikonet i systembakken.",
+    "reopen_after_restart_label": "Åbn igen efter en genstart",
+    "reopen_after_restart_description": "Hvis appen er åben, når computeren genstarter, eller du logger af, åbnes den igen, når du logger på, i den samme mappe, besked eller side.",
     "attention_label": "Blink i proceslinjen ved ny post",
     "attention_mac_label": "Lad Dock-ikonet hoppe ved ny post",
     "attention_description": "Kun når appen ikke er forrest.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Stjernemarkeret",
     "unstarred": "Stjerne fjernet"
+  },
+  "impersonation": {
+    "return_notice": "Du har åbnet {mailbox} via impersonering.",
+    "return_button": "Tilbage til min konto"
+  },
+  "admin_access": {
+    "label": "Superbrugere på denne server må åbne administrationspanelet",
+    "help": "Superbrugere på denne server logger ind på administrationspanelet uden administratoradgangskoden, ligesom dem på JMAP-hovedserveren. Slå det kun til for en server, du selv driver."
   }
 }

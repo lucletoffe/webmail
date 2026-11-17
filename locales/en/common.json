@@ -22,6 +22,7 @@
       "totp_required": "A two-factor authentication code is required. Please enter your code below.",
       "totp_invalid": "Invalid authentication code. Please check your authenticator app and try again.",
       "oauth_discovery_failed": "SSO is enabled but the identity provider could not be reached. Check your OAuth configuration.",
+      "oauth_issuer_mismatch": "Sign-in with this provider is not set up correctly. The administrator has to set its issuer address.",
       "token_exchange_failed": "Your password and code were accepted, but the mail server refused to start a session for this app. Ask your administrator to check its OAuth client settings."
     },
     "show_password": "Show password",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Show on mobile"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last_week": "Last week",
+      "last_month": "Last month",
+      "older": "Older"
+    },
+    "group_by_date": "Group by date",
     "sections": {
       "unread": "Unread",
       "everything_else": "Everything else",
@@ -1085,6 +1094,7 @@
     "templates_menu": "Templates",
     "insert_template": "Insert template…",
     "options": "Options",
+    "tags": "Tags",
     "option_plain_text": "Plain text",
     "option_plain_text_hint": "Send without formatting",
     "option_read_receipt": "Request read receipt",
@@ -1282,6 +1292,14 @@
       "edit": "Edit image description",
       "plain_text": "[Image: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Rename",
+    "rename_named": "Rename {name}",
+    "rename_menu": "Rename…",
+    "rename_title": "Rename attachment",
+    "rename_invalid_chars": "File names can't contain / or \\ or control characters",
+    "rename_too_long": "This name is too long"
   },
   "compose_ux": {
     "draft_discarded": "Draft discarded",
@@ -1800,12 +1818,17 @@
       "title": "Email tags",
       "description": "Make tags to sort your messages. The tags are saved with your messages on the server.",
       "add_keyword": "New tag",
+      "empty": "No tags yet.",
       "label_field": "Display name",
       "label_placeholder": "e.g. Work, Personal, Urgent",
       "id_field": "Tag ID",
       "id_placeholder": "e.g. work, personal",
       "color_field": "Color",
-      "id_exists": "This tag ID already exists",
+      "custom_color": "Custom color",
+      "color_code": "Color code",
+      "pick_custom_color": "Pick a custom color",
+      "invalid_color": "Use a color code like #1a73e8.",
+      "name_exists": "A tag with this name already exists",
       "edit": "Edit tag",
       "delete": "Delete tag",
       "edit_tag": "Edit {name}",
@@ -2093,9 +2116,17 @@
         "label": "Show verification codes",
         "description": "Offer the code from sign-in and confirmation emails for one-click copying, in the list for a day and in the message"
       },
+      "show_attachment_chips": {
+        "label": "Show attachments in the list",
+        "description": "Show attached files under each message, to open them from the list. The paperclip shows either way."
+      },
       "plain_text_mode": {
         "label": "Plain text only",
         "description": "Disable the rich text editor and send all emails as plain text only, including replies and forwards"
+      },
+      "reply_under_message": {
+        "label": "Replies under the message",
+        "description": "A reply or forward opens under its message, which stays readable above it. When off, it takes the whole reading pane, like a new message."
       },
       "quick_reply": {
         "label": "Quick reply",
@@ -2279,6 +2310,10 @@
         "label": "Right-to-left editing support",
         "description": "Adds a direction button to the composer toolbar so you can set paragraphs left-to-right or right-to-left"
       },
+      "group_by_date": {
+        "label": "Group by date",
+        "description": "Show messages under date headers such as Today, Yesterday and Last week. Only applies while the list is sorted by date."
+      },
       "group_conversations": {
         "label": "Group messages by conversation",
         "description": "Show replies together as one conversation instead of as separate messages."
@@ -2383,6 +2418,57 @@
       "managing": "Managing: {name}"
     },
     "security": {
+      "masked_addresses": {
+        "address": "Address",
+        "description_column": "Description",
+        "website_column": "Website",
+        "state": "State",
+        "actions": "Actions",
+        "no_description": "No description",
+        "edit": "Edit",
+        "close": "Close",
+        "pagination": "Masked address pages",
+        "page": "Page {page} of {pages}",
+        "previous": "Previous",
+        "next": "Next",
+        "delete": "Delete",
+        "delete_title": "Permanently delete masked address?",
+        "delete_warning": "Delete {address}? This cannot be undone. Mail sent to this address will no longer be delivered.",
+        "delete_confirm": "Delete permanently",
+        "cancel": "Cancel",
+        "deleted": "Address permanently deleted.",
+        "deleted_refresh_failed": "Deletion confirmed, but the list could not be refreshed. Refresh to load the current list.",
+        "delete_forbidden": "Your current session is not allowed to delete masked addresses. Other permitted actions remain available.",
+        "delete_failed": "The address was not deleted. Refresh the list before trying again.",
+        "delete_unconfirmed": "Deletion could not be confirmed. It will not be retried. Refresh the list to check the address before any further deletion.",
+        "title": "Masked addresses",
+        "intro": "Receive mail without sharing your main address. Disabling an address rejects new mail to it. These addresses cannot be used to send mail.",
+        "loading": "Loading masked addresses…",
+        "count": "{count, plural, one {# address} other {# addresses}}",
+        "empty": "No masked addresses yet.",
+        "website": "Website (optional)",
+        "description": "Description (optional)",
+        "no_website": "Not specified",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "enable": "Enable",
+        "disable": "Disable",
+        "copy": "Copy",
+        "copied": "Address copied.",
+        "copy_failed": "Could not copy. Select and copy the address above.",
+        "save": "Save description",
+        "create": "Create masked address",
+        "refresh": "Refresh",
+        "saved": "Change saved.",
+        "forbidden": "Your current session is not allowed to list masked addresses.",
+        "unavailable": "Masked addresses aren't available for this account or server.",
+        "load_failed": "Could not load the complete address list. Refresh to try again.",
+        "save_failed": "The change could not be confirmed. Refresh the list before trying again.",
+        "create_forbidden": "The server did not allow creating a masked address with this session.",
+        "update_forbidden": "The server did not allow editing masked addresses with this session. You can still copy addresses.",
+        "over_quota": "The server's masked address quota has been reached. Disabled addresses may still count towards the limit.",
+        "rate_limit": "The server's creation rate limit has been reached. Try again later."
+      },
       "title": "Account security",
       "description": "Manage your password, two-factor authentication, and security settings",
       "detecting": "Detecting server capabilities...",
@@ -3354,7 +3440,8 @@
         "description": "The outline around the button, link or field the keyboard is on.",
         "normal": "Normal",
         "thick": "Thick",
-        "extra": "Extra thick"
+        "extra": "Extra thick",
+        "off": "Off"
       },
       "focus_always": {
         "label": "Always show focus",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Delete folder",
     "refresh": "Refresh",
     "hide_shared_account": "Hide from sidebar",
+    "move_shared_account_up": "Move up",
+    "move_shared_account_down": "Move down",
     "mute_notifications": "Mute notifications",
     "unmute_notifications": "Unmute notifications",
     "mute_account_notifications": "Mute notifications for this account",
@@ -6078,6 +6167,13 @@
   "unified_mailbox": {
     "search_unavailable": "Search is not available in the unified view"
   },
+  "account_routing": {
+    "group_members_one_account": "A group can only hold contacts from one account.",
+    "link_names_no_account": "This link doesn't say which account the message is in, so it wasn't opened.",
+    "group_member_gone": "One of the chosen contacts no longer exists. Choose the members again.",
+    "invitation_other_account": "This invitation is in another account. Switch to that account to answer it or add it to a calendar.",
+    "tab_names_no_account": "This tab was saved without its account, so it wasn't opened. Close it and open it again from the account it belongs to."
+  },
   "mail_import": {
     "menu_import": "Import mail…",
     "settings_label": "Import mail",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Attachments of kept messages and the files you keep offline, up to {total} in all. The oldest go first.",
     "total_locked": "Your organisation allows {size} of attachments and files at most.",
     "attachment_cap_label": "Largest attachment to keep",
+    "total_cap_label": "Total size of kept attachments",
+    "total_cap_unlimited": "No limit",
+    "attachments_description_unlimited": "Attachments of kept messages and the files you keep offline, with no limit on their total.",
     "usage_mail": "Messages and search index",
     "usage_attachments": "Attachments",
     "usage_calendar": "Calendar",
@@ -6752,6 +6851,10 @@
         "title": "Sign you out",
         "body": "Sign you out of the webmail."
       },
+      "auth_impersonation_return": {
+        "title": "Take you back to your own account",
+        "body": "After an administrator opened a mailbox through impersonation, end that session and sign back in to the account it started from."
+      },
       "account_read": {
         "title": "See your accounts",
         "body": "See the accounts you added with their addresses and servers, and which mail accounts are team mailboxes."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Connect to other websites",
         "body": "Send requests to these sites. Anything the plugin can read may be sent there:"
+      },
+      "links_check": {
+        "title": "Check the links you open",
+        "body": "See every web link you open, with its text, and stop it or open another address instead."
       },
       "admin_config": {
         "title": "Read its settings from your administrator",
@@ -6902,7 +7009,7 @@
       },
       "ui_notifications": {
         "title": "Show notifications",
-        "body": "Show notifications on your device, or in the app if you haven't allowed them. Each one names the plugin."
+        "body": "Show notifications on your device, or in the app if you haven't allowed them. Each one names the plugin. It also sees the notices the app shows you."
       }
     },
     "forward_approval": {
@@ -7024,6 +7131,14 @@
     "not_available_title": "This page is not available",
     "not_available_description": "The plugin that added it is turned off or no longer installed.",
     "back_to_mail": "Back to mail"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "List from the plugin {name}",
+    "dropdown_list_labelled": "{label}, list from the plugin {name}",
+    "oauth_failed": "The service did not complete the sign-in. Close this window and try again.",
+    "banners_more": "More banners ({count}): {names}",
+    "banners_fewer": "Fewer banners",
+    "opened_by_plugin": "Opened by the plugin {name}"
   },
   "command_palette": {
     "title": "Command palette",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "Added from the mail “{subject}” from {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "This cancellation was sent from {sender}, but the event in your calendar is organized by {organizer}. Only the organizer can cancel it. Remove it yourself if you trust this message.",
+    "cancel_unverified": "This cancellation could not be verified as coming from the organizer. Remove the event yourself if you trust this message.",
+    "card_sender": "from {domain}",
+    "card_sender_title": "This message passed the mail server's sender check for {domain}.",
+    "outside_link": "Other site",
+    "outside_link_title": "This link leads to {host}, outside {domain}, the sender's domain."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Spelling",
@@ -7321,6 +7444,8 @@
       "title": "App windows",
       "double_click_label": "Open messages in a new window on double-click",
       "double_click_description": "A single click still opens the message next to the list.",
+      "compose_window_label": "Always write messages in a new window",
+      "compose_window_description": "New messages, replies, forwards and drafts open in a window of their own instead of in the main window.",
       "restore_label": "Reopen windows at start",
       "restore_description": "Message and draft windows that were open when you quit come back."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "The app starts by itself when you sign in.",
     "start_minimized_label": "Start in the tray",
     "start_minimized_description": "No window opens at sign-in. Use the tray icon to open it.",
+    "reopen_after_restart_label": "Open again after a restart",
+    "reopen_after_restart_description": "If the app is open when the computer restarts or you sign out, it opens again when you sign back in, on the same folder, message or page.",
     "attention_label": "Flash the taskbar on new mail",
     "attention_mac_label": "Bounce the Dock icon on new mail",
     "attention_description": "Only when the app is not in front.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Starred",
     "unstarred": "Star removed"
+  },
+  "impersonation": {
+    "return_notice": "You opened {mailbox} through impersonation.",
+    "return_button": "Return to my account"
+  },
+  "admin_access": {
+    "label": "This server’s superusers may open the admin dashboard",
+    "help": "Superusers of this server sign in to the admin dashboard without the admin password, like those of the main JMAP server. Turn this on only for a server you run yourself."
   }
 }

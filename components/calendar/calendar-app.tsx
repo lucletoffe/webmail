@@ -63,8 +63,8 @@ import { useEventUserEmails } from "@/hooks/use-event-user-emails";
 import { ResizeHandle } from "@/components/layout/resize-handle";
 import { EdgeDrawer } from "@/components/layout/edge-drawer";
 import { descriptionWithNote } from "@/lib/calendar-description";
-import { filterTasksByCalendars } from "@/lib/calendar-tasks";
-import { baseEventStoreId, isServerRecurrenceInstance } from "@/lib/recurrence-instances";
+import { filterTasksByCalendars, taskSeriesId } from "@/lib/calendar-tasks";
+import { baseEventStoreId, isServerRecurrenceInstance, storeIdBeside } from "@/lib/recurrence-instances";
 import { deleteOccurrence, saveOccurrenceEdit, type EventEditorState } from "@/lib/recurrence-scope-edit";
 import { useContactNameResolver } from "@/hooks/use-contact-name-resolver";
 import { getClientByLocalAccountId } from "@/stores/client-registry";
@@ -831,7 +831,10 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
 
   const openEditTaskModal = useCallback((task: CalendarTask) => whenEditorsDiscarded(() => {
     closeEventPanelForTask();
-    setEditTask(task);
+    // An occurrence on the grid opens the task it repeats.
+    const seriesId = taskSeriesId(task);
+    const master = seriesId === task.id ? task : useTaskStore.getState().tasks.find((t) => t.id === seriesId) ?? task;
+    setEditTask(master);
     setShowTaskModal(true);
   }), [closeEventPanelForTask, whenEditorsDiscarded]);
 
@@ -982,6 +985,16 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
     openEventContextMenu(e, event);
   }, [closeDetail, openEventContextMenu]);
 
+  const handleMoreFromDetail = useCallback((e: React.MouseEvent) => {
+    setAnswersOnlyMenu(false);
+    const target = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
+    if (target && detailEvent) {
+      openEventContextMenuFrom(target, detailEvent, "end");
+    } else if (detailEvent) {
+      openEventContextMenu(e, detailEvent);
+    }
+  }, [detailEvent, openEventContextMenu, openEventContextMenuFrom]);
+
   const {
     contextMenu: emptyContextMenu,
     openContextMenu: openEmptyContextMenu,
@@ -1046,9 +1059,13 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
     }
 
     // A hit from another login (global search) is fetched through that
-    // login's client - the active one can't see it (#847).
-    const reachingClient = (link.login ? getClientByLocalAccountId(link.login) : null) ?? client;
-    if (!reachingClient) return;
+    // login's client - the active one can't see it (#847), and asked for the
+    // same id it may answer with another event.
+    const reachingClient = link.login ? getClientByLocalAccountId(link.login) : client;
+    if (!reachingClient) {
+      if (link.login) toast.error(tDeepLink('event_not_found'));
+      return;
+    }
     void (async () => {
       try {
         const event = await reachingClient.getCalendarEvent(link.id, link.accountId);
@@ -1126,6 +1143,24 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
     setShowTaskModal(false);
     setEditTask(null);
   }, []);
+  // The editors, the event's card and the scope question hold the ids of the
+  // login they were opened under (the event, its calendar, the task), and the
+  // same ids name other events and tasks in every other login. When the
+  // active login changes they close, as the contact editor does, instead of
+  // saving through the new one.
+  const editorsLoginRef = useRef(activeAccountId);
+  useEffect(() => {
+    const before = editorsLoginRef.current;
+    editorsLoginRef.current = activeAccountId;
+    if (!before || before === activeAccountId) return;
+    eventEditorDirtyRef.current = false;
+    taskEditorDirtyRef.current = false;
+    closeEditors();
+    setCopySource(null);
+    setQuickDraft(null);
+    setPendingScopeAction(null);
+    closeDetail();
+  }, [activeAccountId, closeEditors, closeDetail]);
   const editorsInView = (showEventModal || showTaskModal) && (isEmbedded ? isFocusedProTab : !proInterfaceActive);
   useCloseOnBack({
     active: editorsInView,
@@ -1179,14 +1214,18 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
     if ((occurrence.recurrenceRules?.length ?? 0) > 0 && !occurrence.recurrenceId) {
       return occurrence;
     }
+    // Only through the occurrence's own login, and nothing while that login
+    // has no client: through any other login the base event's id, or its
+    // uid, names another event or none.
+    const login = occurrence.localAccountId;
+    const loginClient = login ? getClientByLocalAccountId(login) ?? null : client;
     // An occurrence expanded by the server names its base event outright.
     // Fetch it through the occurrence's own account and hand it back under
     // the store id the base would have, so the store routes mutations on it
     // through the same account (see resolveMutationTarget).
     if (isServerRecurrenceInstance(occurrence) && occurrence.baseEventId) {
-      const accountClient = (occurrence.localAccountId && getClientByLocalAccountId(occurrence.localAccountId)) || client;
-      if (!accountClient) return null;
-      const master = await accountClient.getCalendarEvent(occurrence.baseEventId, occurrence.accountId);
+      if (!loginClient) return null;
+      const master = await loginClient.getCalendarEvent(occurrence.baseEventId, occurrence.accountId);
       if (!master) return null;
       return {
         ...master,
@@ -1200,14 +1239,33 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
         isShared: occurrence.isShared,
       };
     }
+    // A uid is the same in every calendar that got the invitation: the series
+    // has to be in the occurrence's login and account too.
     const master = events.find(e =>
       e.uid === occurrence.uid && !e.recurrenceId && (e.recurrenceRules?.length ?? 0) > 0
+      && e.localAccountId === login && e.accountId === occurrence.accountId
     );
     if (master) return master;
-    if (!client) return null;
+    if (!loginClient) return null;
     try {
-      const results = await client.queryCalendarEvents({ uid: occurrence.uid });
-      return results.find(e => !e.recurrenceId && (e.recurrenceRules?.length ?? 0) > 0) || null;
+      const results = await loginClient.queryCalendarEvents({ uid: occurrence.uid }, undefined, undefined, login ? occurrence.accountId : undefined);
+      const found = results.find(e => !e.recurrenceId && (e.recurrenceRules?.length ?? 0) > 0);
+      if (!found || !login) return found ?? null;
+      // Under the store id it has in that login, so the store routes what is
+      // done to it there (see resolveMutationTarget).
+      const id = storeIdBeside(occurrence, found.id);
+      if (!id) return null;
+      return {
+        ...found,
+        id,
+        originalId: found.id,
+        originalCalendarIds: found.calendarIds,
+        calendarIds: occurrence.calendarIds,
+        accountId: occurrence.accountId,
+        accountName: occurrence.accountName,
+        localAccountId: login,
+        isShared: occurrence.isShared,
+      };
     } catch (error) {
       debug.error("Failed to query master event for UID:", occurrence.uid, error);
       throw error;
@@ -1702,8 +1760,9 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
   }, [detailEvent, client, updateEvent, describeError, t]);
 
   const handleDuplicateContextMenu = useCallback((event: CalendarEvent) => {
+    if (detailEvent?.id === event.id) closeDetail();
     handleDuplicateEvent(event);
-  }, [handleDuplicateEvent]);
+  }, [detailEvent, closeDetail, handleDuplicateEvent]);
 
   const handleExportICS = useCallback((event: CalendarEvent) => {
     try {
@@ -1735,9 +1794,10 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
   }, [t]);
 
   const handleDeleteContextMenu = useCallback((event: CalendarEvent) => {
+    if (detailEvent?.id === event.id) closeDetail();
     const hasParticipants = event.participants && Object.keys(event.participants).length > 0;
     handleDeleteEvent(event.id, hasParticipants || undefined);
-  }, [handleDeleteEvent]);
+  }, [detailEvent, closeDetail, handleDeleteEvent]);
 
   // "Copy to <other account>" (pim-p2-16): an event can't move between
   // accounts, so the other one gets a copy, and the toast offers to delete
@@ -1751,7 +1811,9 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
     if (!client) { toast.error(t("notifications.event_error")); return; }
     let source = event;
     if (event.recurrenceId && event.recurrenceRules?.length && event.originalId) {
-      const sourceClient = (event.localAccountId ? useAuthStore.getState().getClientForAccount(event.localAccountId) : null) ?? client;
+      // From its own login only: the same id is another event elsewhere.
+      const sourceClient = event.localAccountId ? useAuthStore.getState().getClientForAccount(event.localAccountId) : client;
+      if (!sourceClient) { toast.error(t("notifications.event_error")); return; }
       const isSharedSource = calendars.some((c) => event.calendarIds?.[c.id] && c.isShared);
       const master = await sourceClient.getCalendarEvent(event.originalId, isSharedSource ? event.accountId : undefined).catch(() => null);
       if (master) source = master;
@@ -2020,11 +2082,11 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
   );
 
   // Tasks on the month, week and day grids follow the calendar filter like
-  // the events do (#1107).
+  // the events do (#1107); tasks in task-only lists follow the task list tick.
   const calendarTasks = useMemo(() => {
     if (!enableCalendarTasks || !showTasksOnCalendar) return undefined;
-    return filterTasksByCalendars(taskStore.tasks, selectedCalendarIds);
-  }, [enableCalendarTasks, showTasksOnCalendar, taskStore.tasks, selectedCalendarIds]);
+    return filterTasksByCalendars(taskStore.tasks, selectedCalendarIds, calendars, hiddenTaskListIds);
+  }, [enableCalendarTasks, showTasksOnCalendar, taskStore.tasks, selectedCalendarIds, calendars, hiddenTaskListIds]);
 
   useEffect(() => {
     const hiddenEvents = events.filter((event) => {
@@ -2651,7 +2713,10 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
           onClose={closeEventContextMenu}
           menuRef={eventContextMenuRef}
           // Edit opens the form, as the card's pencil and `e` do.
-          onEdit={() => openEditModal(eventContextMenu.data!, true)}
+          onEdit={() => {
+            closeDetail();
+            openEditModal(eventContextMenu.data!, true);
+          }}
           onDuplicate={() => handleDuplicateContextMenu(eventContextMenu.data!)}
           onExportICS={() => handleExportICS(eventContextMenu.data!)}
           onCopyTitle={() => handleCopyTitle(eventContextMenu.data!)}
@@ -2662,6 +2727,7 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
           onRespond={gridAnswerFor(eventContextMenu.data) ? (status) => handleRespondFromGrid(eventContextMenu.data!, status) : undefined}
           responseStatus={gridAnswerFor(eventContextMenu.data)?.status}
           answersOnly={answersOnlyMenu}
+          overDialog={true}
           copyTo={answersOnlyMenu ? [] : copyTargetsOf(eventContextMenu.data).map((target) => ({
             address: accountAddress(target.account),
             onCopy: () => { void handleCopyToAccount(eventContextMenu.data!, target); },
@@ -2723,7 +2789,7 @@ export function CalendarApp({ linkSegments: routeSegments }: CalendarAppProps = 
           onEdit={handleEditFromDetail}
           onDelete={handleDeleteFromDetail}
           onDuplicate={handleDuplicateFromDetail}
-          onMore={(e) => handleContextMenuEvent(e, detailEvent)}
+          onMore={handleMoreFromDetail}
           onPrint={printOff ? undefined : () => { void requestPrint({ kind: "calendar-event", event: detailEvent }); }}
           onClose={closeDetail}
           onSaveNote={handleSaveNoteFromDetail}

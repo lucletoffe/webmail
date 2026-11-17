@@ -5,6 +5,7 @@ import { auditLog } from '@/lib/admin/audit';
 import { CONFIG_ENV_MAP, SENSITIVE_CONFIG_KEYS } from '@/lib/admin/types';
 import { parseJmapServers, redactJmapServersForAdmin, withStoredClientSecrets } from '@/lib/admin/jmap-servers';
 import { parseDomainBranding } from '@/lib/admin/domain-branding';
+import { ADMIN_ACCOUNTS_INVALID_MESSAGE, configuredServerUrls, sanitizeAdminAccounts } from '@/lib/admin/admin-accounts';
 import { initAdminPassword, isAdminEnabled } from '@/lib/admin/password';
 import { logger } from '@/lib/logger';
 import { hasSessionSecret } from '@/lib/auth/session-secret';
@@ -16,6 +17,21 @@ import { parseNoThirdPartyEnv } from '@/lib/third-party-mode';
 // can warn about a placeholder session secret without us ever returning the
 // raw value to the client.
 const SENSITIVE_PLACEHOLDERS = new Set(['your-secret-key-here']);
+
+/** A key of the settings map itself, never one it inherits (`constructor`, `__proto__`). */
+function isConfigKey(key: string): boolean {
+  return Object.hasOwn(CONFIG_ENV_MAP, key);
+}
+
+/**
+ * The session secret is the key behind every session cookie and the
+ * synced-settings encryption. The dashboard hides its value for a reason;
+ * letting an admin session replace it with a value of its choosing would
+ * hand that session the key, and removing it would sign everyone out and
+ * orphan everything sealed with it. Only the setup wizard writes it, before
+ * any session exists.
+ */
+const SESSION_SECRET_REFUSED = 'sessionSecret cannot be changed from the dashboard. Set SESSION_SECRET in the environment instead.';
 
 /**
  * GET /api/admin/config - Get full config with sources (admin-protected)
@@ -76,21 +92,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Validate keys
-    const validKeys = Object.keys(CONFIG_ENV_MAP);
-    const invalidKeys = Object.keys(updates).filter(k => !validKeys.includes(k));
+    const invalidKeys = Object.keys(updates).filter(k => !isConfigKey(k));
     if (invalidKeys.length > 0) {
       return NextResponse.json({ error: `Unknown config keys: ${invalidKeys.join(', ')}` }, { status: 400 });
     }
 
-    // The session secret is the key behind every session cookie and the
-    // synced-settings encryption. The dashboard hides its value for a reason;
-    // letting an admin session replace it with a value of its choosing would
-    // hand that session the key (and sign everyone else out). Only the setup
-    // wizard writes it, before any session exists.
-    if ('sessionSecret' in updates) {
-      return NextResponse.json({
-        error: 'sessionSecret cannot be changed from the dashboard. Set SESSION_SECRET in the environment instead.',
-      }, { status: 400 });
+    if (Object.hasOwn(updates, 'sessionSecret')) {
+      return NextResponse.json({ error: SESSION_SECRET_REFUSED }, { status: 400 });
     }
 
     // The directory is fetched server-side on the admin's behalf and its JSON
@@ -157,6 +165,23 @@ export async function PATCH(request: NextRequest) {
       updates.jmapServers = sanitized;
     }
 
+    // Admin accounts are each tied to a configured mail server: the ones in
+    // this request if it changes them, the stored ones otherwise.
+    if ('adminAccounts' in updates) {
+      if (!Array.isArray(updates.adminAccounts)) {
+        return NextResponse.json({ error: 'adminAccounts must be an array' }, { status: 400 });
+      }
+      const serverUrls = configuredServerUrls(
+        'jmapServerUrl' in updates ? updates.jmapServerUrl : configManager.get<unknown>('jmapServerUrl', ''),
+        'jmapServers' in updates ? updates.jmapServers : configManager.get<unknown>('jmapServers', []),
+      );
+      const sanitized = sanitizeAdminAccounts(updates.adminAccounts, serverUrls);
+      if (!sanitized) {
+        return NextResponse.json({ error: ADMIN_ACCOUNTS_INVALID_MESSAGE }, { status: 400 });
+      }
+      updates.adminAccounts = sanitized;
+    }
+
     // Normalize domainBranding: drop entries with an invalid/missing host or
     // duplicate hosts before persisting. Each entry's branding field strings
     // are passed through unchanged (URL/string content is the operator's
@@ -220,8 +245,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Key is required' }, { status: 400 });
     }
 
-    if (!CONFIG_ENV_MAP[key]) {
+    if (!isConfigKey(key)) {
       return NextResponse.json({ error: `Unknown config key: ${key}` }, { status: 400 });
+    }
+
+    // Reverting the session secret removes the one the setup wizard stored.
+    if (key === 'sessionSecret') {
+      return NextResponse.json({ error: SESSION_SECRET_REFUSED }, { status: 400 });
     }
 
     const oldValue = configManager.get(key);

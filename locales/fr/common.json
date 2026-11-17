@@ -22,6 +22,7 @@
       "totp_required": "Un code d'authentification à deux facteurs est requis. Veuillez saisir votre code ci-dessous.",
       "totp_invalid": "Code d'authentification invalide. Vérifiez votre application d'authentification.",
       "oauth_discovery_failed": "Le SSO est activé mais le fournisseur d'identité est injoignable. Vérifiez votre configuration OAuth.",
+      "oauth_issuer_mismatch": "La connexion avec ce fournisseur n'est pas configurée correctement. L'administrateur doit définir son adresse d'émetteur (issuer).",
       "token_exchange_failed": "Votre mot de passe et votre code ont été acceptés, mais le serveur de messagerie a refusé d'ouvrir une session pour cette application. Demandez à votre administrateur de vérifier les paramètres de son client OAuth."
     },
     "show_password": "Afficher le mot de passe",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Afficher sur mobile"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Aujourd'hui",
+      "yesterday": "Hier",
+      "last_week": "La semaine dernière",
+      "last_month": "Le mois dernier",
+      "older": "Plus anciens"
+    },
+    "group_by_date": "Regrouper par date",
     "sections": {
       "unread": "Non lus",
       "everything_else": "Tout le reste",
@@ -1081,6 +1090,7 @@
     "templates_menu": "Modèles",
     "insert_template": "Insérer un modèle…",
     "options": "Options",
+    "tags": "Étiquettes",
     "option_plain_text": "Texte brut",
     "option_plain_text_hint": "Envoyer sans mise en forme",
     "option_read_receipt": "Demander un accusé de lecture",
@@ -1282,6 +1292,14 @@
       "edit": "Modifier la description de l'image",
       "plain_text": "[Image : {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Renommer",
+    "rename_named": "Renommer {name}",
+    "rename_menu": "Renommer…",
+    "rename_title": "Renommer la pièce jointe",
+    "rename_invalid_chars": "Les noms de fichier ne peuvent pas contenir / ni \\ ni de caractères de contrôle",
+    "rename_too_long": "Ce nom est trop long"
   },
   "compose_ux": {
     "draft_discarded": "Brouillon supprimé",
@@ -1797,12 +1815,17 @@
       "title": "Étiquettes de messagerie",
       "description": "Créez des étiquettes pour trier vos messages. Les étiquettes sont enregistrées avec vos messages sur le serveur.",
       "add_keyword": "Ajouter une étiquette",
+      "empty": "Aucune étiquette pour le moment.",
       "label_field": "Nom d'affichage",
       "label_placeholder": "ex. Travail, Personnel, Urgent",
       "id_field": "ID d'étiquette",
       "id_placeholder": "ex. travail, personnel",
       "color_field": "Couleur",
-      "id_exists": "Cet ID d'étiquette existe déjà",
+      "custom_color": "Couleur personnalisée",
+      "color_code": "Code couleur",
+      "pick_custom_color": "Choisir une couleur personnalisée",
+      "invalid_color": "Utilisez un code couleur comme #1a73e8.",
+      "name_exists": "Une étiquette porte déjà ce nom",
       "edit": "Éditer l'étiquette",
       "delete": "Supprimer l'étiquette",
       "edit_tag": "Modifier {name}",
@@ -2085,6 +2108,10 @@
         "label": "Texte brut uniquement",
         "description": "Désactiver l'éditeur de texte enrichi et envoyer tous les e-mails en texte brut uniquement, y compris les réponses et les transferts"
       },
+      "reply_under_message": {
+        "label": "Réponses sous le message",
+        "description": "Une réponse ou un transfert s'ouvre sous son message, qui reste lisible au-dessus. Si cette option est désactivée, il occupe tout le panneau de lecture, comme un nouveau message."
+      },
       "quick_reply": {
         "label": "Réponse rapide",
         "description": "Afficher la zone de réponse rapide sous les messages."
@@ -2132,6 +2159,10 @@
       "show_verification_codes": {
         "label": "Afficher les codes de vérification",
         "description": "Proposer le code des e-mails de connexion et de confirmation pour le copier en un clic, dans la liste pendant un jour et dans le message"
+      },
+      "show_attachment_chips": {
+        "label": "Afficher les pièces jointes dans la liste",
+        "description": "Afficher les fichiers joints sous chaque message pour les ouvrir directement depuis la liste. Le trombone reste affiché dans tous les cas."
       },
       "attachment_click_action": {
         "label": "Action au clic sur les pièces jointes",
@@ -2276,6 +2307,10 @@
         "label": "Prise en charge de la saisie de droite à gauche",
         "description": "Ajoute un bouton de direction à la barre d'outils de l'éditeur pour mettre les paragraphes de gauche à droite ou de droite à gauche"
       },
+      "group_by_date": {
+        "label": "Regrouper par date",
+        "description": "Affiche les messages sous des en-têtes de date comme Aujourd'hui, Hier et La semaine dernière. Ne s'applique que lorsque la liste est triée par date."
+      },
       "group_conversations": {
         "label": "Grouper les messages par conversation",
         "description": "Afficher les réponses ensemble, comme une seule conversation, plutôt que comme des messages séparés."
@@ -2376,6 +2411,57 @@
       }
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adresse",
+        "description_column": "Description",
+        "website_column": "Site web",
+        "state": "État",
+        "actions": "Actions",
+        "no_description": "Aucune description",
+        "edit": "Modifier",
+        "close": "Fermer",
+        "pagination": "Pages des adresses masquées",
+        "page": "Page {page} sur {pages}",
+        "previous": "Précédent",
+        "next": "Suivant",
+        "delete": "Supprimer",
+        "delete_title": "Supprimer définitivement l'adresse masquée ?",
+        "delete_warning": "Supprimer {address} ? Cette action est irréversible. Les e-mails envoyés à cette adresse ne seront plus distribués.",
+        "delete_confirm": "Supprimer définitivement",
+        "cancel": "Annuler",
+        "deleted": "Adresse supprimée définitivement.",
+        "deleted_refresh_failed": "Suppression confirmée, mais la liste n'a pas pu être actualisée. Actualisez pour charger la liste à jour.",
+        "delete_forbidden": "Votre session actuelle n'est pas autorisée à supprimer des adresses masquées. Les autres actions autorisées restent disponibles.",
+        "delete_failed": "L'adresse n'a pas été supprimée. Actualisez la liste avant de réessayer.",
+        "delete_unconfirmed": "La suppression n'a pas pu être confirmée. Elle ne sera pas relancée. Actualisez la liste pour vérifier l'adresse avant toute nouvelle suppression.",
+        "title": "Adresses masquées",
+        "intro": "Recevez des e-mails sans communiquer votre adresse principale. Une adresse désactivée refuse les nouveaux e-mails. Ces adresses ne permettent pas d'envoyer des e-mails.",
+        "loading": "Chargement des adresses masquées…",
+        "count": "{count, plural, one {# adresse} other {# adresses}}",
+        "empty": "Aucune adresse masquée pour l'instant.",
+        "website": "Site web (facultatif)",
+        "description": "Description (facultatif)",
+        "no_website": "Non renseigné",
+        "enabled": "Activée",
+        "disabled": "Désactivée",
+        "enable": "Activer",
+        "disable": "Désactiver",
+        "copy": "Copier",
+        "copied": "Adresse copiée.",
+        "copy_failed": "Impossible de copier. Sélectionnez et copiez l'adresse ci-dessus.",
+        "save": "Enregistrer la description",
+        "create": "Créer une adresse masquée",
+        "refresh": "Actualiser",
+        "saved": "Modification enregistrée.",
+        "forbidden": "Votre session actuelle n'est pas autorisée à afficher les adresses masquées.",
+        "unavailable": "Les adresses masquées ne sont pas disponibles pour ce compte ou ce serveur.",
+        "load_failed": "Impossible de charger la liste complète des adresses. Actualisez pour réessayer.",
+        "save_failed": "La modification n'a pas pu être confirmée. Actualisez la liste avant de réessayer.",
+        "create_forbidden": "Le serveur n'a pas autorisé la création d'une adresse masquée avec cette session.",
+        "update_forbidden": "Le serveur n'a pas autorisé la modification des adresses masquées avec cette session. Vous pouvez toujours copier les adresses.",
+        "over_quota": "Le quota d'adresses masquées du serveur est atteint. Les adresses désactivées peuvent encore compter dans la limite.",
+        "rate_limit": "La limite de création du serveur est atteinte. Réessayez plus tard."
+      },
       "title": "Sécurité du compte",
       "description": "Gérez votre mot de passe, l'authentification à deux facteurs et les paramètres de sécurité",
       "detecting": "Détection des capacités du serveur...",
@@ -3354,7 +3440,8 @@
         "description": "Le contour autour du bouton, du lien ou du champ où se trouve le clavier.",
         "normal": "Normal",
         "thick": "Épais",
-        "extra": "Très épais"
+        "extra": "Très épais",
+        "off": "Désactivé"
       },
       "focus_always": {
         "label": "Toujours afficher le focus",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Supprimer le dossier",
     "refresh": "Actualiser",
     "hide_shared_account": "Masquer de la barre latérale",
+    "move_shared_account_up": "Monter",
+    "move_shared_account_down": "Descendre",
     "mute_notifications": "Désactiver les notifications",
     "unmute_notifications": "Réactiver les notifications",
     "mute_account_notifications": "Désactiver les notifications de ce compte",
@@ -5809,6 +5898,13 @@
   "unified_mailbox": {
     "search_unavailable": "La recherche n'est pas disponible dans la vue unifiée"
   },
+  "account_routing": {
+    "group_members_one_account": "Un groupe ne peut contenir que des contacts d'un seul compte.",
+    "link_names_no_account": "Ce lien n'indique pas dans quel compte se trouve le message, il n'a donc pas été ouvert.",
+    "group_member_gone": "L'un des contacts choisis n'existe plus. Choisissez à nouveau les membres.",
+    "invitation_other_account": "Cette invitation se trouve dans un autre compte. Passez à ce compte pour y répondre ou l'ajouter à un calendrier.",
+    "tab_names_no_account": "Cet onglet a été enregistré sans son compte, il n'a donc pas été ouvert. Fermez-le et rouvrez-le depuis le compte auquel il appartient."
+  },
   "mail_import": {
     "menu_import": "Importer des e-mails…",
     "settings_label": "Importer des e-mails",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Pièces jointes des messages gardés et fichiers que vous gardez hors ligne, jusqu'à {total} au total. Les plus anciens partent en premier.",
     "total_locked": "Votre organisation autorise au maximum {size} de pièces jointes et de fichiers.",
     "attachment_cap_label": "Plus grande pièce jointe à garder",
+    "total_cap_label": "Taille totale des pièces jointes conservées",
+    "total_cap_unlimited": "Sans limite",
+    "attachments_description_unlimited": "Pièces jointes des messages conservés et fichiers que vous gardez hors ligne, sans limite de taille totale.",
     "usage_mail": "Messages et index de recherche",
     "usage_attachments": "Pièces jointes",
     "usage_calendar": "Agenda",
@@ -6752,6 +6851,10 @@
         "title": "Vous déconnecter",
         "body": "Vous déconnecter du webmail."
       },
+      "auth_impersonation_return": {
+        "title": "Vous ramener à votre compte",
+        "body": "Quand un administrateur a ouvert une boîte aux lettres par usurpation d'identité, fermer cette session et vous reconnecter au compte d'où elle est partie."
+      },
       "account_read": {
         "title": "Voir vos comptes",
         "body": "Voir les comptes que vous avez ajoutés, avec leurs adresses et leurs serveurs, et savoir quels comptes de messagerie sont des boîtes aux lettres d'équipe."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Se connecter à d'autres sites web",
         "body": "Envoyer des requêtes à ces sites. Tout ce que le plugin peut lire peut y être envoyé :"
+      },
+      "links_check": {
+        "title": "Vérifier les liens que vous ouvrez",
+        "body": "Voir chaque lien web que vous ouvrez, avec son texte, et le bloquer ou ouvrir une autre adresse à la place."
       },
       "admin_config": {
         "title": "Lire ses paramètres définis par votre administrateur",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "Afficher des notifications",
-        "body": "Afficher des notifications sur votre appareil, ou dans l'application si vous ne les avez pas autorisées. Chacune indique le nom du plugin."
+        "body": "Afficher des notifications sur votre appareil, ou dans l'application si vous ne les avez pas autorisées. Chacune indique le nom du plugin. Le plugin voit aussi les notifications que l'application vous affiche."
       },
       "ui_message_list": {
         "title": "Ajouter à la liste des messages",
@@ -7024,6 +7131,14 @@
     "not_available_title": "Cette page n'est pas disponible",
     "not_available_description": "Le plugin qui l'a ajoutée est désactivé ou n'est plus installé.",
     "back_to_mail": "Retour aux emails"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Liste du plugin {name}",
+    "dropdown_list_labelled": "{label}, liste du plugin {name}",
+    "oauth_failed": "Le service n'a pas terminé la connexion. Fermez cette fenêtre et réessayez.",
+    "banners_more": "Autres bannières ({count}) : {names}",
+    "banners_fewer": "Moins de bannières",
+    "opened_by_plugin": "Ouvert par le plugin {name}"
   },
   "command_palette": {
     "title": "Palette de commandes",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "Ajouté depuis l’e-mail « {subject} » de {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Cette annulation a été envoyée depuis {sender}, mais l'organisateur de cet événement dans votre calendrier est {organizer}. Seul l'organisateur peut l'annuler. Supprimez-le vous-même si vous faites confiance à ce message.",
+    "cancel_unverified": "Impossible de vérifier que cette annulation vient de l'organisateur. Supprimez l'événement vous-même si vous faites confiance à ce message.",
+    "card_sender": "de {domain}",
+    "card_sender_title": "Ce message a réussi la vérification de l'expéditeur du serveur de messagerie pour {domain}.",
+    "outside_link": "Autre site",
+    "outside_link_title": "Ce lien mène à {host}, en dehors de {domain}, le domaine de l'expéditeur."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Orthographe",
@@ -7321,6 +7444,8 @@
       "title": "Fenêtres de l'application",
       "double_click_label": "Ouvrir les messages dans une nouvelle fenêtre par double-clic",
       "double_click_description": "Un simple clic ouvre toujours le message à côté de la liste.",
+      "compose_window_label": "Toujours rédiger les messages dans une nouvelle fenêtre",
+      "compose_window_description": "Les nouveaux messages, réponses, transferts et brouillons s'ouvrent dans leur propre fenêtre plutôt que dans la fenêtre principale.",
       "restore_label": "Rouvrir les fenêtres au démarrage",
       "restore_description": "Les fenêtres de messages et de brouillons ouvertes à la fermeture reviennent."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "L'application démarre seule quand vous ouvrez votre session.",
     "start_minimized_label": "Démarrer dans la zone de notification",
     "start_minimized_description": "Aucune fenêtre ne s'ouvre à l'ouverture de session. Ouvrez-la avec l'icône de la zone de notification.",
+    "reopen_after_restart_label": "Rouvrir après un redémarrage",
+    "reopen_after_restart_description": "Si l'application est ouverte quand l'ordinateur redémarre ou que vous vous déconnectez, elle se rouvre à votre prochaine connexion, sur le même dossier, message ou page.",
     "attention_label": "Faire clignoter la barre des tâches à l'arrivée de courrier",
     "attention_mac_label": "Faire rebondir l'icône du Dock à l'arrivée de courrier",
     "attention_description": "Seulement quand l'application n'est pas au premier plan.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Suivi",
     "unstarred": "Suivi retiré"
+  },
+  "impersonation": {
+    "return_notice": "Vous avez ouvert {mailbox} par usurpation d'identité.",
+    "return_button": "Revenir à mon compte"
+  },
+  "admin_access": {
+    "label": "Les superutilisateurs de ce serveur peuvent ouvrir le tableau de bord d’administration",
+    "help": "Les superutilisateurs de ce serveur se connectent au tableau de bord d’administration sans le mot de passe administrateur, comme ceux du serveur JMAP principal. N’activez cette option que pour un serveur que vous gérez vous-même."
   }
 }

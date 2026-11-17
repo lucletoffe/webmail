@@ -42,7 +42,8 @@ vi.mock('@/hooks/use-config', () => ({ useConfig: () => ({ appName: 'Mail' }) })
 vi.mock('@/hooks/use-identity-sync', () => ({ useIdentitySync: () => {} }));
 vi.mock('@/hooks/use-pro-multi-account-identities', () => ({
   useProMultiAccountIdentities: () => [],
-  cachedIdentitiesForAccount: () => undefined,
+  // Fetched already, as the mocked hook leaves them: a sender's avatar asks for no identities here.
+  cachedIdentitiesForAccount: () => [],
 }));
 vi.mock('@/hooks/use-pro-multi-account-mailboxes', () => ({ useProMultiAccountMailboxes: () => {} }));
 vi.mock('@/hooks/use-wopi-status', () => ({ useWopiStatus: () => null, canWopiOpen: () => false }));
@@ -774,7 +775,9 @@ async function openProMessage(route: typeof proRoutes[number], action: ProBlobAc
     accountMailboxes: { 'login-primary': [primaryMailbox, sharedMailbox], 'login-other': [primaryMailbox, sharedMailbox] },
   });
   if (route.unified || route.emailTab) {
-    render(<ProEmailTabBody tabId="reader" data={{ accountId: route.owner, clientAccountId: route.emailTab ? 'login-other' : undefined, emailId: full.id, mailboxId: '__unified_inbox__', title: full.subject! }} />);
+    // The unified list opens a row's tab with the login the row names, as
+    // the list's open handler does.
+    render(<ProEmailTabBody tabId="reader" data={{ accountId: route.owner, clientAccountId: 'login-other', emailId: full.id, mailboxId: '__unified_inbox__', title: full.subject! }} />);
   } else {
     const mailbox = route.owner === 'nrichmond' ? sharedMailbox : primaryMailbox;
     vi.spyOn(origin, 'getEmails').mockResolvedValue({ emails: [full], total: 1, hasMore: false });
@@ -856,7 +859,7 @@ describe('Pro blob routing', () => {
     vi.spyOn(b, 'getEmail').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const wrongClient = vi.spyOn(a, 'getEmail');
     useEmailStore.setState({ emails: [message({ sourceClientAccountId: 'login-other', sourceAccountId: 'nrichmond' })], selectedEmail: null, isUnifiedView: true });
-    render(<ProEmailTabBody tabId="reader" data={{ accountId: 'nrichmond', emailId: 'email', mailboxId: null, title: 'Loading' }} />);
+    render(<ProEmailTabBody tabId="reader" data={{ accountId: 'nrichmond', clientAccountId: 'login-other', emailId: 'email', mailboxId: null, title: 'Loading' }} />);
     await waitFor(() => expect(b.getEmail).toHaveBeenCalledWith('email', 'nrichmond'));
     act(() => {
       useEmailStore.setState({ emails: [], selectedEmail: message({ id: 'unrelated' }), isUnifiedView: false, selectedMailbox: 'inbox' });

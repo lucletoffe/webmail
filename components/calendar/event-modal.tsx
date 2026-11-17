@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, useId } from "react";
 import { useCloseBesideControls } from "@/hooks/use-close-beside-controls";
 import { useTranslations, useLocale } from "next-intl";
 import { toast } from "@/stores/toast-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeField } from "@/components/ui/time-field";
 import { LinkifiedText } from "@/components/ui/linkified-text";
 import { X, Trash2, Users, CalendarDays, CopyPlus, Pencil, Clock, MapPin, Video, Repeat, Bell, AlignLeft, AlertTriangle, MoreVertical } from "@/components/icons";
 import { IconButton } from "@/components/ui/icon-button";
@@ -43,6 +44,7 @@ import { useAccountStore } from "@/stores/account-store";
 import { useCalendarStore } from "@/stores/calendar-store";
 import { changesWhen, type EditorAttendee, type EventEditorState } from "@/lib/recurrence-scope-edit";
 import { PluginSlot } from "@/components/plugins/plugin-slot";
+import { linkCallback } from "@/lib/plugin-sandbox/slot-callbacks";
 import { useSettingsStore } from "@/stores/settings-store";
 import { generateUUID } from "@/lib/utils";
 import { isUndustMeetEnabled, reserveUndustMeetRoom, UndustMeetError } from "@/lib/undust-meet";
@@ -1148,6 +1150,10 @@ export function EventModal({
     };
   }, [isMobile]);
 
+  const saveRef = useRef(handleSave);
+  useLayoutEffect(() => {
+    saveRef.current = handleSave;
+  });
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -1160,12 +1166,15 @@ export function EventModal({
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        if (canEditBody) handleSave();
+        // A time field hands on its typed time on this Enter, and React
+        // renders it in a microtask queued before this one: save after that,
+        // not with the time from before it.
+        if (canEditBody) queueMicrotask(() => void saveRef.current());
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [requestClose, backToView, handleSave, canEditBody, mode, isEdit]);
+  }, [requestClose, backToView, canEditBody, mode, isEdit]);
 
   const hasParticipants = attendees.length > 0 || (event?.participants && Object.keys(event.participants).length > 0);
 
@@ -1479,11 +1488,10 @@ export function EventModal({
             {!allDay && (
               <div>
                 <label htmlFor={labelFor("start_time")} className="text-sm font-medium mb-1 block">{t("form.start_time")}</label>
-                <input
+                <TimeField
                   id={labelFor("start_time")}
-                  type="time"
                   value={startTime}
-                  onChange={(e) => handleStartTimeChange(e.target.value)}
+                  onChange={handleStartTimeChange}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-hidden"
                 />
               </div>
@@ -1501,11 +1509,10 @@ export function EventModal({
             {!allDay && (
               <div>
                 <label htmlFor={labelFor("end_time")} className="text-sm font-medium mb-1 block">{t("form.end_time")}</label>
-                <input
+                <TimeField
                   id={labelFor("end_time")}
-                  type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={setEndTime}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-hidden"
                 />
               </div>
@@ -1690,7 +1697,10 @@ export function EventModal({
                   uid: event?.uid,
                   attendees: attendees.map((a) => a.email),
                 },
-                setVirtualLocation,
+                // The plugin's frame calls this with whatever it sends: only an
+                // http(s) link that fits the field goes in; anything else is
+                // ignored, and the plugin is answered false.
+                setVirtualLocation: linkCallback(setVirtualLocation, 2000),
               }}
             />
           </div>

@@ -21,6 +21,7 @@
       "generic": "Notikusi neparedzēta kļūda. Ja tā atkārtojas, sazinieties ar administratoru.",
       "totp_invalid": "Nepareizs autentifikācijas kods. Pārbaudiet lietotni un mēģiniet vēlreiz.",
       "oauth_discovery_failed": "SSO ir iespējots, bet autentifikācijas pakalpojums nav pieejams. Pārbaudiet OAuth iestatījumus.",
+      "oauth_issuer_mismatch": "Pieteikšanās ar šo pakalpojumu sniedzēju nav pareizi iestatīta. Administratoram jānorāda tā izdevēja (issuer) adrese.",
       "token_exchange_failed": "Parole un kods tika pieņemti, taču pasta serveris atteicās sākt sesiju šai lietotnei. Lūdziet administratoram pārbaudīt OAuth klienta iestatījumus.",
       "totp_required": "Nepieciešams divu faktoru autentifikācijas kods. Lūdzu, ievadiet kodu zemāk."
     },
@@ -338,6 +339,14 @@
     "show_on_mobile": "Rādīt mobilajā ierīcē"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Šodien",
+      "yesterday": "Vakar",
+      "last_week": "Pagājušajā nedēļā",
+      "last_month": "Pagājušajā mēnesī",
+      "older": "Vecākas"
+    },
+    "group_by_date": "Grupēt pēc datuma",
     "sections": {
       "unread": "Nelasītie",
       "everything_else": "Viss pārējais",
@@ -1081,6 +1090,7 @@
     "templates_menu": "Veidnes",
     "insert_template": "Ievietot veidni…",
     "options": "Opcijas",
+    "tags": "Tagi",
     "option_plain_text": "Vienkāršs teksts",
     "option_plain_text_hint": "Sūtīt bez formatējuma",
     "option_read_receipt": "Pieprasīt izlasīšanas apstiprinājumu",
@@ -1282,6 +1292,14 @@
       "edit": "Rediģēt attēla aprakstu",
       "plain_text": "[Attēls: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Pārdēvēt",
+    "rename_named": "Pārdēvēt {name}",
+    "rename_menu": "Pārdēvēt…",
+    "rename_title": "Pārdēvēt pielikumu",
+    "rename_invalid_chars": "Faila nosaukumā nedrīkst būt / vai \\ vai vadības rakstzīmes",
+    "rename_too_long": "Šis nosaukums ir pārāk garš"
   },
   "compose_ux": {
     "draft_discarded": "Melnraksts atmests",
@@ -1797,12 +1815,17 @@
       "title": "E-pasta tagi",
       "description": "Izveidojiet tagus, lai kārtotu vēstules. Tagi tiek saglabāti kopā ar vēstulēm serverī.",
       "add_keyword": "Pievienot tagu",
+      "empty": "Tagu vēl nav.",
       "label_field": "Redzamais nosaukums",
       "label_placeholder": "piem., Darbs, Personīgi, Steidzami",
       "id_field": "Taga identifikators",
       "id_placeholder": "piem., darbs, personigi",
       "color_field": "Krāsa",
-      "id_exists": "Šāds taga identifikators jau pastāv",
+      "custom_color": "Pielāgota krāsa",
+      "color_code": "Krāsas kods",
+      "pick_custom_color": "Izvēlēties pielāgotu krāsu",
+      "invalid_color": "Izmantojiet krāsas kodu, piemēram, #1a73e8.",
+      "name_exists": "Birka ar šādu nosaukumu jau pastāv",
       "edit": "Rediģēt tagu",
       "delete": "Dzēst tagu",
       "edit_tag": "Rediģēt {name}",
@@ -2085,6 +2108,10 @@
         "label": "Tikai parasts teksts",
         "description": "Izslēgt formatētā teksta redaktoru un sūtīt vēstules tikai kā parastu tekstu"
       },
+      "reply_under_message": {
+        "label": "Atbildes zem ziņas",
+        "description": "Atbilde vai pārsūtīšana atveras zem savas ziņas, kas virs tās paliek salasāma. Ja izslēgts, tā aizņem visu lasīšanas rūti kā jauna ziņa."
+      },
       "quick_reply": {
         "label": "Ātrā atbilde",
         "description": "Rādīt ātrās atbildes lauku zem ziņojumiem."
@@ -2132,6 +2159,10 @@
       "show_verification_codes": {
         "label": "Rādīt verifikācijas kodus",
         "description": "Piedāvāt kodu no pieteikšanās un apstiprinājuma e-pastiem kopēšanai ar vienu klikšķi, sarakstā vienu dienu un ziņojumā"
+      },
+      "show_attachment_chips": {
+        "label": "Rādīt pielikumus sarakstā",
+        "description": "Rādīt pievienotos failus zem katras vēstules, lai tos varētu atvērt tieši no saraksta. Saspraudes ikona tiek rādīta jebkurā gadījumā."
       },
       "attachment_click_action": {
         "label": "Darbība, noklikšķinot uz pielikuma",
@@ -2276,6 +2307,10 @@
         "label": "Rakstīšanas no labās uz kreiso atbalsts",
         "description": "Pievieno redaktora rīkjoslai virziena pogu, ar kuru rindkopas var iestatīt no kreisās uz labo vai no labās uz kreiso"
       },
+      "group_by_date": {
+        "label": "Grupēt pēc datuma",
+        "description": "Rādīt ziņojumus zem datuma virsrakstiem, piemēram, Šodien, Vakar un Pagājušajā nedēļā. Attiecas tikai tad, ja saraksts ir kārtots pēc datuma."
+      },
       "group_conversations": {
         "label": "Grupēt ziņas pēc sarunas",
         "description": "Rādīt atbildes kopā kā vienu sarunu, nevis kā atsevišķas ziņas."
@@ -2376,6 +2411,57 @@
       }
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adrese",
+        "description_column": "Apraksts",
+        "website_column": "Vietne",
+        "state": "Stāvoklis",
+        "actions": "Darbības",
+        "no_description": "Nav apraksta",
+        "edit": "Rediģēt",
+        "close": "Aizvērt",
+        "pagination": "Maskēto adrešu lapas",
+        "page": "{page}. lapa no {pages}",
+        "previous": "Iepriekšējā",
+        "next": "Nākamā",
+        "delete": "Dzēst",
+        "delete_title": "Neatgriezeniski dzēst maskēto adresi?",
+        "delete_warning": "Dzēst {address}? To nevar atsaukt. Uz šo adresi sūtītās vēstules vairs netiks piegādātas.",
+        "delete_confirm": "Dzēst neatgriezeniski",
+        "cancel": "Atcelt",
+        "deleted": "Adrese ir neatgriezeniski izdzēsta.",
+        "deleted_refresh_failed": "Dzēšana apstiprināta, bet sarakstu neizdevās atsvaidzināt. Atsvaidziniet, lai ielādētu pašreizējo sarakstu.",
+        "delete_forbidden": "Jūsu pašreizējai sesijai nav atļauts dzēst maskētās adreses. Citas atļautās darbības joprojām ir pieejamas.",
+        "delete_failed": "Adrese netika izdzēsta. Pirms mēģināt vēlreiz, atsvaidziniet sarakstu.",
+        "delete_unconfirmed": "Dzēšanu neizdevās apstiprināt. Tā netiks atkārtota. Pirms turpmākas dzēšanas atsvaidziniet sarakstu un pārbaudiet adresi.",
+        "title": "Maskētās adreses",
+        "intro": "Saņemiet vēstules, neizpaužot savu galveno adresi. Atspējota adrese noraida jaunas vēstules. Šīs adreses nevar izmantot vēstuļu sūtīšanai.",
+        "loading": "Ielādē maskētās adreses…",
+        "count": "{count, plural, zero {# adrešu} one {# adrese} other {# adreses}}",
+        "empty": "Vēl nav maskēto adrešu.",
+        "website": "Vietne (neobligāti)",
+        "description": "Apraksts (neobligāti)",
+        "no_website": "Nav norādīta",
+        "enabled": "Iespējota",
+        "disabled": "Atspējota",
+        "enable": "Iespējot",
+        "disable": "Atspējot",
+        "copy": "Kopēt",
+        "copied": "Adrese nokopēta.",
+        "copy_failed": "Neizdevās nokopēt. Atlasiet un nokopējiet adresi augstāk.",
+        "save": "Saglabāt aprakstu",
+        "create": "Izveidot maskēto adresi",
+        "refresh": "Atsvaidzināt",
+        "saved": "Izmaiņas saglabātas.",
+        "forbidden": "Jūsu pašreizējai sesijai nav atļauts skatīt maskēto adrešu sarakstu.",
+        "unavailable": "Maskētās adreses šim kontam vai serverim nav pieejamas.",
+        "load_failed": "Neizdevās ielādēt pilnu adrešu sarakstu. Atsvaidziniet, lai mēģinātu vēlreiz.",
+        "save_failed": "Izmaiņas neizdevās apstiprināt. Pirms mēģināt vēlreiz, atsvaidziniet sarakstu.",
+        "create_forbidden": "Serveris neatļāva ar šo sesiju izveidot maskēto adresi.",
+        "update_forbidden": "Serveris neatļāva ar šo sesiju rediģēt maskētās adreses. Adreses joprojām varat kopēt.",
+        "over_quota": "Sasniegta servera maskēto adrešu kvota. Atspējotās adreses joprojām var tikt ieskaitītas limitā.",
+        "rate_limit": "Sasniegts servera izveides ātruma limits. Mēģiniet vēlāk vēlreiz."
+      },
       "title": "Konta drošība",
       "description": "Pārvaldiet paroli, 2FA un drošības iestatījumus",
       "detecting": "Nosaka servera iespējas...",
@@ -3354,7 +3440,8 @@
         "description": "Apvadījums ap pogu, saiti vai lauku, kurā atrodas tastatūra.",
         "normal": "Parasts",
         "thick": "Biezs",
-        "extra": "Ļoti biezs"
+        "extra": "Ļoti biezs",
+        "off": "Izslēgts"
       },
       "focus_always": {
         "label": "Vienmēr rādīt fokusu",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Dzēst mapi",
     "refresh": "Atjaunināt",
     "hide_shared_account": "Paslēpt no sānjoslas",
+    "move_shared_account_up": "Pārvietot uz augšu",
+    "move_shared_account_down": "Pārvietot uz leju",
     "mute_notifications": "Izslēgt paziņojumus",
     "unmute_notifications": "Ieslēgt paziņojumus",
     "mute_account_notifications": "Izslēgt šī konta paziņojumus",
@@ -5809,6 +5898,13 @@
   "unified_mailbox": {
     "search_unavailable": "Meklēšana nav pieejama apvienotajā skatā"
   },
+  "account_routing": {
+    "group_members_one_account": "Grupā var būt tikai viena konta kontakti.",
+    "link_names_no_account": "Šī saite nenorāda, kurā kontā ir ziņojums, tāpēc tā netika atvērta.",
+    "group_member_gone": "Viens no izvēlētajiem kontaktiem vairs nepastāv. Izvēlieties dalībniekus vēlreiz.",
+    "invitation_other_account": "Šis uzaicinājums ir citā kontā. Pārslēdzieties uz to kontu, lai uz to atbildētu vai pievienotu to kalendāram.",
+    "tab_names_no_account": "Šī cilne tika saglabāta bez sava konta, tāpēc tā netika atvērta. Aizveriet to un atveriet vēlreiz no konta, kuram tā pieder."
+  },
   "mail_import": {
     "menu_import": "Importēt pastu…",
     "settings_label": "Importēt pastu",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Glabāto vēstuļu pielikumi un faili, ko glabājat bezsaistē, kopā līdz {total}. Vecākie tiek noņemti pirmie.",
     "total_locked": "Jūsu organizācija atļauj ne vairāk kā {size} pielikumu un failu.",
     "attachment_cap_label": "Lielākais glabājamais pielikums",
+    "total_cap_label": "Saglabāto pielikumu kopējais izmērs",
+    "total_cap_unlimited": "Bez ierobežojuma",
+    "attachments_description_unlimited": "Saglabāto ziņojumu pielikumi un faili, ko glabājat bezsaistē, bez kopējā izmēra ierobežojuma.",
     "usage_mail": "Vēstules un meklēšanas indekss",
     "usage_attachments": "Pielikumi",
     "usage_calendar": "Kalendārs",
@@ -6752,6 +6851,10 @@
         "title": "Izrakstīt jūs",
         "body": "Izrakstīt jūs no webmail."
       },
+      "auth_impersonation_return": {
+        "title": "Atgriezt jūs jūsu kontā",
+        "body": "Kad administrators ir atvēris pastkasti, uzdodoties par lietotāju, beigt šo sesiju un atkal pierakstīties kontā, no kura tā sākās."
+      },
       "account_read": {
         "title": "Redzēt jūsu kontus",
         "body": "Redzēt jūsu pievienotos kontus ar to adresēm un serveriem, kā arī to, kuri pasta konti ir komandu pastkastes."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Savienoties ar citām vietnēm",
         "body": "Sūtīt pieprasījumus uz šīm vietnēm. Uz turieni var nosūtīt visu, ko spraudnis var nolasīt:"
+      },
+      "links_check": {
+        "title": "Pārbaudīt saites, ko atverat",
+        "body": "Redzēt katru tīmekļa saiti, ko atverat, kopā ar tās tekstu, un apturēt to vai tās vietā atvērt citu adresi."
       },
       "admin_config": {
         "title": "Lasīt savus iestatījumus no administratora",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "Rādīt paziņojumus",
-        "body": "Rādīt paziņojumus jūsu ierīcē vai lietotnē, ja neesat tos atļāvis. Katrā ir spraudņa nosaukums."
+        "body": "Rādīt paziņojumus jūsu ierīcē vai lietotnē, ja neesat tos atļāvis. Katrā ir spraudņa nosaukums. Spraudnis redz arī paziņojumus, ko jums rāda lietotne."
       },
       "ui_message_list": {
         "title": "Papildināt vēstuļu sarakstu",
@@ -7024,6 +7131,14 @@
     "not_available_title": "Šī lapa nav pieejama",
     "not_available_description": "Spraudnis, kas to pievienoja, ir izslēgts vai vairs nav instalēts.",
     "back_to_mail": "Atgriezties pie pasta"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Saraksts no spraudņa {name}",
+    "dropdown_list_labelled": "{label}, saraksts no spraudņa {name}",
+    "oauth_failed": "Pakalpojums nepabeidza pierakstīšanos. Aizveriet šo logu un mēģiniet vēlreiz.",
+    "banners_more": "Vairāk reklāmjoslu ({count}): {names}",
+    "banners_fewer": "Mazāk reklāmjoslu",
+    "opened_by_plugin": "Atvēra spraudnis {name}"
   },
   "command_palette": {
     "title": "Komandu palete",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "Pievienots no {domain} e-pasta “{subject}”"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Šo atcelšanu nosūtīja {sender}, bet pasākuma organizators jūsu kalendārā ir {organizer}. Atcelt to var tikai organizators. Ja uzticaties šim ziņojumam, noņemiet to pats.",
+    "cancel_unverified": "Neizdevās pārbaudīt, vai šī atcelšana nāk no organizatora. Ja uzticaties šim ziņojumam, noņemiet pasākumu pats.",
+    "card_sender": "no {domain}",
+    "card_sender_title": "Šis ziņojums izturēja pasta servera sūtītāja pārbaudi domēnam {domain}.",
+    "outside_link": "Cita vietne",
+    "outside_link_title": "Šī saite ved uz {host}, ārpus sūtītāja domēna {domain}."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Pareizrakstība",
@@ -7321,6 +7444,8 @@
       "title": "Lietotnes logi",
       "double_click_label": "Atvērt ziņojumus jaunā logā ar dubultklikšķi",
       "double_click_description": "Viens klikšķis joprojām atver ziņojumu blakus sarakstam.",
+      "compose_window_label": "Vienmēr rakstīt ziņojumus jaunā logā",
+      "compose_window_description": "Jauni ziņojumi, atbildes, pārsūtījumi un melnraksti tiek atvērti atsevišķā logā, nevis galvenajā logā.",
       "restore_label": "Startējot atkal atvērt logus",
       "restore_description": "Ziņojumu un melnrakstu logi, kas bija atvērti izejot, atgriežas."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "Lietotne sākas pati, kad piesakāties.",
     "start_minimized_label": "Sākt teknē",
     "start_minimized_description": "Piesakoties logs neatveras. Atveriet to ar teknes ikonu.",
+    "reopen_after_restart_label": "Atvērt atkārtoti pēc restartēšanas",
+    "reopen_after_restart_description": "Ja lietotne ir atvērta, kad dators tiek restartēts vai jūs izrakstāties, tā atkal tiek atvērta, kad pierakstāties, tajā pašā mapē, ziņojumā vai lapā.",
     "attention_label": "Mirgot uzdevumjoslā, pienākot pastam",
     "attention_mac_label": "Lēkāt Dock ikonai, pienākot pastam",
     "attention_description": "Tikai tad, ja lietotne nav priekšplānā.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Atzīmēts ar zvaigznīti",
     "unstarred": "Zvaigznīte noņemta"
+  },
+  "impersonation": {
+    "return_notice": "Jūs atvērāt {mailbox}, uzdodoties par lietotāju.",
+    "return_button": "Atgriezties manā kontā"
+  },
+  "admin_access": {
+    "label": "Šī servera superlietotāji var atvērt administrēšanas paneli",
+    "help": "Šī servera superlietotāji piesakās administrēšanas panelī bez administratora paroles, tāpat kā galvenā JMAP servera superlietotāji. Ieslēdziet to tikai serverim, ko uzturat paši."
   }
 }

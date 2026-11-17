@@ -57,7 +57,9 @@ export function MessageListSettings() {
     searchDefaultScope,
     showPreview,
     showVerificationCodes,
+    showAttachmentChips,
     disableThreading,
+    groupListByDate,
     emailsPerPage,
     archiveMode,
     hoverActions,
@@ -154,6 +156,19 @@ export function MessageListSettings() {
           />
         </SettingItem>
 
+        {!isSettingHidden('groupListByDate') && (
+        <SettingItem
+          label={t('group_by_date.label')}
+          description={t('group_by_date.description')}
+          locked={isSettingLocked('groupListByDate')}
+        >
+          <ToggleSwitch
+            checked={groupListByDate}
+            onChange={(checked) => updateSetting('groupListByDate', checked)}
+          />
+        </SettingItem>
+        )}
+
         {!isSettingHidden('showPreview') && (
         <SettingItem
           label={t('show_preview.label')}
@@ -208,6 +223,19 @@ export function MessageListSettings() {
             onChange={(checked) => updateSetting('showVerificationCodes', checked)}
           />
         </SettingItem>
+
+        {!isSettingHidden('showAttachmentChips') && (
+        <SettingItem
+          label={t('show_attachment_chips.label')}
+          description={t('show_attachment_chips.description')}
+          locked={isSettingLocked('showAttachmentChips')}
+        >
+          <ToggleSwitch
+            checked={showAttachmentChips}
+            onChange={(checked) => updateSetting('showAttachmentChips', checked)}
+          />
+        </SettingItem>
+        )}
 
         <PrivacyLinkRow topic="senders" />
       </SettingsSection>

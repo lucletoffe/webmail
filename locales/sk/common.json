@@ -22,6 +22,7 @@
       "totp_required": "Je vyžadovaný kód dvojfaktorového overenia. Zadajte kód nižšie.",
       "totp_invalid": "Neplatný overovací kód. Skontrolujte svoju overovaciu aplikáciu a skúste znova.",
       "oauth_discovery_failed": "SSO je povolené, ale poskytovateľa identity sa nepodarilo dosiahnuť. Skontrolujte konfiguráciu OAuth.",
+      "oauth_issuer_mismatch": "Prihlásenie cez tohto poskytovateľa nie je správne nastavené. Správca musí nastaviť jeho adresu vydavateľa (issuer).",
       "token_exchange_failed": "Heslo a kód boli prijaté, ale poštový server odmietol pre túto aplikáciu spustiť reláciu. Požiadajte správcu o kontrolu nastavení klienta OAuth."
     },
     "show_password": "Zobraziť heslo",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Zobraziť na mobile"
   },
   "email_list": {
+    "date_groups": {
+      "today": "Dnes",
+      "yesterday": "Včera",
+      "last_week": "Minulý týždeň",
+      "last_month": "Minulý mesiac",
+      "older": "Staršie"
+    },
+    "group_by_date": "Zoskupiť podľa dátumu",
     "sections": {
       "unread": "Neprečítané",
       "everything_else": "Všetko ostatné",
@@ -1084,6 +1093,7 @@
     "templates_menu": "Šablóny",
     "insert_template": "Vložiť šablónu…",
     "options": "Možnosti",
+    "tags": "Štítky",
     "option_plain_text": "Obyčajný text",
     "option_plain_text_hint": "Odoslať bez formátovania",
     "option_read_receipt": "Vyžiadať potvrdenie o prečítaní",
@@ -1282,6 +1292,14 @@
       "edit": "Upraviť popis obrázka",
       "plain_text": "[Obrázok: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Premenovať",
+    "rename_named": "Premenovať {name}",
+    "rename_menu": "Premenovať…",
+    "rename_title": "Premenovať prílohu",
+    "rename_invalid_chars": "Názvy súborov nesmú obsahovať / ani \\ ani riadiace znaky",
+    "rename_too_long": "Tento názov je príliš dlhý"
   },
   "compose_ux": {
     "draft_discarded": "Koncept zahodený",
@@ -1800,12 +1818,17 @@
       "title": "E-mailové štítky",
       "description": "Vytvorte štítky na triedenie správ. Štítky sa ukladajú so správami na serveri.",
       "add_keyword": "Pridať štítok",
+      "empty": "Zatiaľ nemáte žiadne štítky.",
       "label_field": "Zobrazovaný názov",
       "label_placeholder": "napr. Práca, Osobné, Naliehavé",
       "id_field": "ID štítku",
       "id_placeholder": "napr. praca, osobne",
       "color_field": "Farba",
-      "id_exists": "Toto ID štítku už existuje",
+      "custom_color": "Vlastná farba",
+      "color_code": "Kód farby",
+      "pick_custom_color": "Vybrať vlastnú farbu",
+      "invalid_color": "Zadajte kód farby, napríklad #1a73e8.",
+      "name_exists": "Štítok s týmto názvom už existuje",
       "edit": "Upraviť štítok",
       "delete": "Odstrániť štítok",
       "edit_tag": "Upraviť {name}",
@@ -2093,9 +2116,17 @@
         "label": "Zobrazovať overovacie kódy",
         "description": "Ponúkať kód z prihlasovacích a potvrdzovacích e-mailov na skopírovanie jedným kliknutím, v zozname počas jedného dňa a v správe"
       },
+      "show_attachment_chips": {
+        "label": "Zobraziť prílohy v zozname",
+        "description": "Zobrazovať priložené súbory pod každou správou, aby sa dali otvoriť priamo zo zoznamu. Ikona spinky sa zobrazuje vždy."
+      },
       "plain_text_mode": {
         "label": "Iba prostý text",
         "description": "Zakázať editor formátovaného textu a odosielať všetky e-maily iba ako prostý text"
+      },
+      "reply_under_message": {
+        "label": "Odpovede pod správou",
+        "description": "Odpoveď alebo preposlanie sa otvorí pod svojou správou, ktorá nad ňou zostane čitateľná. Keď je vypnuté, zaberie celý panel čítania ako nová správa."
       },
       "quick_reply": {
         "label": "Rýchla odpoveď",
@@ -2279,6 +2310,10 @@
         "label": "Podpora písania sprava doľava",
         "description": "Pridá do panela nástrojov editora tlačidlo smeru textu, ktorým možno odseky nastaviť zľava doprava alebo sprava doľava"
       },
+      "group_by_date": {
+        "label": "Zoskupiť podľa dátumu",
+        "description": "Zobrazí správy pod hlavičkami dátumu, ako Dnes, Včera a Minulý týždeň. Platí len vtedy, keď je zoznam zoradený podľa dátumu."
+      },
       "group_conversations": {
         "label": "Zoskupovať správy podľa konverzácie",
         "description": "Zobrazovať odpovede spolu ako jednu konverzáciu namiesto samostatných správ."
@@ -2383,6 +2418,57 @@
       "managing": "Správa: {name}"
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adresa",
+        "description_column": "Popis",
+        "website_column": "Web",
+        "state": "Stav",
+        "actions": "Akcie",
+        "no_description": "Bez popisu",
+        "edit": "Upraviť",
+        "close": "Zavrieť",
+        "pagination": "Stránky maskovaných adries",
+        "page": "Strana {page} z {pages}",
+        "previous": "Predchádzajúca",
+        "next": "Ďalšia",
+        "delete": "Odstrániť",
+        "delete_title": "Natrvalo odstrániť maskovanú adresu?",
+        "delete_warning": "Odstrániť {address}? Túto akciu nie je možné vrátiť späť. Pošta odoslaná na túto adresu už nebude doručená.",
+        "delete_confirm": "Natrvalo odstrániť",
+        "cancel": "Zrušiť",
+        "deleted": "Adresa bola natrvalo odstránená.",
+        "deleted_refresh_failed": "Odstránenie bolo potvrdené, ale zoznam sa nepodarilo obnoviť. Obnovte ho, aby sa načítal aktuálny zoznam.",
+        "delete_forbidden": "Vaša aktuálna relácia nemá povolenie odstraňovať maskované adresy. Ostatné povolené akcie zostávajú dostupné.",
+        "delete_failed": "Adresa nebola odstránená. Skôr ako to skúsite znova, obnovte zoznam.",
+        "delete_unconfirmed": "Odstránenie sa nepodarilo potvrdiť. Nebude sa opakovať. Pred ďalším odstraňovaním obnovte zoznam a skontrolujte adresu.",
+        "title": "Maskované adresy",
+        "intro": "Prijímajte poštu bez toho, aby ste zdieľali svoju hlavnú adresu. Vypnutá adresa odmieta novú poštu. Z týchto adries nie je možné poštu odosielať.",
+        "loading": "Načítavajú sa maskované adresy…",
+        "count": "{count, plural, one {# adresa} few {# adresy} many {# adresy} other {# adries}}",
+        "empty": "Zatiaľ žiadne maskované adresy.",
+        "website": "Web (voliteľné)",
+        "description": "Popis (voliteľné)",
+        "no_website": "Neuvedené",
+        "enabled": "Zapnutá",
+        "disabled": "Vypnutá",
+        "enable": "Zapnúť",
+        "disable": "Vypnúť",
+        "copy": "Kopírovať",
+        "copied": "Adresa bola skopírovaná.",
+        "copy_failed": "Kopírovanie zlyhalo. Označte a skopírujte adresu vyššie.",
+        "save": "Uložiť popis",
+        "create": "Vytvoriť maskovanú adresu",
+        "refresh": "Obnoviť",
+        "saved": "Zmena bola uložená.",
+        "forbidden": "Vaša aktuálna relácia nemá povolenie zobraziť maskované adresy.",
+        "unavailable": "Maskované adresy nie sú pre tento účet alebo server k dispozícii.",
+        "load_failed": "Úplný zoznam adries sa nepodarilo načítať. Obnovte ho a skúste to znova.",
+        "save_failed": "Zmenu sa nepodarilo potvrdiť. Skôr ako to skúsite znova, obnovte zoznam.",
+        "create_forbidden": "Server v tejto relácii nepovolil vytvoriť maskovanú adresu.",
+        "update_forbidden": "Server v tejto relácii nepovolil upravovať maskované adresy. Adresy môžete naďalej kopírovať.",
+        "over_quota": "Dosiahli ste kvótu maskovaných adries na serveri. Vypnuté adresy sa do limitu môžu stále započítavať.",
+        "rate_limit": "Dosiahli ste limit servera na vytváranie adries. Skúste to neskôr."
+      },
       "title": "Zabezpečenie účtu",
       "description": "Správa hesla, dvojfaktorového overenia a nastavení zabezpečenia",
       "detecting": "Zisťovanie možností servera...",
@@ -3354,7 +3440,8 @@
         "description": "Rámik okolo tlačidla, odkazu alebo poľa, na ktorom je klávesnica.",
         "normal": "Normálny",
         "thick": "Hrubý",
-        "extra": "Veľmi hrubý"
+        "extra": "Veľmi hrubý",
+        "off": "Vypnuté"
       },
       "focus_always": {
         "label": "Vždy zobrazovať zameranie",
@@ -3921,6 +4008,8 @@
     "delete_folder": "Zmazať priečinok",
     "refresh": "Obnoviť",
     "hide_shared_account": "Skryť z bočného panela",
+    "move_shared_account_up": "Posunúť nahor",
+    "move_shared_account_down": "Posunúť nadol",
     "mute_notifications": "Stlmiť upozornenia",
     "unmute_notifications": "Zapnúť upozornenia",
     "mute_account_notifications": "Stlmiť upozornenia tohto účtu",
@@ -6078,6 +6167,13 @@
   "unified_mailbox": {
     "search_unavailable": "Vyhľadávanie nie je v zjednotenom zobrazení k dispozícii"
   },
+  "account_routing": {
+    "group_members_one_account": "Skupina môže obsahovať iba kontakty z jedného účtu.",
+    "link_names_no_account": "Tento odkaz neuvádza, v ktorom účte je správa, preto sa neotvoril.",
+    "group_member_gone": "Jeden z vybraných kontaktov už neexistuje. Vyberte členov znova.",
+    "invitation_other_account": "Táto pozvánka je v inom účte. Prepnite na ten účet, ak na ňu chcete odpovedať alebo ju pridať do kalendára.",
+    "tab_names_no_account": "Táto karta bola uložená bez svojho účtu, preto sa neotvorila. Zatvorte ju a otvorte znova z účtu, ku ktorému patrí."
+  },
   "mail_import": {
     "menu_import": "Importovať poštu…",
     "settings_label": "Importovať poštu",
@@ -6410,6 +6506,9 @@
     "attachments_description": "Prílohy uchovaných správ a súbory, ktoré uchovávate offline, spolu až {total}. Najstaršie sa odstránia ako prvé.",
     "total_locked": "Vaša organizácia povoľuje najviac {size} príloh a súborov.",
     "attachment_cap_label": "Najväčšia uchovávaná príloha",
+    "total_cap_label": "Celková veľkosť uchovaných príloh",
+    "total_cap_unlimited": "Bez obmedzenia",
+    "attachments_description_unlimited": "Prílohy uchovaných správ a súbory, ktoré uchovávate offline, bez obmedzenia ich celkovej veľkosti.",
     "usage_mail": "Správy a index vyhľadávania",
     "usage_attachments": "Prílohy",
     "usage_calendar": "Kalendár",
@@ -6752,6 +6851,10 @@
         "title": "Odhlásiť vás",
         "body": "Môže vás odhlásiť z webmailu."
       },
+      "auth_impersonation_return": {
+        "title": "Vrátiť vás do vášho účtu",
+        "body": "Keď správca otvorí schránku cez zosobnenie, ukončiť túto reláciu a znova vás prihlásiť do účtu, z ktorého začala."
+      },
       "account_read": {
         "title": "Vidieť vaše účty",
         "body": "Vidí účty, ktoré ste pridali, vrátane ich adries a serverov, a ktoré poštové účty sú tímové schránky."
@@ -6767,6 +6870,10 @@
       "http_fetch": {
         "title": "Pripájať sa k iným webom",
         "body": "Odosiela požiadavky na tieto weby. Čokoľvek, čo doplnok môže čítať, tam môže byť odoslané:"
+      },
+      "links_check": {
+        "title": "Kontrolovať odkazy, ktoré otvárate",
+        "body": "Vidí každý webový odkaz, ktorý otvoríte, aj s jeho textom, a môže ho zastaviť alebo namiesto neho otvoriť inú adresu."
       },
       "admin_config": {
         "title": "Čítať nastavenia od správcu",
@@ -6874,7 +6981,7 @@
       },
       "ui_notifications": {
         "title": "Zobrazovať upozornenia",
-        "body": "Zobrazuje upozornenia vo vašom zariadení alebo v aplikácii, ak ste ich nepovolili. Každé uvádza názov doplnku."
+        "body": "Zobrazuje upozornenia vo vašom zariadení alebo v aplikácii, ak ste ich nepovolili. Každé uvádza názov doplnku. Doplnok tiež vidí upozornenia, ktoré vám aplikácia zobrazuje."
       },
       "ui_message_list": {
         "title": "Pridávať obsah do zoznamu správ",
@@ -7024,6 +7131,14 @@
     "not_available_title": "Táto stránka nie je k dispozícii",
     "not_available_description": "Doplnok, ktorý ju pridal, je vypnutý alebo už nie je nainštalovaný.",
     "back_to_mail": "Späť na poštu"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Zoznam od doplnku {name}",
+    "dropdown_list_labelled": "{label}, zoznam od doplnku {name}",
+    "oauth_failed": "Služba nedokončila prihlásenie. Zatvorte toto okno a skúste to znova.",
+    "banners_more": "Ďalšie bannery ({count}): {names}",
+    "banners_fewer": "Menej bannerov",
+    "opened_by_plugin": "Otvorené doplnkom {name}"
   },
   "command_palette": {
     "title": "Paleta príkazov",
@@ -7227,6 +7342,14 @@
       "added_from_subject": "Pridané z e-mailu „{subject}“ od {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Toto zrušenie bolo odoslané od {sender}, ale organizátorom udalosti vo vašom kalendári je {organizer}. Zrušiť ju môže iba organizátor. Ak tejto správe dôverujete, odstráňte ju sami.",
+    "cancel_unverified": "Nepodarilo sa overiť, že toto zrušenie pochádza od organizátora. Ak tejto správe dôverujete, odstráňte udalosť sami.",
+    "card_sender": "od {domain}",
+    "card_sender_title": "Táto správa prešla kontrolou odosielateľa na poštovom serveri pre {domain}.",
+    "outside_link": "Iná stránka",
+    "outside_link_title": "Tento odkaz vedie na {host}, mimo {domain}, doménu odosielateľa."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Pravopis",
@@ -7321,6 +7444,8 @@
       "title": "Okná aplikácie",
       "double_click_label": "Otvárať správy v novom okne dvojitým kliknutím",
       "double_click_description": "Jedným kliknutím sa správa stále otvorí vedľa zoznamu.",
+      "compose_window_label": "Vždy písať správy v novom okne",
+      "compose_window_description": "Nové správy, odpovede, preposlania a koncepty sa otvárajú vo vlastnom okne namiesto hlavného okna.",
       "restore_label": "Pri spustení znova otvoriť okná",
       "restore_description": "Okná správ a konceptov otvorené pri ukončení sa vrátia."
     },
@@ -7728,6 +7853,8 @@
     "start_at_login_description": "Aplikácia sa po prihlásení spustí sama.",
     "start_minimized_label": "Spustiť v oblasti oznámení",
     "start_minimized_description": "Po prihlásení sa neotvorí žiadne okno. Otvorte ju ikonou v oblasti oznámení.",
+    "reopen_after_restart_label": "Znova otvoriť po reštarte",
+    "reopen_after_restart_description": "Ak je aplikácia otvorená, keď sa počítač reštartuje alebo sa odhlásite, po prihlásení sa znova otvorí na rovnakom priečinku, správe alebo stránke.",
     "attention_label": "Pri novej pošte blikať na paneli úloh",
     "attention_mac_label": "Pri novej pošte poskakovať ikonou v Docku",
     "attention_description": "Len keď aplikácia nie je v popredí.",
@@ -8225,5 +8352,13 @@
   "selectionView": {
     "starred": "Označené hviezdičkou",
     "unstarred": "Hviezdička odstránená"
+  },
+  "impersonation": {
+    "return_notice": "Schránku {mailbox} ste otvorili cez zosobnenie.",
+    "return_button": "Späť na môj účet"
+  },
+  "admin_access": {
+    "label": "Superpoužívatelia tohto servera môžu otvoriť administráciu",
+    "help": "Superpoužívatelia tohto servera sa prihlasujú do administrácie bez hesla správcu, rovnako ako tí z hlavného servera JMAP. Zapnite to len pre server, ktorý sami prevádzkujete."
   }
 }

@@ -646,6 +646,13 @@ export interface TaskInput {
    * update as `alerts` is.
    */
   relatedTo?: Record<string, TaskRelationInput | null> | null;
+  /**
+   * Keywords (1-64 of `A-Z a-z 0-9 . _ -`): `true` sets one, null removes
+   * it. A task holds at most 10, counting every keyword on it, those
+   * another app wrote too. Merged by key on update as `alerts` is; keywords
+   * another app wrote stay unless named with null.
+   */
+  keywords?: Record<string, true | null> | null;
 }
 
 /**
@@ -1679,6 +1686,12 @@ export const ALL_PERMISSIONS = [
   'security:read',
   'auth:observe',
   'auth:emit',
+  // End an impersonation handoff and sign back in to the account that
+  // started it (api.user.returnToOwnAccount, the app-top-banner slot's
+  // `canReturn`). A plugin with it and an app-top-banner banner draws the
+  // button, and the core strip steps back. Declare it in
+  // optionalPermissions: older webmails don't know it.
+  'auth:impersonation-return',
   'account:read',
   // Look people up in the server's directory (api.user.findPeople).
   'directory:read',
@@ -1687,8 +1700,11 @@ export const ALL_PERMISSIONS = [
   'ui:email-details',
   'ui:download-file',
   // Show a system notification, or a toast when the user hasn't allowed them
-  // (api.notifications.show).
+  // (api.notifications.show), and see the app's own toasts (onToastShow).
   'ui:notifications',
+  // See every web link the user opens, with its text, and stop it or open
+  // another address instead (onBeforeExternalLink).
+  'links:check',
   // Register native message-list category tabs (Gmail-style inbox tabs).
   'ui:message-list-tabs',
   'ui:composer-toolbar', 'ui:composer-sidebar',
@@ -1744,6 +1760,11 @@ export const DISALLOWED_CSS_PATTERNS = [
   /url\s*\(\s*(?!['"]?\s*#)/i,
   // Takes plain strings, so it loads remote images without any url().
   /image-set\s*\(/i,
+  // image("…") and src("…") take the address as a plain string too (CSS
+  // Images 4, Values 4). cross-fade() and element() name no address of their
+  // own; what they wrap goes through these same patterns.
+  /\bimage\s*\(/i,
+  /\bsrc\s*\(/i,
   /expression\s*\(/i,
   /javascript\s*:/i,
   /-moz-binding/i,

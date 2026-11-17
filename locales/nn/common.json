@@ -22,6 +22,7 @@
       "totp_required": "Du må skrive inn ein tofaktorautentiseringskode nedanfor.",
       "totp_invalid": "Ugyldig autentiseringskode. Sjekk autentiseringsappen din og prøv igjen.",
       "oauth_discovery_failed": "SSO er aktivert, men identitetsleverandøren kunne ikkje nåast. Sjekk OAuth-oppsettet.",
+      "oauth_issuer_mismatch": "Innlogging med denne leverandøren er ikkje sett opp rett. Administratoren må setje issuer-adressa til leverandøren.",
       "token_exchange_failed": "Passordet og koden vart godtekne, men e-posttenaren nekta å starte ei økt for denne appen. Be administratoren din om å sjekke OAuth-klientinnstillingane."
     },
     "show_password": "Vis passord",
@@ -338,6 +339,14 @@
     "show_on_mobile": "Vis på mobil"
   },
   "email_list": {
+    "date_groups": {
+      "today": "I dag",
+      "yesterday": "I går",
+      "last_week": "Førre veke",
+      "last_month": "Førre månad",
+      "older": "Eldre"
+    },
+    "group_by_date": "Grupper etter dato",
     "sections": {
       "unread": "Ulesne",
       "everything_else": "Alt anna",
@@ -1085,6 +1094,7 @@
     "templates_menu": "Malar",
     "insert_template": "Set inn mal …",
     "options": "Val",
+    "tags": "Etikettar",
     "option_plain_text": "Ren tekst",
     "option_plain_text_hint": "Send utan formatering",
     "option_read_receipt": "Be om lesekvittering",
@@ -1290,6 +1300,14 @@
       "edit": "Rediger biletskildringa",
       "plain_text": "[Bilete: {alt}]"
     }
+  },
+  "attachment_rename": {
+    "rename": "Gi nytt namn",
+    "rename_named": "Gi {name} nytt namn",
+    "rename_menu": "Gi nytt namn…",
+    "rename_title": "Gi vedlegget nytt namn",
+    "rename_invalid_chars": "Filnamn kan ikkje innehalde / eller \\ eller kontrollteikn",
+    "rename_too_long": "Namnet er for langt"
   },
   "compose_ux": {
     "draft_discarded": "Utkast forkasta",
@@ -1808,12 +1826,17 @@
       "title": "E-postetikettar",
       "description": "Lag etikettar for å sortere meldingane dine. Etikettane vert lagra saman med meldingane dine på tenaren.",
       "add_keyword": "Ny etikett",
+      "empty": "Ingen etikettar enno.",
       "label_field": "Visingsnamn",
       "label_placeholder": "t.d. Arbeid, Privat, Hasteleg",
       "id_field": "Etikett-ID",
       "id_placeholder": "t.d. arbeid, privat",
       "color_field": "Farge",
-      "id_exists": "Denne etikett-ID-en finst allereie",
+      "custom_color": "Eigendefinert farge",
+      "color_code": "Fargekode",
+      "pick_custom_color": "Vel ein eigendefinert farge",
+      "invalid_color": "Bruk ein fargekode som #1a73e8.",
+      "name_exists": "Det finst allereie ein etikett med dette namnet",
       "edit": "Rediger etikett",
       "delete": "Slett etikett",
       "edit_tag": "Rediger {name}",
@@ -2090,9 +2113,17 @@
         "label": "Vis stadfestingskodar",
         "description": "Tilby koden frå innloggings- og stadfestingsmeldingar for kopiering med eitt klikk, i lista i eit døgn og i meldinga"
       },
+      "show_attachment_chips": {
+        "label": "Vis vedlegg i lista",
+        "description": "Vis vedlagde filer under kvar melding, så du kan opne dei rett frå lista. Bindersen blir vist uansett."
+      },
       "plain_text_mode": {
         "label": "Berre ren tekst",
         "description": "Slå av rikteksteditoren og send all e-post som ren tekst, òg svar og vidaresendingar"
+      },
+      "reply_under_message": {
+        "label": "Svar under meldinga",
+        "description": "Eit svar eller ei vidaresending opnar seg under meldinga si, som held seg leseleg over. Når dette er slått av, fyller det heile leseflata, som ei ny melding."
       },
       "quick_reply": {
         "label": "Raskt svar",
@@ -2276,6 +2307,10 @@
         "label": "Støtte for redigering frå høgre mot venstre",
         "description": "Legg til ein retningsknapp i verktøylinja for skriving, slik at du kan setje avsnitt frå venstre mot høgre eller frå høgre mot venstre"
       },
+      "group_by_date": {
+        "label": "Grupper etter dato",
+        "description": "Vis meldingar under datooverskrifter som I dag, I går og Førre veke. Gjeld berre når lista er sortert etter dato."
+      },
       "group_conversations": {
         "label": "Grupper meldingar etter samtale",
         "description": "Vis svar saman som éin samtale i staden for som separate meldingar."
@@ -2380,6 +2415,57 @@
       "managing": "Administrerer: {name}"
     },
     "security": {
+      "masked_addresses": {
+        "address": "Adresse",
+        "description_column": "Skildring",
+        "website_column": "Nettstad",
+        "state": "Status",
+        "actions": "Handlingar",
+        "no_description": "Inga skildring",
+        "edit": "Rediger",
+        "close": "Lukk",
+        "pagination": "Sider med maskerte adresser",
+        "page": "Side {page} av {pages}",
+        "previous": "Førre",
+        "next": "Neste",
+        "delete": "Slett",
+        "delete_title": "Slette den maskerte adressa for godt?",
+        "delete_warning": "Slette {address}? Dette kan ikkje angrast. E-post som vert send til denne adressa, vert ikkje levert lenger.",
+        "delete_confirm": "Slett for godt",
+        "cancel": "Avbryt",
+        "deleted": "Adressa er sletta for godt.",
+        "deleted_refresh_failed": "Slettinga er stadfesta, men lista kunne ikkje oppdaterast. Oppdater for å laste inn den gjeldande lista.",
+        "delete_forbidden": "Den gjeldande økta di har ikkje løyve til å slette maskerte adresser. Andre tillatne handlingar er framleis tilgjengelege.",
+        "delete_failed": "Adressa vart ikkje sletta. Oppdater lista før du prøver igjen.",
+        "delete_unconfirmed": "Slettinga kunne ikkje stadfestast. Ho vert ikkje prøvd på nytt. Oppdater lista og sjekk adressa før du slettar noko meir.",
+        "title": "Maskerte adresser",
+        "intro": "Ta imot e-post utan å dele hovudadressa di. Når ei adresse er slått av, vert ny e-post til henne avvist. Desse adressene kan ikkje brukast til å sende e-post.",
+        "loading": "Lastar inn maskerte adresser…",
+        "count": "{count, plural, one {# adresse} other {# adresser}}",
+        "empty": "Ingen maskerte adresser enno.",
+        "website": "Nettstad (valfritt)",
+        "description": "Skildring (valfritt)",
+        "no_website": "Ikkje oppgjeve",
+        "enabled": "Slått på",
+        "disabled": "Slått av",
+        "enable": "Slå på",
+        "disable": "Slå av",
+        "copy": "Kopier",
+        "copied": "Adressa er kopiert.",
+        "copy_failed": "Klarte ikkje kopiere. Merk og kopier adressa ovanfor.",
+        "save": "Lagre skildring",
+        "create": "Opprett maskert adresse",
+        "refresh": "Oppdater",
+        "saved": "Endringa er lagra.",
+        "forbidden": "Den gjeldande økta di har ikkje løyve til å vise maskerte adresser.",
+        "unavailable": "Maskerte adresser er ikkje tilgjengelege for denne kontoen eller tenaren.",
+        "load_failed": "Klarte ikkje laste inn heile adresselista. Oppdater for å prøve igjen.",
+        "save_failed": "Endringa kunne ikkje stadfestast. Oppdater lista før du prøver igjen.",
+        "create_forbidden": "Tenaren tillét ikkje å opprette ei maskert adresse med denne økta.",
+        "update_forbidden": "Tenaren tillét ikkje å redigere maskerte adresser med denne økta. Du kan framleis kopiere adresser.",
+        "over_quota": "Kvoten til tenaren for maskerte adresser er nådd. Adresser som er slått av, kan framleis telje med i grensa.",
+        "rate_limit": "Grensa til tenaren for oppretting er nådd. Prøv igjen seinare."
+      },
       "title": "Kontotryggleik",
       "description": "Administrer passord, tofaktorautentisering og tryggleiksinnstillingar",
       "detecting": "Finn ut kva tenaren kan...",
@@ -3351,7 +3437,8 @@
         "description": "Ramma rundt knappen, lenkja eller feltet tastaturet står på.",
         "normal": "Normal",
         "thick": "Tjukk",
-        "extra": "Ekstra tjukk"
+        "extra": "Ekstra tjukk",
+        "off": "Av"
       },
       "focus_always": {
         "label": "Vis alltid fokus",
@@ -3929,6 +4016,8 @@
     "delete_folder": "Slett mappe",
     "refresh": "Oppdater",
     "hide_shared_account": "Gøym frå sidefeltet",
+    "move_shared_account_up": "Flytt opp",
+    "move_shared_account_down": "Flytt ned",
     "mute_notifications": "Demp varsel",
     "unmute_notifications": "Slå på varsel igjen",
     "mute_account_notifications": "Demp varsel for denne kontoen",
@@ -6086,6 +6175,13 @@
   "unified_mailbox": {
     "search_unavailable": "Søk er ikkje tilgjengeleg i den samla visinga"
   },
+  "account_routing": {
+    "group_members_one_account": "Ei gruppe kan berre innehalde kontaktar frå éin konto.",
+    "link_names_no_account": "Denne lenkja seier ikkje kva konto meldinga ligg i, så ho vart ikkje opna.",
+    "group_member_gone": "Ein av dei valde kontaktane finst ikkje lenger. Vel medlemmene på nytt.",
+    "invitation_other_account": "Denne invitasjonen ligg i ein annan konto. Byt til den kontoen for å svare på han eller leggje han til i ein kalender.",
+    "tab_names_no_account": "Denne fana vart lagra utan kontoen sin, så ho vart ikkje opna. Lukk ho og opne ho på nytt frå kontoen ho høyrer til."
+  },
   "mail_import": {
     "menu_import": "Importer e-post …",
     "settings_label": "Importer e-post",
@@ -6418,6 +6514,9 @@
     "attachments_description": "Vedlegg til behaldne meldingar og filene du held fråkopla, opptil {total} til saman. Dei eldste går først.",
     "total_locked": "Organisasjonen din tillèt høgst {size} med vedlegg og filer.",
     "attachment_cap_label": "Største vedlegg å behalde",
+    "total_cap_label": "Total storleik på lagra vedlegg",
+    "total_cap_unlimited": "Inga grense",
+    "attachments_description_unlimited": "Vedlegg i lagra meldingar og filene du lagrar fråkopla, utan grense for total storleik.",
     "usage_mail": "Meldingar og søkjeindeks",
     "usage_attachments": "Vedlegg",
     "usage_calendar": "Kalender",
@@ -6760,6 +6859,10 @@
         "title": "Logg deg ut",
         "body": "Logg deg ut av webmailen."
       },
+      "auth_impersonation_return": {
+        "title": "Sende deg tilbake til din eigen konto",
+        "body": "Når ein administrator har opna ein postkasse via imitering, avslutte den økta og logge inn att på kontoen ho starta frå."
+      },
       "account_read": {
         "title": "Sjå kontoane dine",
         "body": "Sjå kontoane du la til med adressene og tenarane, og kva postkontoar som er team-postkassar."
@@ -6775,6 +6878,10 @@
       "http_fetch": {
         "title": "Kople til andre nettstader",
         "body": "Send førespurnader til desse nettstadane. Alt som plugin-en kan lese, kan verte sendt dit:"
+      },
+      "links_check": {
+        "title": "Sjekke lenkjene du opnar",
+        "body": "Sjå kvar nettlenkje du opnar, med teksten, og stoppe ho eller opne ei anna adresse i staden."
       },
       "admin_config": {
         "title": "Les innstillingane frå administratoren din",
@@ -6910,7 +7017,7 @@
       },
       "ui_notifications": {
         "title": "Vis varsel",
-        "body": "Vis varsel på eininga di, eller i appen om du ikkje har late det vere. Kvar einskild viser kva plugin det er."
+        "body": "Vis varsel på eininga di, eller i appen om du ikkje har late det vere. Kvar einskild viser kva plugin det er. Pluginen ser òg meldingane som appen viser deg."
       }
     },
     "forward_approval": {
@@ -7032,6 +7139,14 @@
     "not_available_title": "Denne sida er ikkje tilgjengeleg",
     "not_available_description": "Appet som la til det er slått av eller ikkje lenger installert.",
     "back_to_mail": "Tilbake til e-post"
+  },
+  "plugin_surfaces": {
+    "dropdown_list": "Liste frå plugin {name}",
+    "dropdown_list_labelled": "{label}, liste frå plugin {name}",
+    "oauth_failed": "Tenesta fullførte ikkje innlogginga. Lukk dette vindauget og prøv igjen.",
+    "banners_more": "Fleire bannerar ({count}): {names}",
+    "banners_fewer": "Færre bannerar",
+    "opened_by_plugin": "Opna av plugin {name}"
   },
   "command_palette": {
     "title": "Kommando-palett",
@@ -7235,6 +7350,14 @@
       "added_from_subject": "Lagt til frå e-posten «{subject}» frå {domain}"
     }
   },
+  "sender_trust": {
+    "cancel_not_organizer": "Denne avlysinga vart send frå {sender}, men arrangøren av hendinga i kalenderen din er {organizer}. Berre arrangøren kan avlyse ho. Fjern ho sjølv dersom du stolar på denne meldinga.",
+    "cancel_unverified": "Det kunne ikkje stadfestast at denne avlysinga kjem frå arrangøren. Fjern hendinga sjølv dersom du stolar på denne meldinga.",
+    "card_sender": "frå {domain}",
+    "card_sender_title": "Denne meldinga bestod avsendarkontrollen til e-posttenaren for {domain}.",
+    "outside_link": "Anna nettstad",
+    "outside_link_title": "Denne lenkja går til {host}, utanfor {domain}, domenet til avsendaren."
+  },
   "proofreading": {
     "kind": {
       "spelling": "Staving",
@@ -7329,6 +7452,8 @@
       "title": "App-vindauge",
       "double_click_label": "Opne meldingar i eit nytt vindauge med dobbeltklikk",
       "double_click_description": "Einkvar klikk opnar framleis meldinga ved sida av lista.",
+      "compose_window_label": "Skriv alltid meldingar i eit nytt vindauge",
+      "compose_window_description": "Nye meldingar, svar, vidaresendingar og utkast opnar seg i eit eige vindauge i staden for i hovudvindauget.",
       "restore_label": "Opne att vindauge ved oppstart",
       "restore_description": "Meldingar og utkast som var opne då du avslutta, kjem tilbake."
     },
@@ -7736,6 +7861,8 @@
     "start_at_login_description": "Appen startar av seg sjølv når du loggar inn.",
     "start_minimized_label": "Start i systemfeltet",
     "start_minimized_description": "Ingen vindauge opnar seg ved innlogging. Bruk systemikonet for å opne det.",
+    "reopen_after_restart_label": "Opne igjen etter ein omstart",
+    "reopen_after_restart_description": "Viss appen er open når datamaskina startar på nytt eller du loggar av, opnar han seg igjen når du loggar på, i same mappe, melding eller side.",
     "attention_label": "Lyser opp oppgåvelinja ved ny e-post",
     "attention_mac_label": "Hopp med Dock-ikonet når ny e-post kjem",
     "attention_description": "Berre når appen ikkje er i framgrunnen.",
@@ -8233,5 +8360,13 @@
   "selectionView": {
     "starred": "Stjernemerka",
     "unstarred": "Stjerna fjerna"
+  },
+  "impersonation": {
+    "return_notice": "Du opna {mailbox} via imitering.",
+    "return_button": "Tilbake til kontoen min"
+  },
+  "admin_access": {
+    "label": "Superbrukarar på denne tenaren kan opne administrasjonspanelet",
+    "help": "Superbrukarar på denne tenaren loggar inn på administrasjonspanelet utan administratorpassordet, slik som dei på hovud-JMAP-tenaren. Slå det berre på for ein tenar du driv sjølv."
   }
 }

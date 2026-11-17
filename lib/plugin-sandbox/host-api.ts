@@ -23,6 +23,8 @@ import { checkPages, setPluginPages } from './pages';
 import { dismissPluginToast, showPluginProgressToast, showPluginToast } from './host-api-toasts';
 import { useAuthStore } from '@/stores/auth-store';
 import { useAccountStore } from '@/stores/account-store';
+import { returnToOwnAccount } from '@/lib/impersonation/return-client';
+import { isPopoutWindow } from '@/lib/popout/window-role';
 import { claimLegacyPluginStorage, pluginStoragePrefix } from './storage-scope';
 import { useIdentityStore } from '@/stores/identity-store';
 import { resolveEmailBlobContext, useEmailStore } from '@/stores/email-store';
@@ -31,20 +33,22 @@ import { useFilterStore } from '@/stores/filter-store';
 import { useMessageListTabsStore } from '@/stores/message-list-tabs-store';
 import {
   KEYWORD_PALETTE,
+  emailKeywordsChosenPatch,
   useSettingsStore,
   type KeywordDefinition,
   type KeywordVisibility,
 } from '@/stores/settings-store';
 import type { MessageListTabsConfig } from '../plugin-types';
 import { apiFetch, getPathPrefix, withBasePath } from '../browser-navigation';
-import { createOAuthState } from '../plugin-oauth';
+import { createOAuthState, isPluginSignIn } from '../plugin-oauth';
+import { openPluginSignInInApp } from '../desktop/browser-sign-in';
 import { reportUploadProgress } from '../upload-progress';
 import { DEFAULT_KEYWORD_SCAN_LIMIT } from '../jmap/client';
 import { isServerSetKeyword } from '../jmap/server-keywords';
 import { suggestKeywordColor } from '../keyword-discovery';
-import { MAX_KEYWORD_LENGTH } from '../keyword-nesting';
-import { emailKeyFor, KEYWORD_PREFIX } from '../thread-utils';
-import { DEFAULT_SEARCH_FILTERS, normalizePluginFilter } from '../jmap/search-utils';
+import { isValidKeywordDefinitionId, MAX_KEYWORD_LABEL_LENGTH } from '../keyword-nesting';
+import { emailKeyFor } from '../thread-utils';
+import { DEFAULT_SEARCH_FILTERS, isFilterEmpty, normalizePluginFilter } from '../jmap/search-utils';
 import { awaitDialog, awaitPrompt, awaitCustomDialog, type PromptField } from './host-dialog';
 import { triggerAnchor } from './dialog-anchor';
 import { fileStorage } from '../plugin-storage';
@@ -201,6 +205,8 @@ export const PERM_PER_METHOD: Readonly<Record<string, Permission | null>> = {
   // The user's preferences (layout, formats, reading and sending behaviour).
   'app.getSettings': 'settings:read',
   'user.logout': 'auth:emit',
+  // Only in an impersonated session; see doUserReturnToOwnAccount.
+  'user.returnToOwnAccount': 'auth:impersonation-return',
   // admin
   'admin.getConfig': 'admin:config',
   'admin.getAllConfig': 'admin:config',
@@ -253,6 +259,7 @@ export const PERM_PER_METHOD: Readonly<Record<string, Permission | null>> = {
   // message-list search: the plugin never sees the results, but it decides
   // which messages the list shows.
   'search.run': 'email:read',
+  'search.clear': 'email:read',
   // OAuth with a third party: a state value bound to this plugin, and the
   // redirect URI the provider sends the user back to.
   'oauth.createState': 'http:fetch',
@@ -493,6 +500,23 @@ function doUserGetIdentities(): Identity[] {
 
 async function doUserLogout(): Promise<void>{
   return useAuthStore.getState().logout();
+}
+
+/**
+ * "Return to my account" for a plugin's impersonation banner (#1538): the
+ * same POST /api/auth/impersonate/return as the core strip, falling back to
+ * signing out when the server has nothing to return to. The plugin learns
+ * nothing from it; the session it returns to stays on the server. Refused
+ * outside an impersonated session, so the permission is no way to sign the
+ * user out, and in a pop-out, which doesn't own the account list.
+ */
+async function doUserReturnToOwnAccount(): Promise<void> {
+  if (isPopoutWindow()) throw new Error('user.returnToOwnAccount: not available in a pop-out window');
+  const accounts = useAccountStore.getState();
+  if (!accounts.getActiveAccount()?.impersonated) {
+    throw new Error('user.returnToOwnAccount: the session is not an impersonation');
+  }
+  await returnToOwnAccount();
 }
 
 // ─── http.post (same-origin /api/*) ───────────────────────────
@@ -1538,30 +1562,13 @@ function patchThreadCache(isTarget: (email: Email) => boolean, changes: Record<s
 // ─── Native keyword definitions ──────────────────────────────
 
 const MAX_PLUGIN_KEYWORD_DEFINITIONS = 500;
-const MAX_PLUGIN_KEYWORD_LABEL_LENGTH = 255;
+const MAX_PLUGIN_KEYWORD_LABEL_LENGTH = MAX_KEYWORD_LABEL_LENGTH;
 const VALID_VISIBILITIES = new Set<KeywordVisibility>(['show', 'hide', 'unread']);
 
 type PluginKeywordDefinitionInput = Omit<KeywordDefinition, 'color'> & { color?: string };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/** RFC 8621 keyword syntax, applied to the complete `$label:<id>` value. */
-function isValidKeywordDefinitionId(id: string): boolean {
-  const keyword = KEYWORD_PREFIX + id;
-  if (id.length === 0 || keyword.length > MAX_KEYWORD_LENGTH) return false;
-  for (let i = 0; i < keyword.length; i++) {
-    const code = keyword.charCodeAt(i);
-    if (
-      code < 0x21 || code > 0x7e ||
-      code === 0x28 || code === 0x29 || code === 0x7b || code === 0x7d ||
-      code === 0x5d || code === 0x25 || code === 0x2a || code === 0x22 || code === 0x5c
-    ) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /** The fields of a definition a plugin may set; keywords.update sends only the ones it changes. */
@@ -1595,6 +1602,8 @@ function assertKeywordFields(
       `${method}: definitions[${index}].label must be 1-${MAX_PLUGIN_KEYWORD_LABEL_LENGTH} characters`,
     );
   }
+  // Palette keys only. A tag the user coloured in settings may hold a custom
+  // #rrggbb, which keywords.list passes on as stored.
   if (
     color !== undefined &&
     (typeof color !== 'string' || !Object.prototype.hasOwnProperty.call(KEYWORD_PALETTE, color))
@@ -1685,8 +1694,10 @@ function doKeywordsAdd(plugin: InstalledPlugin, value: unknown): { added: Keywor
   if (added.length > 0) {
     // One atomic append keeps concurrent plugin calls from partially
     // overwriting the list and triggers the normal persist/settings-sync path.
+    // A plugin's tags make the list chosen, so no admin default wipes them.
     useSettingsStore.setState((state) => ({
       emailKeywords: [...state.emailKeywords, ...added],
+      ...emailKeywordsChosenPatch(state),
     }));
   }
 
@@ -1710,7 +1721,7 @@ function doKeywordsUpdate(plugin: InstalledPlugin, value: unknown): { updated: K
       updated.push(next);
       return next;
     });
-    return updated.length > 0 ? { emailKeywords } : state;
+    return updated.length > 0 ? { emailKeywords, ...emailKeywordsChosenPatch(state) } : state;
   });
 
   const done = new Set(updated.map((keyword) => keyword.id.toLowerCase()));
@@ -1732,7 +1743,7 @@ function doKeywordsRemove(plugin: InstalledPlugin, value: unknown): { removed: s
       if (drop) removed.push(keyword.id);
       return !drop;
     });
-    return removed.length > 0 ? { emailKeywords } : state;
+    return removed.length > 0 ? { emailKeywords, ...emailKeywordsChosenPatch(state) } : state;
   });
 
   const done = new Set(removed.map((id) => id.toLowerCase()));
@@ -1792,7 +1803,7 @@ function doKeywordsReorder(value: unknown, rawOptions?: unknown): KeywordDefinit
     // Reuse the existing definitions verbatim so ordering cannot change a
     // label's name, colour, visibility, id casing, or any future metadata.
     result = reordered;
-    return { emailKeywords: reordered };
+    return { emailKeywords: reordered, ...emailKeywordsChosenPatch(state) };
   });
   return result.map((keyword) => ({ ...keyword }));
 }
@@ -1921,6 +1932,24 @@ async function doSearchRun(plugin: InstalledPlugin, query: unknown, options: unk
     pluginFilter: { pluginId: plugin.id, label, filter },
   });
   await store.advancedSearch(client);
+}
+
+/**
+ * End the plugin's own search: its chip goes, as with the chip's ✕. Filters
+ * the user added on top stay and the search runs again with them; with
+ * nothing left it clears as "clear all" does, so the folder's list shows
+ * again. A search the user typed or another plugin ran stays. Resolves
+ * whether it ended one.
+ */
+async function doSearchClear(plugin: InstalledPlugin): Promise<boolean> {
+  const store = useEmailStore.getState();
+  if (store.searchFilters.pluginFilter?.pluginId !== plugin.id) return false;
+  const client = requireClient();
+  store.setSearchFilters({ pluginFilter: null });
+  const rest = useEmailStore.getState();
+  if (!rest.searchQuery.trim() && isFilterEmpty(rest.searchFilters)) rest.clearSearchFilters();
+  await useEmailStore.getState().advancedSearch(client);
+  return true;
 }
 
 // ─── Sieve (delivery-time classification) ─────────────────────
@@ -2109,11 +2138,11 @@ export async function dispatchApiCall(
     case 'storage.remove': storageRemove(plugin.id, args[0] as string); return undefined;
     case 'storage.keys': return storageKeys(plugin.id);
 
-    case 'toast.success': showPluginToast(plugin.id, 'success', args[0]); return undefined;
-    case 'toast.error': showPluginToast(plugin.id, 'error', args[0]); return undefined;
-    case 'toast.info': showPluginToast(plugin.id, 'info', args[0]); return undefined;
-    case 'toast.warning': showPluginToast(plugin.id, 'warning', args[0]); return undefined;
-    case 'toast.progress': return showPluginProgressToast(plugin.id, args[0], opts?.toastSignal);
+    case 'toast.success': showPluginToast(plugin, 'success', args[0]); return undefined;
+    case 'toast.error': showPluginToast(plugin, 'error', args[0]); return undefined;
+    case 'toast.info': showPluginToast(plugin, 'info', args[0]); return undefined;
+    case 'toast.warning': showPluginToast(plugin, 'warning', args[0]); return undefined;
+    case 'toast.progress': return showPluginProgressToast(plugin, args[0], opts?.toastSignal);
     case 'toast.dismiss': dismissPluginToast(plugin.id, args[0], opts?.toastSignal); return undefined;
 
     case 'http.post':  return doHttpPost(plugin, args[0] as string, args[1], args[2] as PluginHttpPostOptions | undefined);
@@ -2197,6 +2226,7 @@ export async function dispatchApiCall(
     case 'app.searchSettings': return doAppSearchSettings(args[0], args[1]);
     case 'app.getSettings': return doAppGetSettings();
     case 'user.logout' : return doUserLogout();
+    case 'user.returnToOwnAccount': return doUserReturnToOwnAccount();
 
     case 'admin.getConfig':    return adminGet(plugin.id, args[0] as string);
     case 'admin.getAllConfig': return adminGetAll(plugin.id);
@@ -2204,45 +2234,51 @@ export async function dispatchApiCall(
     case 'admin.setConfig':    refuseServerField(plugin, args[0], 'admin.setConfig'); await adminSet(plugin.id, args[0] as string, args[1]); return undefined;
     case 'admin.deleteConfig': refuseServerField(plugin, args[0], 'admin.deleteConfig'); await adminDelete(plugin.id, args[0] as string); return undefined;
 
+    // The dialog cases take text only where they expect text (anything else
+    // gets the default); host-dialog.ts cuts the lengths, the number of
+    // prompt fields and the width before the dialog is queued.
     case 'ui.confirm': {
-      const opts = (args[0] ?? {}) as { title?: string; message?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean };
+      const opts = (args[0] ?? {}) as { title?: unknown; message?: unknown; confirmLabel?: unknown; cancelLabel?: unknown; danger?: boolean };
       return awaitDialog({
         pluginId: plugin.id,
         kind: 'confirm',
-        title: String(opts.title ?? plugin.name ?? 'Confirm'),
-        message: String(opts.message ?? ''),
+        title: typeof opts.title === 'string' ? opts.title : (plugin.name ?? 'Confirm'),
+        message: typeof opts.message === 'string' ? opts.message : '',
         confirmLabel: typeof opts.confirmLabel === 'string' ? opts.confirmLabel : undefined,
         cancelLabel: typeof opts.cancelLabel === 'string' ? opts.cancelLabel : undefined,
         danger: !!opts.danger,
       });
     }
     case 'ui.alert': {
-      const opts = (args[0] ?? {}) as { title?: string; message?: string; confirmLabel?: string };
+      const opts = (args[0] ?? {}) as { title?: unknown; message?: unknown; confirmLabel?: unknown };
       await awaitDialog({
         pluginId: plugin.id,
         kind: 'alert',
-        title: String(opts.title ?? plugin.name ?? 'Notice'),
-        message: String(opts.message ?? ''),
+        title: typeof opts.title === 'string' ? opts.title : (plugin.name ?? 'Notice'),
+        message: typeof opts.message === 'string' ? opts.message : '',
         confirmLabel: typeof opts.confirmLabel === 'string' ? opts.confirmLabel : undefined,
       });
       return undefined;
     }
     case 'ui.prompt': {
-      const opts = (args[0] ?? {}) as { title?: string; message?: string; confirmLabel?: string; cancelLabel?: string; fields?: PromptField[] };
+      const opts = (args[0] ?? {}) as { title?: unknown; message?: unknown; confirmLabel?: unknown; cancelLabel?: unknown; fields?: unknown };
+      // A field needs a name; only the known parts of it are kept.
       const fields: PromptField[] = Array.isArray(opts.fields)
-        ? opts.fields.map((f) => ({
-            name: String(f.name),
-            label: String(f.label),
-            type: f.type === 'password' ? 'password' : 'text',
-            placeholder: typeof f.placeholder === 'string' ? f.placeholder : undefined,
-            required: !!f.required,
-          }))
+        ? opts.fields
+            .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && typeof (f as { name?: unknown }).name === 'string')
+            .map((f) => ({
+              name: f.name as string,
+              label: typeof f.label === 'string' ? f.label : '',
+              type: f.type === 'password' ? 'password' : 'text',
+              placeholder: typeof f.placeholder === 'string' ? f.placeholder : undefined,
+              required: !!f.required,
+            }))
         : [];
       return awaitPrompt({
         pluginId: plugin.id,
         kind: 'prompt',
-        title: String(opts.title ?? plugin.name ?? 'Enter details'),
-        message: String(opts.message ?? ''),
+        title: typeof opts.title === 'string' ? opts.title : (plugin.name ?? 'Enter details'),
+        message: typeof opts.message === 'string' ? opts.message : '',
         confirmLabel: typeof opts.confirmLabel === 'string' ? opts.confirmLabel : undefined,
         cancelLabel: typeof opts.cancelLabel === 'string' ? opts.cancelLabel : undefined,
         fields,
@@ -2253,13 +2289,13 @@ export async function dispatchApiCall(
       // real app-root overlay, instead of a fixed confirm/prompt form - see
       // the 'plugin-dialog' SlotName / host-dialog.ts comments for why this
       // exists (a small toolbar/row slot can't show a large custom UI).
-      const opts = (args[0] ?? {}) as { title?: string; slot?: string; extraProps?: Record<string, unknown>; width?: number; fill?: boolean; anchor?: unknown };
+      const opts = (args[0] ?? {}) as { title?: unknown; slot?: string; extraProps?: Record<string, unknown>; width?: number; fill?: boolean; anchor?: unknown };
       if (!opts.slot || typeof opts.slot !== 'string') {
         throw new Error('ui.openDialog requires a "slot" name');
       }
       return awaitCustomDialog({
         pluginId: plugin.id,
-        title: String(opts.title ?? plugin.name ?? ''),
+        title: typeof opts.title === 'string' ? opts.title : (plugin.name ?? ''),
         message: '',
         slot: opts.slot,
         extraProps: (opts.extraProps && typeof opts.extraProps === 'object') ? opts.extraProps : {},
@@ -2295,6 +2331,9 @@ export async function dispatchApiCall(
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         throw new Error(`ui.openExternalUrl: ${parsed.protocol} not allowed`);
       }
+      // The plugin's own OAuth sign-in, in the desktop app: in the system browser its
+      // callback page would park the code where this page can't read it.
+      if (isPluginSignIn(parsed, plugin.id, window.location.origin, getPathPrefix()) && await openPluginSignInInApp(parsed.toString())) return undefined;
       // Other plugins' link checks (onBeforeExternalLink) see it like a
       // click in a message; the plugin's own handler isn't asked again, so a
       // link check opens the link after its dialog.
@@ -2353,6 +2392,7 @@ export async function dispatchApiCall(
     case 'tabs.categorize': return doTabsCategorize(args[0], args[1]);
 
     case 'search.run': return doSearchRun(plugin, args[0], args[1]);
+    case 'search.clear': return doSearchClear(plugin);
 
     case 'oauth.createState': return createOAuthState(plugin.id);
     case 'oauth.getRedirectUri': {
