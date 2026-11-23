@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withMeetingLinkFallback } from '../meeting-link-fallback';
+import { isUndustMeetLink, withMeetingLinkFallback } from '../meeting-link-fallback';
 
 const LINK = 'https://meet.undust.co/m-87d53d5c1664dfd4';
 const LABEL = 'Visio (navigateur, sans compte ni appli) :';
@@ -38,5 +38,17 @@ describe('withMeetingLinkFallback', () => {
 
   it('trims the link it writes', () => {
     expect(withMeetingLinkFallback({ location: '', description: '' }, `  ${LINK} `, LABEL).location).toBe(LINK);
+  });
+});
+
+describe('isUndustMeetLink', () => {
+  it('recognises an undust room only', () => {
+    expect(isUndustMeetLink(LINK)).toBe(true);
+    expect(isUndustMeetLink(` ${LINK} `)).toBe(true);
+    expect(isUndustMeetLink('https://zoom.us/j/123')).toBe(false);
+    expect(isUndustMeetLink('https://meet.undust.co.evil.example/x')).toBe(false);
+    expect(isUndustMeetLink('http://meet.undust.co/x')).toBe(false);
+    expect(isUndustMeetLink('not a url')).toBe(false);
+    expect(isUndustMeetLink(null)).toBe(false);
   });
 });

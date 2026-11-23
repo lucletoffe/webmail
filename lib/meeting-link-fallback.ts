@@ -36,3 +36,16 @@ export function withMeetingLinkFallback(
 
   return { location, description };
 }
+
+/**
+ * Whether `link` is an undust visio room (meet.undust.co): only those open in
+ * the browser with no account or app, which the longer label promises.
+ */
+export function isUndustMeetLink(link: string | null | undefined): boolean {
+  try {
+    const url = new URL((link ?? '').trim());
+    return url.protocol === 'https:' && url.hostname === 'meet.undust.co';
+  } catch {
+    return false;
+  }
+}

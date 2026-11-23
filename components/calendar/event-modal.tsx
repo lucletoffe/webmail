@@ -13,7 +13,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { findMeetingLink, locationAction, mapsUrl, primaryLocationName } from "@/lib/event-links";
 import { descriptionAsText, isHtmlDescription, plainDescriptionFields } from "@/lib/calendar-description";
 import { escapeHtml } from "@/lib/email-sanitization";
-import { withMeetingLinkFallback } from "@/lib/meeting-link-fallback";
+import { isUndustMeetLink, withMeetingLinkFallback } from "@/lib/meeting-link-fallback";
 import { ParticipantStatusBadge } from "./rsvp-buttons";
 import { format, parseISO, addHours, isSameDay } from "date-fns";
 import type { CalendarEvent, Calendar, CalendarParticipant, CalendarEventAlert, CalendarRecurrenceRule } from "@/lib/jmap/types";
@@ -837,6 +837,13 @@ export function EventModal({
   // ne parte — l'URL retournée est écrite dans virtualLocation, donc portée
   // par le PREMIER iMIP envoyé par Stalwart. Pas de second mail « mise à
   // jour » (c'est l'inquiétude de fond, cf. mandat 2026-10-22).
+  // undust: the label written before the meeting link in the description.
+  // "No account or app" holds for an undust room only, not for Zoom or Teams.
+  const meetingLinkLabel = useCallback(
+    (link: string) => t(isUndustMeetLink(link) ? "form.meeting_link_description_label" : "form.meeting_link_description_label_other"),
+    [t],
+  );
+
   const handleGenerateUndustMeet = useCallback(async () => {
     // Garde SYNCHRONE : le state React n'est propagé qu'au prochain rendu,
     // deux clics successifs lanceraient deux fetch.
@@ -850,7 +857,7 @@ export function EventModal({
       // undust: the link also goes into the location and the description,
       // the only fields Google Calendar and Outlook show to an invitee
       // (CONFERENCE is ignored there) - see lib/meeting-link-fallback.ts.
-      const filled = withMeetingLinkFallback({ location, description }, room.url, t("form.meeting_link_description_label"));
+      const filled = withMeetingLinkFallback({ location, description }, room.url, meetingLinkLabel(room.url));
       setLocation(filled.location);
       setDescription(filled.description);
     } catch (e) {
@@ -874,7 +881,7 @@ export function EventModal({
       undustMeetInFlight.current = false;
       setGeneratingUndustMeet(false);
     }
-  }, [title, location, description, t]);
+  }, [title, location, description, meetingLinkLabel, t]);
 
   const handleDismissUndustMeetPrompt = useCallback(() => {
     setShowUndustMeetPrompt(false);
@@ -1105,7 +1112,7 @@ export function EventModal({
         : null;
       if (userIsOrganizer && savedLink) {
         const current = { location: location.trim(), description: trimmedDescription };
-        const filled = withMeetingLinkFallback(current, savedLink, t("form.meeting_link_description_label"));
+        const filled = withMeetingLinkFallback(current, savedLink, meetingLinkLabel(savedLink));
         if (filled.location !== current.location) {
           data.locations = {
             loc1: {
@@ -1124,7 +1131,7 @@ export function EventModal({
           if (keepsHtml) {
             const html = seed?.description ?? "";
             if (!html.includes(savedLink)) {
-              data.description = `${html}<p>${escapeHtml(t("form.meeting_link_description_label").trim())} ${escapeHtml(savedLink)}</p>`;
+              data.description = `${html}<p>${escapeHtml(meetingLinkLabel(savedLink).trim())} ${escapeHtml(savedLink)}</p>`;
               data.descriptionContentType = seed?.descriptionContentType ?? "text/html";
             }
           } else {
@@ -1153,7 +1160,7 @@ export function EventModal({
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, timeZone, initialForm, calendarId, calendars, recurrence, customRule, useDefaultAlerts, defaultAlerts, alertRows, preservedAlerts, attendees, initialAttendees, sendInvitations, currentUserEmails, userIsOrganizer, resolveContactName, event, seed, eventDescription, onSave, isSaving, t]);
+  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, timeZone, initialForm, calendarId, calendars, recurrence, customRule, useDefaultAlerts, defaultAlerts, alertRows, preservedAlerts, attendees, initialAttendees, sendInvitations, currentUserEmails, userIsOrganizer, resolveContactName, event, seed, eventDescription, onSave, isSaving, meetingLinkLabel, t]);
 
   // The user's own answer, and the owner's in a calendar shared with them
   // (lib/calendar-delegate.ts).

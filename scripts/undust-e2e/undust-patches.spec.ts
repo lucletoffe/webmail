@@ -289,6 +289,29 @@ test("a visio link typed by hand is saved into the location and the description 
   expect(event.description).toBe(`Video call (browser, no account or app needed): ${link}`);
 });
 
+test("a Zoom link typed by hand gets the short label, not the undust promise", async ({ page }) => {
+  const link = "https://zoom.us/j/123456789";
+  const calls = recordJmap(page);
+  await signIn(page);
+  await openApp(page, "calendar");
+  await page.getByRole("button", { name: /^(new event|create event|create|new)$/i }).first().click();
+  await page.getByLabel("Title", { exact: true }).fill("e2e zoom visio");
+  await page.getByPlaceholder("https://meet.example.com/...").fill(link);
+  await page.getByRole("button", { name: /^save$/i }).last().click();
+  const created = async () => {
+    for (const args of callsOf(calls, "CalendarEvent/set")) {
+      for (const event of Object.values((args.create ?? {}) as Record<string, Record<string, unknown>>)) {
+        if (event.title === "e2e zoom visio") return event;
+      }
+    }
+    return null;
+  };
+  await expect.poll(created, { timeout: 15_000 }).not.toBeNull();
+  const event = (await created())!;
+  expect(Object.values(event.locations as Record<string, { name: string }>)[0].name).toBe(link);
+  expect(event.description).toBe(`Video call: ${link}`);
+});
+
 /** What the page's clipboard holds now, as text and as HTML. */
 async function readClipboard(page: Page): Promise<{ text: string; html: string }> {
   return page.evaluate(async () => {
