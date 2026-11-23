@@ -4882,6 +4882,8 @@
       "undust_meet_prompt_no": "No",
       "undust_meet_error": "Could not generate the visio link (code {code}).",
       "undust_meet_error_401": "Session with Ops expired. Sign in to Ops and try again:",
+      "meeting_link_description_label": "Video call (browser, no account or app needed):",
+      "meeting_link_description_label_other": "Video call:",
       "start_date": "Startdato",
       "end_date": "Sluttdato",
       "start_time": "Starttid",

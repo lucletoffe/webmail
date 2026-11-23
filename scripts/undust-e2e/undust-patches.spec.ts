@@ -224,6 +224,94 @@ test("the event form reserves an undust visio room", async ({ page }) => {
   await expect(page.getByPlaceholder("https://meet.example.com/...")).toHaveValue("https://ops.undust.co/meet/e2e-room");
 });
 
+test("the generated visio link also goes into the location and the description that invitees' calendars show", async ({ page }) => {
+  // Google Calendar and Outlook ignore CONFERENCE (the virtual location):
+  // the link must reach Stalwart as the location and in the description too
+  // (Togother meeting, 20/11/2026: invitees saw no link at all).
+  const link = "https://meet.undust.co/e2e-room";
+  await page.route("https://ops.undust.co/api/calendar/meetings/reserve", (route) => route.fulfill({
+    status: 201,
+    contentType: "application/json",
+    headers: { "access-control-allow-origin": "http://localhost:3152", "access-control-allow-credentials": "true" },
+    body: JSON.stringify({ room_name: "e2e-room", organizer_email: "dev@localhost", url: link }),
+  }));
+  const calls = recordJmap(page);
+  await signIn(page);
+  await openApp(page, "calendar");
+  await page.getByRole("button", { name: /^(new event|create event|create|new)$/i }).first().click();
+  await page.getByLabel("Title", { exact: true }).fill("e2e visio everywhere");
+  await page.getByLabel("Description", { exact: true }).fill("Ordre du jour");
+  await page.getByTestId("undust-meet-generate").click();
+
+  // Seen in the form right after the click...
+  await expect(page.getByLabel("Location", { exact: true })).toHaveValue(link);
+  await expect(page.getByLabel("Description", { exact: true })).toHaveValue(
+    `Ordre du jour\n\nVideo call (browser, no account or app needed): ${link}`,
+  );
+
+  // ...and saved that way, once.
+  await page.getByRole("button", { name: /^save$/i }).last().click();
+  const created = async () => {
+    for (const args of callsOf(calls, "CalendarEvent/set")) {
+      for (const event of Object.values((args.create ?? {}) as Record<string, Record<string, unknown>>)) {
+        if (event.title === "e2e visio everywhere") return event;
+      }
+    }
+    return null;
+  };
+  await expect.poll(created, { timeout: 15_000 }).not.toBeNull();
+  const event = (await created())!;
+  expect(Object.values(event.virtualLocations as Record<string, { uri: string }>)[0].uri).toBe(link);
+  expect(Object.values(event.locations as Record<string, { name: string }>)[0].name).toBe(link);
+  expect(countOf(event.description as string, link)).toBe(1);
+});
+
+test("a visio link typed by hand is saved into the location and the description too", async ({ page }) => {
+  const link = "https://meet.undust.co/typed-room";
+  const calls = recordJmap(page);
+  await signIn(page);
+  await openApp(page, "calendar");
+  await page.getByRole("button", { name: /^(new event|create event|create|new)$/i }).first().click();
+  await page.getByLabel("Title", { exact: true }).fill("e2e typed visio");
+  await page.getByPlaceholder("https://meet.example.com/...").fill(link);
+  await page.getByRole("button", { name: /^save$/i }).last().click();
+  const created = async () => {
+    for (const args of callsOf(calls, "CalendarEvent/set")) {
+      for (const event of Object.values((args.create ?? {}) as Record<string, Record<string, unknown>>)) {
+        if (event.title === "e2e typed visio") return event;
+      }
+    }
+    return null;
+  };
+  await expect.poll(created, { timeout: 15_000 }).not.toBeNull();
+  const event = (await created())!;
+  expect(Object.values(event.locations as Record<string, { name: string }>)[0].name).toBe(link);
+  expect(event.description).toBe(`Video call (browser, no account or app needed): ${link}`);
+});
+
+test("a Zoom link typed by hand gets the short label, not the undust promise", async ({ page }) => {
+  const link = "https://zoom.us/j/123456789";
+  const calls = recordJmap(page);
+  await signIn(page);
+  await openApp(page, "calendar");
+  await page.getByRole("button", { name: /^(new event|create event|create|new)$/i }).first().click();
+  await page.getByLabel("Title", { exact: true }).fill("e2e zoom visio");
+  await page.getByPlaceholder("https://meet.example.com/...").fill(link);
+  await page.getByRole("button", { name: /^save$/i }).last().click();
+  const created = async () => {
+    for (const args of callsOf(calls, "CalendarEvent/set")) {
+      for (const event of Object.values((args.create ?? {}) as Record<string, Record<string, unknown>>)) {
+        if (event.title === "e2e zoom visio") return event;
+      }
+    }
+    return null;
+  };
+  await expect.poll(created, { timeout: 15_000 }).not.toBeNull();
+  const event = (await created())!;
+  expect(Object.values(event.locations as Record<string, { name: string }>)[0].name).toBe(link);
+  expect(event.description).toBe(`Video call: ${link}`);
+});
+
 /** What the page's clipboard holds now, as text and as HTML. */
 async function readClipboard(page: Page): Promise<{ text: string; html: string }> {
   return page.evaluate(async () => {

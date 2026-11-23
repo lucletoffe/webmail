@@ -4894,6 +4894,8 @@
       "undust_meet_prompt_no": "Không",
       "undust_meet_error": "Không thể tạo liên kết video (mã {code}).",
       "undust_meet_error_401": "Phiên Ops đã hết hạn. Đăng nhập Ops rồi thử lại:",
+      "meeting_link_description_label": "Video call (browser, no account or app needed):",
+      "meeting_link_description_label_other": "Video call:",
       "start_date": "Ngày bắt đầu",
       "end_date": "Ngày kết thúc",
       "start_time": "Thời gian bắt đầu",
