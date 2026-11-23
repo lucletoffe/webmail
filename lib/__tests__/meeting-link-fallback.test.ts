@@ -110,3 +110,17 @@ describe('withMeetingLinkFallback does not cut into a longer link', () => {
       .toBe(`Salle ${OLD}2 puis https://zoom.us/j/9 demain`);
   });
 });
+
+describe('withMeetingLinkFallback replaces an old link followed by punctuation', () => {
+  it('replaces it before a closing punctuation, not inside a longer link', () => {
+    const OLD = 'https://meet.undust.co/m-old';
+    const NEW = 'https://meet.undust.co/m-new';
+    const opts = { previousLinks: [OLD] };
+    expect(withMeetingLinkFallback({ location: 'x', description: `Rejoindre ${OLD}. Merci` }, NEW, 'Visio :', opts).description)
+      .toBe(`Rejoindre ${NEW}. Merci`);
+    expect(withMeetingLinkFallback({ location: 'x', description: `Salle (${OLD})` }, NEW, 'Visio :', opts).description)
+      .toBe(`Salle (${NEW})`);
+    expect(withMeetingLinkFallback({ location: 'x', description: `Voir ${OLD}.html` }, NEW, 'Visio :', opts).description)
+      .toBe(`Voir ${OLD}.html\n\nVisio : ${NEW}`);
+  });
+});

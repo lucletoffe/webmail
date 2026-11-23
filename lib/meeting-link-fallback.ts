@@ -52,8 +52,10 @@ export function withMeetingLinkFallback(
       description = kept.length === lines.length
         ? description
         : kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
-      // Only the old link itself, not the start of a longer one.
-      if (uri) description = description.replace(new RegExp(`${escapeRegExp(old)}(?![^\\s<>"'])`, 'g'), () => uri);
+      // Only the old link itself, not the start of a longer one: it ends at
+      // a space, a quote, a tag, the end, or a closing punctuation followed
+      // by one of those ("Salle (…/m-old).").
+      if (uri) description = description.replace(new RegExp(`${escapeRegExp(old)}(?=$|[\\s<>"']|[.,;:!?)\\]]+(?:$|[\\s<>"']))`, 'g'), () => uri);
     }
   }
 
