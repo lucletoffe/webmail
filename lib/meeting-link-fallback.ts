@@ -52,7 +52,8 @@ export function withMeetingLinkFallback(
       description = kept.length === lines.length
         ? description
         : kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
-      if (uri) description = description.split(old).join(uri);
+      // Only the old link itself, not the start of a longer one.
+      if (uri) description = description.replace(new RegExp(`${escapeRegExp(old)}(?![^\\s<>"'])`, 'g'), () => uri);
     }
   }
 
@@ -66,6 +67,10 @@ export function withMeetingLinkFallback(
   }
 
   return { location, description };
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

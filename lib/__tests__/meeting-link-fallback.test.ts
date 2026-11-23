@@ -99,3 +99,14 @@ describe('withMeetingLinkFallback with a previous link', () => {
     expect(withMeetingLinkFallback(fields, NEW, LABEL, { previousLinks: [NEW] })).toEqual(fields);
   });
 });
+
+describe('withMeetingLinkFallback does not cut into a longer link', () => {
+  it('leaves a longer link that starts with the old one', () => {
+    const OLD = 'https://zoom.us/j/123';
+    const NEW = 'https://zoom.us/j/123?pwd=x';
+    expect(withMeetingLinkFallback({ location: '', description: `Rejoindre : ${NEW}` }, NEW, 'Visio :', { previousLinks: [OLD] }).description)
+      .toBe(`Rejoindre : ${NEW}`);
+    expect(withMeetingLinkFallback({ location: '', description: `Salle ${OLD}2 puis ${OLD} demain` }, 'https://zoom.us/j/9', 'Visio :', { previousLinks: [OLD] }).description)
+      .toBe(`Salle ${OLD}2 puis https://zoom.us/j/9 demain`);
+  });
+});

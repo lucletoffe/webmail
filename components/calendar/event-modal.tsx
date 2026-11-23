@@ -1136,7 +1136,7 @@ export function EventModal({
         : null;
       const initialLink = initialForm.virtualLocation.trim();
       const linkChanged = !event || (savedLink ?? "") !== initialLink;
-      if (userIsOrganizer && (savedLink || initialLink) && (linkChanged || isDirty)) {
+      if (userIsOrganizer && (savedLink || initialLink || copiedMeetingLinks.current.length > 0) && (linkChanged || isDirty)) {
         const current = { location: location.trim(), description: trimmedDescription };
         const filled = withMeetingLinkFallback(current, savedLink, savedLink ? meetingLinkLabel(savedLink) : "", {
           previousLinks: [initialLink, ...copiedMeetingLinks.current],
