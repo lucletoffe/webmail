@@ -833,17 +833,25 @@ export function EventModal({
     setAttendees(prev => prev.filter(a => a.email.toLowerCase() !== email.toLowerCase()));
   }, []);
 
-  // Appelle le serveur ops qui réserve une salle Jitsi avant que l'invitation
-  // ne parte — l'URL retournée est écrite dans virtualLocation, donc portée
-  // par le PREMIER iMIP envoyé par Stalwart. Pas de second mail « mise à
-  // jour » (c'est l'inquiétude de fond, cf. mandat 2026-10-22).
   // undust: the label written before the meeting link in the description.
   // "No account or app" holds for an undust room only, not for Zoom or Teams.
   const meetingLinkLabel = useCallback(
     (link: string) => t(isUndustMeetLink(link) ? "form.meeting_link_description_label" : "form.meeting_link_description_label_other"),
     [t],
   );
+  // Both labels, so a copied line is recognised whichever one it carries.
+  const meetingLinkLabels = useCallback(
+    () => [t("form.meeting_link_description_label"), t("form.meeting_link_description_label_other")],
+    [t],
+  );
+  // Meeting links this form copied into the location / description, so a
+  // later link replaces them instead of sitting next to them.
+  const copiedMeetingLinks = useRef<string[]>([]);
 
+  // Appelle le serveur ops qui réserve une salle Jitsi avant que l'invitation
+  // ne parte — l'URL retournée est écrite dans virtualLocation, donc portée
+  // par le PREMIER iMIP envoyé par Stalwart. Pas de second mail « mise à
+  // jour » (c'est l'inquiétude de fond, cf. mandat 2026-10-22).
   const handleGenerateUndustMeet = useCallback(async () => {
     // Garde SYNCHRONE : le state React n'est propagé qu'au prochain rendu,
     // deux clics successifs lanceraient deux fetch.
@@ -857,9 +865,23 @@ export function EventModal({
       // undust: the link also goes into the location and the description,
       // the only fields Google Calendar and Outlook show to an invitee
       // (CONFERENCE is ignored there) - see lib/meeting-link-fallback.ts.
-      const filled = withMeetingLinkFallback({ location, description }, room.url, meetingLinkLabel(room.url));
-      setLocation(filled.location);
-      setDescription(filled.description);
+      // Shown in the form now; the save writes the same. Functional updates:
+      // what was typed while the room was being reserved is kept. Someone
+      // else's invitation is left as its organizer sent it, and an untouched
+      // HTML description is completed by the save, which keeps its markup.
+      if (userIsOrganizer) {
+        const options = {
+          previousLinks: [initialForm.virtualLocation, ...copiedMeetingLinks.current],
+          knownLabels: meetingLinkLabels(),
+        };
+        const label = meetingLinkLabel(room.url);
+        copiedMeetingLinks.current.push(room.url);
+        setLocation((prev) => withMeetingLinkFallback({ location: prev, description: "" }, room.url, label, options).location);
+        setDescription((prev) => {
+          if (seed && isHtmlDescription(seed) && prev.trim() === eventDescription.trim()) return prev;
+          return withMeetingLinkFallback({ location: "-", description: prev }, room.url, label, options).description;
+        });
+      }
     } catch (e) {
       if (e instanceof UndustMeetError && e.status === 401) {
         // Session Ops expirée → l'utilisateur doit se reconnecter sur
@@ -881,7 +903,7 @@ export function EventModal({
       undustMeetInFlight.current = false;
       setGeneratingUndustMeet(false);
     }
-  }, [title, location, description, meetingLinkLabel, t]);
+  }, [title, userIsOrganizer, initialForm, meetingLinkLabel, meetingLinkLabels, seed, eventDescription, t]);
 
   const handleDismissUndustMeetPrompt = useCallback(() => {
     setShowUndustMeetPrompt(false);
@@ -1105,34 +1127,48 @@ export function EventModal({
       // typed in, a plugin above), the saved event also carries it as its
       // location when it has none and at the end of its description: Google
       // Calendar and Outlook show invitees those fields, never CONFERENCE.
-      // Only on the user's own events: someone else's invitation stays as
-      // its organizer sent it.
+      // A previous link copied there is replaced, a removed one taken out.
+      // Only on the user's own events (someone else's invitation stays as its
+      // organizer sent it), and only when this save changes something: an
+      // event saved untouched sends its invitees no update.
       const savedLink = data.virtualLocations
-        ? Object.values(data.virtualLocations).find((v) => v?.uri)?.uri ?? null
+        ? Object.values(data.virtualLocations).find((v) => v?.uri)?.uri?.trim() || null
         : null;
-      if (userIsOrganizer && savedLink) {
+      const initialLink = initialForm.virtualLocation.trim();
+      const linkChanged = !event || (savedLink ?? "") !== initialLink;
+      if (userIsOrganizer && (savedLink || initialLink) && (linkChanged || isDirty)) {
         const current = { location: location.trim(), description: trimmedDescription };
-        const filled = withMeetingLinkFallback(current, savedLink, meetingLinkLabel(savedLink));
+        const filled = withMeetingLinkFallback(current, savedLink, savedLink ? meetingLinkLabel(savedLink) : "", {
+          previousLinks: [initialLink, ...copiedMeetingLinks.current],
+          knownLabels: meetingLinkLabels(),
+        });
         if (filled.location !== current.location) {
-          data.locations = {
-            loc1: {
-              "@type": "Location",
-              name: filled.location,
-              description: null,
-              locationTypes: null,
-              coordinates: null,
-              timeZone: null,
-              links: null,
-              relativeTo: null,
-            },
-          };
+          if (filled.location) {
+            data.locations = {
+              loc1: {
+                "@type": "Location",
+                name: filled.location,
+                description: null,
+                locationTypes: null,
+                coordinates: null,
+                timeZone: null,
+                links: null,
+                relativeTo: null,
+              },
+            };
+          } else if (event?.locations && Object.keys(event.locations).length > 0) {
+            data.locations = null;
+          } else {
+            delete data.locations;
+          }
         }
         if (filled.description !== current.description) {
           if (keepsHtml) {
+            // An untouched HTML description keeps its markup: the link is
+            // added as a paragraph of its own, unless it is already there.
             const html = seed?.description ?? "";
-            if (!html.includes(savedLink)) {
+            if (savedLink && !html.includes(savedLink) && !html.includes(escapeHtml(savedLink))) {
               data.description = `${html}<p>${escapeHtml(meetingLinkLabel(savedLink).trim())} ${escapeHtml(savedLink)}</p>`;
-              data.descriptionContentType = seed?.descriptionContentType ?? "text/html";
             }
           } else {
             Object.assign(data, plainDescriptionFields(event, filled.description));
@@ -1160,7 +1196,7 @@ export function EventModal({
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, timeZone, initialForm, calendarId, calendars, recurrence, customRule, useDefaultAlerts, defaultAlerts, alertRows, preservedAlerts, attendees, initialAttendees, sendInvitations, currentUserEmails, userIsOrganizer, resolveContactName, event, seed, eventDescription, onSave, isSaving, meetingLinkLabel, t]);
+  }, [title, description, location, virtualLocation, startDate, startTime, endDate, endTime, allDay, timeZone, initialForm, calendarId, calendars, recurrence, customRule, useDefaultAlerts, defaultAlerts, alertRows, preservedAlerts, attendees, initialAttendees, sendInvitations, currentUserEmails, userIsOrganizer, resolveContactName, event, seed, eventDescription, onSave, isSaving, meetingLinkLabel, meetingLinkLabels, isDirty, t]);
 
   // The user's own answer, and the owner's in a calendar shared with them
   // (lib/calendar-delegate.ts).

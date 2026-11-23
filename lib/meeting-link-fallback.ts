@@ -9,6 +9,11 @@
  * as the location, when the event has none, and at the end of the
  * description, unless the description already holds it.
  *
+ * A link the event carried before (`previousLinks`) is replaced where it was
+ * copied: a location equal to it takes the new link, its own line in the
+ * description is dropped and any other mention is rewritten, so an invitee
+ * never sees a stale room. Removing the meeting link removes those copies.
+ *
  * Idempotent: applying it twice changes nothing more; a location the user
  * typed is never replaced.
  */
@@ -17,17 +22,43 @@ export interface MeetingLinkFields {
   description: string;
 }
 
+export interface MeetingLinkOptions {
+  /** Links the event or this form carried before, to be replaced. */
+  previousLinks?: ReadonlyArray<string | null | undefined>;
+  /** Every label a copied line may start with (both variants, all languages in use). */
+  knownLabels?: ReadonlyArray<string>;
+}
+
 export function withMeetingLinkFallback(
   fields: MeetingLinkFields,
   link: string | null | undefined,
   label: string,
+  options: MeetingLinkOptions = {},
 ): MeetingLinkFields {
   const uri = (link ?? '').trim();
-  if (!uri) return fields;
+  const previous = [...new Set((options.previousLinks ?? []).map((l) => (l ?? '').trim()))]
+    .filter((l) => l && l !== uri);
+  if (!uri && previous.length === 0) return fields;
 
-  const location = fields.location.trim() ? fields.location : uri;
-
+  const labels = [...new Set([label, ...(options.knownLabels ?? [])].map((l) => l.trim()).filter(Boolean))];
+  let location = fields.location;
   let description = fields.description;
+
+  for (const old of previous) {
+    if (location.trim() === old) location = uri;
+    if (description.includes(old)) {
+      const lines = description.split('\n');
+      const kept = lines.filter((line) => !labels.some((l) => line.trim() === `${l} ${old}`));
+      description = kept.length === lines.length
+        ? description
+        : kept.join('\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
+      if (uri) description = description.split(old).join(uri);
+    }
+  }
+
+  if (!uri) return { location, description };
+
+  if (!location.trim()) location = uri;
   if (!description.includes(uri)) {
     const line = `${label.trim()} ${uri}`;
     const body = description.replace(/\s+$/, '');

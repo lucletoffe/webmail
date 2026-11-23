@@ -52,3 +52,50 @@ describe('isUndustMeetLink', () => {
     expect(isUndustMeetLink(null)).toBe(false);
   });
 });
+
+describe('withMeetingLinkFallback with a previous link', () => {
+  const OLD = 'https://meet.undust.co/m-old';
+  const NEW = 'https://meet.undust.co/m-new';
+  const SHORT = 'Visio :';
+  const opts = { previousLinks: [OLD], knownLabels: [LABEL, SHORT] };
+
+  it('replaces the copied location and line', () => {
+    expect(withMeetingLinkFallback({ location: OLD, description: `Notes\n\n${LABEL} ${OLD}` }, NEW, LABEL, opts)).toEqual({
+      location: NEW,
+      description: `Notes\n\n${LABEL} ${NEW}`,
+    });
+  });
+
+  it('replaces a line written with the other label, under the label that fits the new link', () => {
+    expect(withMeetingLinkFallback({ location: OLD, description: `${SHORT} ${OLD}` }, NEW, LABEL, opts)).toEqual({
+      location: NEW,
+      description: `${LABEL} ${NEW}`,
+    });
+  });
+
+  it('rewrites the old link where the user mentioned it', () => {
+    expect(withMeetingLinkFallback({ location: '', description: `Salle : ${OLD} (code 12)` }, NEW, LABEL, opts).description)
+      .toBe(`Salle : ${NEW} (code 12)`);
+  });
+
+  it('keeps a typed location', () => {
+    expect(withMeetingLinkFallback({ location: 'Bureau', description: '' }, NEW, LABEL, opts).location).toBe('Bureau');
+  });
+
+  it('takes the copies out when the link is removed', () => {
+    expect(withMeetingLinkFallback({ location: OLD, description: `Notes\n\n${LABEL} ${OLD}` }, '', LABEL, opts)).toEqual({
+      location: '',
+      description: 'Notes',
+    });
+  });
+
+  it('is idempotent after a replacement', () => {
+    const once = withMeetingLinkFallback({ location: OLD, description: `${LABEL} ${OLD}` }, NEW, LABEL, opts);
+    expect(withMeetingLinkFallback(once, NEW, LABEL, opts)).toEqual(once);
+  });
+
+  it('ignores a previous link equal to the current one', () => {
+    const fields = { location: NEW, description: `${LABEL} ${NEW}` };
+    expect(withMeetingLinkFallback(fields, NEW, LABEL, { previousLinks: [NEW] })).toEqual(fields);
+  });
+});
