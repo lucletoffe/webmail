@@ -4882,6 +4882,7 @@
       "undust_meet_prompt_no": "Ei",
       "undust_meet_error": "Videolinki ei õnnestunud luua (kood {code}).",
       "undust_meet_error_401": "Opsi seanss aegus. Logi Opsi sisse ja proovi uuesti:",
+      "meeting_link_description_label": "Video call (browser, no account or app needed):",
       "start_date": "Alguskuupäev",
       "end_date": "Lõpukuupäev",
       "start_time": "Algusaeg",

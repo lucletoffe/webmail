@@ -4278,6 +4278,7 @@
       "undust_meet_prompt_no": "ไม่",
       "undust_meet_error": "สร้างลิงก์วิดีโอไม่ได้ (รหัส {code})",
       "undust_meet_error_401": "เซสชัน Ops หมดอายุ ลงชื่อเข้าใช้ Ops แล้วลองอีกครั้ง:",
+      "meeting_link_description_label": "Video call (browser, no account or app needed):",
       "start_date": "วันที่เริ่มต้น",
       "end_date": "วันที่สิ้นสุด",
       "start_time": "เวลาเริ่มต้น",

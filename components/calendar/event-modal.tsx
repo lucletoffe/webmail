@@ -12,6 +12,8 @@ import { X, Trash2, Users, CalendarDays, CopyPlus, Pencil, Clock, MapPin, Video,
 import { IconButton } from "@/components/ui/icon-button";
 import { findMeetingLink, locationAction, mapsUrl, primaryLocationName } from "@/lib/event-links";
 import { descriptionAsText, isHtmlDescription, plainDescriptionFields } from "@/lib/calendar-description";
+import { escapeHtml } from "@/lib/email-sanitization";
+import { withMeetingLinkFallback } from "@/lib/meeting-link-fallback";
 import { ParticipantStatusBadge } from "./rsvp-buttons";
 import { format, parseISO, addHours, isSameDay } from "date-fns";
 import type { CalendarEvent, Calendar, CalendarParticipant, CalendarEventAlert, CalendarRecurrenceRule } from "@/lib/jmap/types";
@@ -845,6 +847,12 @@ export function EventModal({
     try {
       const room = await reserveUndustMeetRoom(title.trim());
       setVirtualLocation(room.url);
+      // undust: the link also goes into the location and the description,
+      // the only fields Google Calendar and Outlook show to an invitee
+      // (CONFERENCE is ignored there) - see lib/meeting-link-fallback.ts.
+      const filled = withMeetingLinkFallback({ location, description }, room.url, t("form.meeting_link_description_label"));
+      setLocation(filled.location);
+      setDescription(filled.description);
     } catch (e) {
       if (e instanceof UndustMeetError && e.status === 401) {
         // Session Ops expirée → l'utilisateur doit se reconnecter sur
@@ -866,7 +874,7 @@ export function EventModal({
       undustMeetInFlight.current = false;
       setGeneratingUndustMeet(false);
     }
-  }, [title, t]);
+  }, [title, location, description, t]);
 
   const handleDismissUndustMeetPrompt = useCallback(() => {
     setShowUndustMeetPrompt(false);
@@ -1083,6 +1091,45 @@ export function EventModal({
           data.virtualLocations = null;
         } else {
           delete data.virtualLocations;
+        }
+      }
+
+      // undust: whatever set the meeting link (the generate button, a link
+      // typed in, a plugin above), the saved event also carries it as its
+      // location when it has none and at the end of its description: Google
+      // Calendar and Outlook show invitees those fields, never CONFERENCE.
+      // Only on the user's own events: someone else's invitation stays as
+      // its organizer sent it.
+      const savedLink = data.virtualLocations
+        ? Object.values(data.virtualLocations).find((v) => v?.uri)?.uri ?? null
+        : null;
+      if (userIsOrganizer && savedLink) {
+        const current = { location: location.trim(), description: trimmedDescription };
+        const filled = withMeetingLinkFallback(current, savedLink, t("form.meeting_link_description_label"));
+        if (filled.location !== current.location) {
+          data.locations = {
+            loc1: {
+              "@type": "Location",
+              name: filled.location,
+              description: null,
+              locationTypes: null,
+              coordinates: null,
+              timeZone: null,
+              links: null,
+              relativeTo: null,
+            },
+          };
+        }
+        if (filled.description !== current.description) {
+          if (keepsHtml) {
+            const html = seed?.description ?? "";
+            if (!html.includes(savedLink)) {
+              data.description = `${html}<p>${escapeHtml(t("form.meeting_link_description_label").trim())} ${escapeHtml(savedLink)}</p>`;
+              data.descriptionContentType = seed?.descriptionContentType ?? "text/html";
+            }
+          } else {
+            Object.assign(data, plainDescriptionFields(event, filled.description));
+          }
         }
       }
 
